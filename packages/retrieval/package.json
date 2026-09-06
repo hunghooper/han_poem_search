@@ -1,0 +1,23 @@
+{
+  "name": "@han/retrieval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./normalize": "./src/normalize.ts",
+    "./reorder": "./src/reorder.ts",
+    "./confidence": "./src/confidence.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@han/shared": "workspace:*",
+    "opencc-js": "^1.0.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/opencc-js": "^1.0.3"
+  }
+}

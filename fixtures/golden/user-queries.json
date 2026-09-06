@@ -1,0 +1,104 @@
+{
+  "$comment": "Golden set seeded from the maintainer's real queries (2026-09-06). Ground truth marked `confirmed: false` still needs a human decision — see docs/TODO.md. Half of these cases are NEGATIVE: they must produce no_local_result rather than an answer assembled from irrelevant top-k (the spec §1, failure mode 1).",
+  "cases": [
+    {
+      "id": "gq-01",
+      "query": "意靜不隨流水轉\n心閒遠與雲俱",
+      "damageClass": "intact_couplet",
+      "expect": { "outcome": "no_local_result", "confirmed": false },
+      "note": "Reads as a 對聯, not a Tang/Song poem. Line 2 is 6 chars against line 1's 7 — likely a dropped character. If it is out of corpus this is a correct negative."
+    },
+    {
+      "id": "gq-02",
+      "query": "靜觀世事\n笑看人生",
+      "damageClass": "intact_couplet",
+      "expect": { "outcome": "no_local_result", "confirmed": false },
+      "note": "Four-character couplet, modern calligraphic idiom. Not classical verse."
+    },
+    {
+      "id": "gq-03",
+      "query": "話涕霑巾\n諫丹墀有故人向來論社稷爲\n猶戀主久客羨歸秦黃閣長司\n羣盜至今在先朝赤子存君王",
+      "damageClass": "reversed_line_order",
+      "expect": {
+        "outcome": "local_result_found",
+        "flags": ["exact_partial_match", "input_reordered"],
+        "text": "羣盜至今在，先朝赤子存。君王猶戀主，久客羨歸秦。黃閣長司諫，丹墀有故人。向來論社稷，爲話涕霑巾。",
+        "form": "五言律詩",
+        "author": "杜甫",
+        "confirmed": false
+      },
+      "note": "Recovered by reading lines bottom-to-top and re-segmenting at 5-char boundaries; the pasted line breaks fall mid-line. 40 chars, scans as a 五律."
+    },
+    {
+      "id": "gq-04",
+      "query": "雲井涼煙如殘\n空山一葉依心驚",
+      "damageClass": "unknown_scramble",
+      "expect": { "outcome": "unknown", "confirmed": false },
+      "note": "6 + 7 characters. Neither line scans; could be column-interleaved or a lossy transcription. Left unlabelled deliberately — the index should tell us."
+    },
+    {
+      "id": "gq-05",
+      "query": "白頭不老\n希施持戒",
+      "damageClass": "intact_couplet",
+      "expect": { "outcome": "no_local_result", "confirmed": false },
+      "note": "Buddhist vocabulary (持戒). Almost certainly outside 全唐詩/宋詞."
+    },
+    {
+      "id": "gq-06",
+      "query": "水\n秋\n無\n淨\n泥\n春\n花\n開\n落\n自",
+      "damageClass": "one_char_per_line",
+      "expect": { "outcome": "unknown", "confirmed": false },
+      "note": "10 characters, one per line — a vertical column transcribed line-by-line. Reversed it reads 自落開花春／泥淨無秋水, which has the shape of a 迴文 couplet. Must be joined into a single stream before any matching runs."
+    },
+    {
+      "id": "gq-07",
+      "query": "在歲月中堅持\n在前行中努力\n生活就是甜的\n人生就是美的",
+      "damageClass": "modern_vernacular",
+      "expect": { "outcome": "no_local_result", "confirmed": true },
+      "note": "NEGATIVE CASE, load-bearing. Modern vernacular Chinese (就是, 的). Vector search will happily return 6-char Tang lines for this. It must not produce an answer."
+    },
+    {
+      "id": "gq-08",
+      "query": "境\n塵\n之\n超\n地\n六",
+      "damageClass": "one_char_per_line",
+      "expect": { "outcome": "unknown", "confirmed": false },
+      "note": "6 characters, one per line. Reversed: 六地超之塵境. 六塵 is Buddhist terminology, so likely out of corpus."
+    },
+    {
+      "id": "gq-09",
+      "query": "地何病著名涌平夜岸細\n一所休官章江野舟危草\n沙似老應文大闊星檣微\n鷗天飄飄豈流月垂獨風",
+      "damageClass": "column_grid_transpose",
+      "expect": {
+        "outcome": "local_result_found",
+        "flags": ["exact_partial_match", "input_reordered"],
+        "title": "旅夜書懷",
+        "author": "杜甫",
+        "text": "細草微風岸，危檣獨夜舟。星垂平野闊，月涌大江流。名豈文章著，官應老病休。飄飄何所似，天地一沙鷗。",
+        "form": "五言律詩",
+        "confirmed": false
+      },
+      "note": "THE case that breaks §7.3 as written. A 4x10 grid written in vertical columns read right-to-left, pasted row-wise. Transposing right-to-left lands 34 of 40 characters correctly, giving a 16-character exact prefix (細草微風岸危檣獨夜舟星垂平野闊月, in match form) and an 8-character exact tail. The 6 displaced characters are three transposition pairs, one of which crosses a column boundary — so edit tolerance is needed on top of the transpose, but the exact runs are already far above the 5-character short-circuit threshold of §7.1. Line reversal alone recovers nothing here. Verified in packages/retrieval/src/reorder.test.ts."
+    },
+    {
+      "id": "gq-10",
+      "query": "辛亥月\n鶴舞飛翔\n己亥年",
+      "damageClass": "inscription_block",
+      "expect": { "outcome": "no_local_result", "confirmed": true },
+      "note": "NEGATIVE CASE. A calligraphy signature block: 干支 cyclical date plus a title. Not verse at all. 辛亥月 is also malformed as a date — 干支 months are rare and this pairs a stem-branch month with a different stem-branch year."
+    },
+    {
+      "id": "gq-11",
+      "query": "鶴舞飛翔",
+      "damageClass": "inscription_block",
+      "expect": { "outcome": "no_local_result", "confirmed": true },
+      "note": "NEGATIVE CASE. Four-character calligraphy title in isolation. Below the 5-character short-circuit threshold of §7.1, so it must not short-circuit."
+    },
+    {
+      "id": "gq-12",
+      "query": "客\n莫\n基\n東\n幹\n觀\n歎\n執\n軍\n成\n名\n木",
+      "damageClass": "one_char_per_line",
+      "expect": { "outcome": "unknown", "confirmed": false },
+      "note": "12 characters, one per line. 12 factors as 3x4 or 4x3, so the original grid width is ambiguous — the reorder search must try both rather than assume."
+    }
+  ]
+}
