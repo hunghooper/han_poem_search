@@ -30,6 +30,8 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
 
 EMBEDDING_MODEL_ID = os.environ.get("EMBEDDING_MODEL_ID", "BAAI/bge-m3")
 RERANKER_MODEL_ID = os.environ.get("RERANKER_MODEL_ID", "BAAI/bge-reranker-v2-m3")
+MAX_SEQ_LENGTH = int(os.environ.get("MAX_SEQ_LENGTH", "256"))
+EMBED_BATCH_SIZE = int(os.environ.get("EMBED_BATCH_SIZE", "32"))
 
 # Must match packages/retrieval/src/normalize.ts. Reported on /health so a drift between the
 # two normalizations is visible rather than silently degrading recall.
@@ -64,11 +66,17 @@ def _dtype():
 def embedder() -> SentenceTransformer:
     if "embedder" not in _state:
         log.info("loading %s on %s", EMBEDDING_MODEL_ID, _device())
-        _state["embedder"] = SentenceTransformer(
+        model = SentenceTransformer(
             EMBEDDING_MODEL_ID,
             device=_device(),
             model_kwargs={"torch_dtype": _dtype()},
         )
+        # BGE-M3 defaults to an 8192-token window. Our documents are whole poems of 20-40
+        # characters (§3.1: "documents are tiny"), so that window buys nothing and costs a
+        # great deal of memory — on a 6GB card it pushed utilisation to 5.9GB and throughput
+        # collapsed. 256 tokens is comfortably more than the longest 排律 in the corpus.
+        model.max_seq_length = MAX_SEQ_LENGTH
+        _state["embedder"] = model
     return _state["embedder"]  # type: ignore[return-value]
 
 
@@ -78,7 +86,7 @@ def reranker() -> CrossEncoder:
         _state["reranker"] = CrossEncoder(
             RERANKER_MODEL_ID,
             device=_device(),
-            max_length=512,
+            max_length=MAX_SEQ_LENGTH,
             model_kwargs={"torch_dtype": _dtype()},
         )
     return _state["reranker"]  # type: ignore[return-value]
@@ -129,6 +137,7 @@ class HealthResponse(BaseModel):
     opencc_config: str
     device: str
     dtype: str
+    max_seq_length: int
     reranker_loaded: bool
 
 
@@ -144,6 +153,7 @@ def health() -> HealthResponse:
         opencc_config=OPENCC_CONFIG,
         device=_device(),
         dtype=str(_dtype()).replace("torch.", ""),
+        max_seq_length=MAX_SEQ_LENGTH,
         reranker_loaded="reranker" in _state,
     )
 
@@ -161,7 +171,7 @@ def embed_dense(req: EmbedRequest) -> EmbedResponse:
         normalize_embeddings=req.normalize,
         convert_to_numpy=True,
         show_progress_bar=False,
-        batch_size=64,
+        batch_size=EMBED_BATCH_SIZE,
     )
     return EmbedResponse(
         vectors=[v.tolist() for v in vectors],
