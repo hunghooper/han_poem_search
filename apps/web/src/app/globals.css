@@ -105,3 +105,37 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .empty { margin-top: 32px; padding-top: 24px; border-top: 2px solid var(--line); color: var(--muted); }
 .empty strong { color: var(--fg); display: block; margin-bottom: 6px; font-size: 15px; }
+
+/* Attribution after the poem — how a printed edition closes a piece. */
+.attrib {
+  font-family: var(--serif-cjk);
+  font-size: 15px;
+  color: var(--muted);
+  margin: 18px 0 0;
+  text-align: right;
+  letter-spacing: 0.06em;
+}
+.poem.vertical + .attrib { text-align: left; }
+
+.verify {
+  margin-top: 20px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--line);
+  font-size: 13px;
+}
+.verify.v-pass { border-left-color: var(--ok); }
+.verify.v-fail { border-left-color: var(--warn); }
+.verify strong { display: block; margin-bottom: 6px; font-weight: 600; }
+.verify ul { margin: 0; padding-left: 18px; color: var(--muted); }
+.verify li { margin: 3px 0; }
+.vmark { font-weight: 700; }
+.vmark.v-pass { color: var(--ok); }
+.vmark.v-fail { color: var(--err); }
+.vmark.v-abstain { color: var(--muted); }
+
+.colophon {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-style: italic;
+}

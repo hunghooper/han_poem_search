@@ -14,6 +14,8 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { z } from 'zod';
 import { encode } from '@han/shared/serde';
 import { fold } from '@han/shared/state';
+import { ModelClient } from '@han/retrieval/model-client';
+import { VectorStore, assertModelMatch } from '@han/retrieval/vector-store';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
 
@@ -30,16 +32,67 @@ const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 10 });
 const db = drizzle(pool);
 const store = new RunStore();
 
+const MODEL_SERVICE_URL = process.env.MODEL_SERVICE_URL ?? 'http://localhost:8000';
+const QDRANT_URL = process.env.QDRANT_URL ?? 'http://localhost:6333';
+const QDRANT_ALIAS = process.env.QDRANT_COLLECTION_ALIAS ?? 'poetry';
+
+/**
+ * The semantic layer is OPTIONAL and its absence is reported, never hidden.
+ *
+ * If the sidecar or the collection is missing, exact matching still works and every query says
+ * so in the trace. What is NOT permitted is starting with a collection built by a different
+ * embedding model than the sidecar serves (§2.1): that returns confident, wrong neighbours
+ * with no error anywhere, so it is a hard refusal to boot.
+ */
+async function initSemanticLayer(): Promise<{ model: ModelClient | null; vectors: VectorStore | null }> {
+  const model = new ModelClient({ baseUrl: MODEL_SERVICE_URL, timeoutMs: 30000 });
+  let health;
+  try {
+    health = await model.health();
+  } catch (e) {
+    app.log.warn({ err: e }, 'model service unreachable — semantic search disabled, exact matching unaffected');
+    return { model: null, vectors: null };
+  }
+
+  const vectors = new VectorStore(QDRANT_URL, QDRANT_ALIAS, process.env.QDRANT_API_KEY);
+  const meta = await vectors.readMeta();
+  if (!meta) {
+    app.log.warn('no vector collection behind the alias — semantic search disabled until ingest runs');
+    return { model, vectors: null };
+  }
+
+  // Throws on mismatch. Do not soften this into a warning.
+  assertModelMatch(meta, {
+    modelId: health.modelId,
+    dim: health.dim,
+    normalized: health.normalized,
+    openccConfig: health.openccConfig,
+  });
+  app.log.info(
+    { modelId: meta.modelId, points: meta.pointCount, corpus: meta.corpusCommitSha.slice(0, 8) },
+    'semantic layer ready',
+  );
+  return { model, vectors };
+}
+
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 await app.register(cors, { origin: true });
 await app.register(websocket);
+
+const deps = await initSemanticLayer().then((d) => ({ db, ...d }));
 
 const SearchBody = z.object({ query: z.string().min(1).max(2000) });
 const HelloFrame = z.object({ lastSeq: z.number().int().min(-1).default(-1) });
 
 app.get('/health', async () => {
   const r = await pool.query('SELECT count(*)::int AS n FROM poem');
-  return { ok: true, poems: r.rows[0]?.n ?? 0, phase: 1 };
+  return {
+    ok: true,
+    poems: r.rows[0]?.n ?? 0,
+    phase: 2,
+    semantic: deps.vectors !== null,
+    reranker: deps.model !== null,
+  };
 });
 
 app.post('/api/search', async (req, reply) => {
@@ -50,7 +103,7 @@ app.post('/api/search', async (req, reply) => {
   // Return immediately so the client can attach to the stream before work begins; the run is
   // then observable from its first event rather than only from its result.
   // runSearch settles the outcome into the store itself, before it emits final_answer.
-  void runSearch(db, store, runId, parsed.data.query).catch((e: unknown) => {
+  void runSearch(deps, store, runId, parsed.data.query).catch((e: unknown) => {
     app.log.error({ err: e, runId }, 'search run failed');
   });
   return reply.code(202).send(encode({ runId }));
@@ -66,8 +119,16 @@ app.get('/api/runs/:runId', async (req, reply) => {
 app.get('/api/runs/:runId/results', async (req, reply) => {
   const { runId } = req.params as { runId: string };
   if (!store.has(runId)) return reply.code(404).send({ error: 'run not found' });
-  const outcome = store.outcome(runId) as { evidence?: unknown[] } | null;
-  return reply.send(encode({ results: outcome?.evidence ?? [] }));
+  const outcome = store.outcome(runId) as
+    | { evidence?: unknown[]; colophon?: unknown; verification?: unknown }
+    | null;
+  return reply.send(
+    encode({
+      results: outcome?.evidence ?? [],
+      colophon: outcome?.colophon ?? null,
+      verification: outcome?.verification ?? null,
+    }),
+  );
 });
 
 app.get('/api/runs/:runId/stream', { websocket: true }, (socket, req) => {

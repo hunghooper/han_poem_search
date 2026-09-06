@@ -27,12 +27,25 @@ interface Result {
   metadata: { matchedLines?: string[] };
 }
 
+interface Check {
+  name: string;
+  outcome: 'pass' | 'fail' | 'abstain';
+  detail: string;
+}
+
+interface Outcome {
+  results: Result[];
+  colophon: { lines: string[]; cyclicalDate: string | null } | null;
+  verification: { outcome: string; summary: string; checks: Check[] } | null;
+}
+
 const SAMPLE = '自下寒煙 卧松高 白鶴眠 語来江色暮 獨 尋古道 倚石聽流泉 花暖青牛 羣峭碧摩天 逍遥不記年 撥雲';
 
 export default function Home() {
   const [query, setQuery] = useState(SAMPLE);
   const [events, setEvents] = useState<Ev[]>([]);
   const [results, setResults] = useState<Result[]>([]);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [running, setRunning] = useState(false);
   const [vertical, setVertical] = useState(false);
   const lastSeq = useRef(-1);
@@ -44,6 +57,7 @@ export default function Home() {
       setRunning(true);
       setEvents([]);
       setResults([]);
+      setOutcome(null);
       lastSeq.current = -1;
 
       const res = await fetch(`${API}/api/search`, {
@@ -65,7 +79,11 @@ export default function Home() {
         if (ev.step === 'final_answer') {
           void fetch(`${API}/api/runs/${runId}/results`)
             .then((r) => r.json())
-            .then((j) => setResults(decode<{ results: Result[] }>(j).results))
+            .then((j) => {
+              const o = decode<Outcome>(j);
+              setOutcome(o);
+              setResults(o.results ?? []);
+            })
             .finally(() => setRunning(false));
           ws.close();
         }
@@ -141,6 +159,37 @@ export default function Home() {
           <div className={`poem${vertical ? ' vertical' : ''}`}>
             {highlight(results[0].content, results[0].metadata.matchedLines ?? [])}
           </div>
+          {/*
+            Attribution set after the poem, the way a printed edition closes a piece. The
+            heading above names it for scanning; this reads as part of the text.
+          */}
+          <p className="attrib">
+            —— {results[0].author ?? '佚名'}《{results[0].title ?? '無題'}》
+          </p>
+
+          {outcome?.verification && outcome.verification.outcome !== 'abstain' && (
+            <div className={`verify v-${outcome.verification.outcome}`}>
+              <strong>{outcome.verification.outcome === 'pass' ? '✓' : '⚠'} {outcome.verification.summary}</strong>
+              <ul>
+                {outcome.verification.checks.map((c) => (
+                  <li key={c.name}>
+                    <span className={`vmark v-${c.outcome}`}>
+                      {c.outcome === 'pass' ? '✓' : c.outcome === 'fail' ? '✗' : '○'}
+                    </span>{' '}
+                    {c.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {outcome?.colophon && (
+            <p className="colophon">
+              Inscription set aside before searching: {outcome.colophon.lines.join(' · ')}
+              {outcome.colophon.cyclicalDate ? ` — 干支 date ${outcome.colophon.cyclicalDate}` : ''}
+            </p>
+          )}
+
           {results[0].provenance && (
             <p className="prov">
               What this dataset says — not an authoritative edition. Source:{' '}

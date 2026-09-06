@@ -21,7 +21,8 @@
     "corpus:fetch": "pnpm --filter @han/corpus fetch",
     "corpus:ingest": "pnpm --filter @han/corpus ingest",
     "flags:docs": "tsx scripts/flags-docs.ts",
-    "golden": "tsx scripts/golden-check.ts"
+    "golden": "tsx scripts/golden-check.ts",
+    "eval": "tsx scripts/eval.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

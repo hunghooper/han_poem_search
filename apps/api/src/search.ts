@@ -1,14 +1,21 @@
 /**
- * The Phase 1 search pipeline: normalize -> exact_ngram -> evaluate -> answer.
+ * The search pipeline — the spec §7, §8, §10.
  *
- * Every stage emits started/completed events. The fast path (§7.1) completes without any LLM
- * call; the agent arrives in Phase 3 and slots in after local_evaluation.
+ *   colophon split -> exact -> (short circuit?) -> bm25 + vector -> RRF -> rerank
+ *                  -> confidence policy -> rule verification -> answer
+ *
+ * Every stage emits started/completed events. A stage that does not emit is a stage the user
+ * cannot see, including when it fails — which is §1's second unacceptable failure mode.
  */
 
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { normalize } from '@han/retrieval/normalize';
-import { exactNgramSearch } from '@han/retrieval/sources/exact-ngram';
+import { normalize, toMatchForm, visualLines } from '@han/retrieval/normalize';
+import { splitColophon } from '@han/retrieval/colophon';
+import { hybridSearch } from '@han/retrieval/hybrid';
 import { evaluateLocal } from '@han/retrieval/confidence';
+import { verifyCandidate } from '@han/retrieval/verify';
+import type { ModelClient } from '@han/retrieval/model-client';
+import type { VectorStore } from '@han/retrieval/vector-store';
 import type { Evidence } from '@han/shared/evidence';
 import { StepStatus } from '@han/shared/status';
 import { AggregateFlag } from '@han/shared/flags';
@@ -21,118 +28,101 @@ export interface SearchOutcome {
   reason: string;
   flags: string[];
   evidence: Evidence[];
+  colophon: { lines: string[]; cyclicalDate: string | null } | null;
+  verification: ReturnType<typeof verifyCandidate> | null;
 }
 
-/** Group line hits into one Evidence per work, so the UI shows poems and not fragments. */
-function toEvidence(hits: Awaited<ReturnType<typeof exactNgramSearch>>['hits']): Evidence[] {
-  const byWork = new Map<string, Evidence>();
-  for (const h of hits) {
-    const existing = byWork.get(h.workId);
-    if (existing) {
-      const lines = (existing.metadata.matchedLines as string[] | undefined) ?? [];
-      if (!lines.includes(h.textDisplay)) lines.push(h.textDisplay);
-      existing.metadata.matchedLines = lines;
-      existing.score = lines.length;
-      continue;
-    }
-    byWork.set(h.workId, {
-      id: h.workId,
-      source: 'exact',
-      retrievalMethod: 'exact_ngram',
-      workId: h.workId,
-      title: h.title,
-      author: h.author,
-      dynasty: null,
-      edition: h.edition,
-      // Provenance is required on local results (§3.1 item 4) — the dataset is crawled, and
-      // this is what lets a result say "what this dataset says", pinned to a commit.
-      provenance: { dataset: h.dataset, file: h.sourceFile, commitSha: h.commitSha },
-      url: null,
-      content: h.poemTextDisplay,
-      matchedSpan: null,
-      score: 1,
-      rerankScore: null,
-      metadata: { matchedLines: [h.textDisplay] },
-    });
-  }
-  return [...byWork.values()].sort((a, b) => b.score - a.score);
+export interface SearchDeps {
+  db: NodePgDatabase<Record<string, never>>;
+  model: ModelClient | null;
+  vectors: VectorStore | null;
 }
+
+/** 句 of a poem's display text, in match form — what the verifier needs. */
+const poemLines = (textDisplay: string): string[] =>
+  textDisplay
+    .split(/[\n，。！？；]/u)
+    .map((s) => toMatchForm(s))
+    .filter((s) => s.length > 0);
 
 export async function runSearch(
-  db: NodePgDatabase<Record<string, never>>,
+  deps: SearchDeps,
   store: RunStore,
   runId: string,
-  query: string,
+  rawQuery: string,
 ): Promise<SearchOutcome> {
   store.emit(runId, {
     step: 'query_understanding',
     source: 'query',
     phase: 'started',
     message: 'Reading your query',
-    metadata: { query },
+    metadata: { query: rawQuery },
   });
 
-  const norm = normalize(query);
+  // ---- 落款 ---------------------------------------------------------------
+  // A transcription of a scroll ends with a signature block. Feeding it to the fragment
+  // matcher wastes the query budget and, worse, lets a poet's name match unrelated poems.
+  const colophon = splitColophon(rawQuery);
+  const searchText = colophon.body.length > 0 ? colophon.body.join('\n') : rawQuery;
+
+  if (colophon.colophonLines.length > 0) {
+    store.emit(runId, {
+      step: 'query_understanding',
+      source: 'query',
+      phase: 'completed',
+      status: StepStatus.HAS_RESULT,
+      message: `Set aside an inscription: ${colophon.colophonLines.join(' · ')}${colophon.cyclicalDate ? ` (${colophon.cyclicalDate})` : ''}`,
+      metadata: { query: rawQuery, normalizedQuery: toMatchForm(searchText) },
+    });
+  }
+
+  const norm = normalize(searchText);
   store.emit(runId, {
     step: 'normalization',
     source: 'query',
     phase: 'completed',
     status: StepStatus.HAS_RESULT,
     message: `Normalised to ${norm.textMatch.length} characters`,
-    metadata: { query, normalizedQuery: norm.textMatch },
+    metadata: { query: rawQuery, normalizedQuery: norm.textMatch },
   });
 
+  // ---- retrieval ----------------------------------------------------------
   store.emit(runId, {
-    step: 'exact',
-    source: 'exact',
+    step: 'local_search',
+    source: 'local',
     phase: 'started',
-    message: 'Looking for an exact match in the corpus',
+    message: 'Searching the corpus',
   });
 
-  let exact: Awaited<ReturnType<typeof exactNgramSearch>>;
-  try {
-    exact = await exactNgramSearch(db, query);
-  } catch (e) {
-    // A retriever that fails must say so. Reporting this as "found nothing" is the opaque
-    // failure §1 calls unacceptable — the user would be told the poem is not in the corpus.
-    const message = e instanceof Error ? e.message : String(e);
+  const result = await hybridSearch(searchText, deps);
+
+  for (const [source, report] of Object.entries(result.reports)) {
+    const step = source === 'reranker' ? 'reranker' : source === 'exact' ? 'exact' : source === 'bm25' ? 'bm25' : 'vector';
     store.emit(runId, {
-      step: 'exact',
-      source: 'exact',
-      phase: 'failed',
-      status: StepStatus.ERROR,
-      message: 'The exact-match index failed',
-      metadata: { errorCode: 'INDEX_QUERY_FAILED', errorMessage: message },
+      step: step as 'exact' | 'bm25' | 'vector' | 'reranker',
+      source,
+      phase: report.status === StepStatus.ERROR || report.status === StepStatus.TIMEOUT ? 'failed' : 'completed',
+      status: report.status,
+      flags: source === 'exact' ? result.exact.flags : [],
+      message: describeSource(source, report.status, report.count, result.shortCircuited),
+      metadata: {
+        latencyMs: report.latencyMs,
+        resultCount: report.count,
+        ...(report.errorCode ? { errorCode: report.errorCode, errorMessage: report.errorMessage } : {}),
+      },
     });
-    return {
-      runId,
-      status: StepStatus.ERROR,
-      confidence: 0,
-      reason: `exact_ngram failed: ${message}`,
-      flags: ['exact_error'],
-      evidence: [],
-    };
   }
 
-  const evidence = toEvidence(exact.hits);
-  store.emit(runId, {
-    step: 'exact',
-    source: 'exact',
-    phase: 'completed',
-    status: exact.kind === 'none' ? StepStatus.NO_RESULT : StepStatus.HAS_RESULT,
-    flags: exact.flags,
-    message:
-      exact.kind === 'none'
-        ? 'No exact match in the corpus'
-        : `Exact match — longest run ${exact.longestRun} characters across ${exact.windowsMatched} windows`,
-    metadata: { latencyMs: exact.latencyMs, resultCount: evidence.length, topScore: exact.longestRun },
-  });
-
+  // ---- confidence (§8) ----------------------------------------------------
   const verdict = evaluateLocal({
     intent: 'fragment_lookup',
-    exactMatch: { kind: exact.kind, workIds: exact.workIds, windowsMatched: exact.windowsMatched },
-    candidateCount: exact.hits.length,
-    rerankScores: [],
+    exactMatch: {
+      kind: result.exact.kind,
+      workIds: result.exact.workIds,
+      windowsMatched: result.exact.windowsMatched,
+    },
+    candidateCount: result.evidence.length,
+    rerankScores: result.rerankScores,
   });
 
   store.emit(runId, {
@@ -142,21 +132,50 @@ export async function runSearch(
     status: verdict.status,
     flags: verdict.flags,
     message: verdict.reason,
-    metadata: { confidence: verdict.confidence, resultCount: evidence.length },
+    metadata: {
+      confidence: verdict.confidence,
+      resultCount: result.evidence.length,
+      ...(result.rerankScores[0] !== undefined ? { topScore: result.rerankScores[0] } : {}),
+    },
   });
 
-  const allFlags = [...new Set([...exact.flags, ...verdict.flags])];
+  // ---- rule verification (§10.1) ------------------------------------------
+  // Rules first, deterministic and free. The LLM verifier (§10.2) arrives in Phase 4 and only
+  // sees what the rules could not decide.
+  let verification: ReturnType<typeof verifyCandidate> | null = null;
+  const top = result.evidence[0];
 
-  // Phase 1 has no semantic layer and no agent. Saying so explicitly is the difference between
-  // "not in the corpus" and "we only looked one way" (§1, failure mode 2).
-  if (!allFlags.includes(AggregateFlag.LOCAL_RESULT_FOUND)) {
+  if (top) {
+    const inputLines = visualLines(searchText).map((l) => toMatchForm(l)).filter((l) => l.length > 0);
+    verification = verifyCandidate(inputLines, poemLines(top.content));
     store.emit(runId, {
-      step: 'vector',
-      source: 'vector',
+      step: 'rule_verification',
+      source: 'rule_verify',
+      phase: 'completed',
+      status:
+        verification.outcome === 'pass'
+          ? StepStatus.HAS_RESULT
+          : verification.outcome === 'fail'
+            ? StepStatus.LOW_CONFIDENCE
+            : StepStatus.SKIPPED,
+      flags: verification.flags,
+      message: verification.summary,
+      metadata: { resultCount: verification.checks.length },
+    });
+  } else {
+    store.emit(runId, {
+      step: 'rule_verification',
+      source: 'rule_verify',
       phase: 'completed',
       status: StepStatus.NOT_EXECUTED,
-      message: 'Semantic search is not available yet (Phase 2)',
+      message: 'Nothing to verify — no candidate',
     });
+  }
+
+  const allFlags = [...new Set([...result.exact.flags, ...verdict.flags, ...(verification?.flags ?? [])])];
+  const found = allFlags.includes(AggregateFlag.LOCAL_RESULT_FOUND);
+
+  if (!found) {
     store.emit(runId, {
       step: 'agent',
       source: 'model',
@@ -172,11 +191,15 @@ export async function runSearch(
     confidence: verdict.confidence,
     reason: verdict.reason,
     flags: allFlags,
-    evidence,
+    evidence: result.evidence,
+    colophon:
+      colophon.colophonLines.length > 0
+        ? { lines: colophon.colophonLines, cyclicalDate: colophon.cyclicalDate }
+        : null,
+    verification,
   };
-  // Settle the result BEFORE emitting final_answer. The event is the client's signal to fetch,
-  // so emitting first opens a window where the answer is announced but not yet readable — a
-  // race that shows up as an empty answer panel on a successful run.
+  // Settle before announcing: final_answer is the client's signal to fetch, so emitting first
+  // opens a window where the answer is announced but not yet readable.
   store.setOutcome(runId, outcome);
 
   store.emit(runId, {
@@ -186,11 +209,35 @@ export async function runSearch(
     status: verdict.status,
     flags: allFlags,
     message:
-      evidence[0] && allFlags.includes(AggregateFlag.LOCAL_RESULT_FOUND)
-        ? `${evidence[0].title ?? '(untitled)'} — ${evidence[0].author ?? '(unknown)'}`
+      top && found
+        ? `${top.title ?? '(untitled)'} — ${top.author ?? '(unknown)'}`
         : 'No confident answer from the local corpus',
-    metadata: { confidence: verdict.confidence, resultCount: evidence.length },
+    metadata: { confidence: verdict.confidence, resultCount: result.evidence.length },
   });
 
   return outcome;
+}
+
+function describeSource(
+  source: string,
+  status: StepStatus,
+  count: number,
+  shortCircuited: boolean,
+): string {
+  if (status === StepStatus.SKIPPED) {
+    return shortCircuited
+      ? 'Skipped — the exact match already resolved it'
+      : 'Skipped';
+  }
+  if (status === StepStatus.UNAVAILABLE) return 'Not available — the model service is not running';
+  if (status === StepStatus.TIMEOUT) return 'Timed out';
+  if (status === StepStatus.ERROR) return 'Failed';
+  const label: Record<string, string> = {
+    exact: 'Exact match',
+    bm25: 'Keyword search',
+    vector: 'Semantic search',
+    reranker: 'Re-ranked candidates',
+  };
+  const name = label[source] ?? source;
+  return count === 0 ? `${name} — nothing found` : `${name} — ${count} result${count === 1 ? '' : 's'}`;
 }
