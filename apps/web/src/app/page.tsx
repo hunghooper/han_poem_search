@@ -103,7 +103,8 @@ export default function Home() {
     <main>
       <h1>漢詩檢索</h1>
       <p className="sub">
-        Fragment lookup over 全唐詩 + 宋詞 · 78,455 poems · exact match only (Phase 1)
+        全唐詩 + 宋詞 · 78,455 poems · exact fragment match, keyword and semantic search,
+        with form, rhyme and 平仄 verification
       </p>
 
       <form onSubmit={search}>
