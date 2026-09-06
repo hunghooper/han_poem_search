@@ -49,6 +49,7 @@ app.post('/api/search', async (req, reply) => {
   const runId = store.create();
   // Return immediately so the client can attach to the stream before work begins; the run is
   // then observable from its first event rather than only from its result.
+  // runSearch settles the outcome into the store itself, before it emits final_answer.
   void runSearch(db, store, runId, parsed.data.query).catch((e: unknown) => {
     app.log.error({ err: e, runId }, 'search run failed');
   });
@@ -60,6 +61,13 @@ app.get('/api/runs/:runId', async (req, reply) => {
   if (!store.has(runId)) return reply.code(404).send({ error: 'run not found' });
   const events = store.since(runId, -1);
   return reply.send(encode({ state: fold(events), events }));
+});
+
+app.get('/api/runs/:runId/results', async (req, reply) => {
+  const { runId } = req.params as { runId: string };
+  if (!store.has(runId)) return reply.code(404).send({ error: 'run not found' });
+  const outcome = store.outcome(runId) as { evidence?: unknown[] } | null;
+  return reply.send(encode({ results: outcome?.evidence ?? [] }));
 });
 
 app.get('/api/runs/:runId/stream', { websocket: true }, (socket, req) => {

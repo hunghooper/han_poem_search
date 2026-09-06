@@ -28,6 +28,7 @@ type Listener = (e: SearchEvent) => void;
  */
 export class RunStore {
   private readonly events = new Map<string, SearchEvent[]>();
+  private readonly outcomes = new Map<string, unknown>();
   private readonly listeners = new Map<string, Set<Listener>>();
 
   create(): string {
@@ -60,6 +61,15 @@ export class RunStore {
   /** Everything after `afterSeq`. This is what makes reconnect lossless (§14.1). */
   since(runId: string, afterSeq: number): SearchEvent[] {
     return (this.events.get(runId) ?? []).filter((e) => e.seq > afterSeq);
+  }
+
+  /** The settled result. Kept beside the log, never in place of it — the log stays authoritative. */
+  setOutcome(runId: string, outcome: unknown): void {
+    this.outcomes.set(runId, outcome);
+  }
+
+  outcome(runId: string): unknown {
+    return this.outcomes.get(runId) ?? null;
   }
 
   has(runId: string): boolean {

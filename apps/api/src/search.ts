@@ -166,6 +166,19 @@ export async function runSearch(
     });
   }
 
+  const outcome: SearchOutcome = {
+    runId,
+    status: verdict.status,
+    confidence: verdict.confidence,
+    reason: verdict.reason,
+    flags: allFlags,
+    evidence,
+  };
+  // Settle the result BEFORE emitting final_answer. The event is the client's signal to fetch,
+  // so emitting first opens a window where the answer is announced but not yet readable — a
+  // race that shows up as an empty answer panel on a successful run.
+  store.setOutcome(runId, outcome);
+
   store.emit(runId, {
     step: 'final_answer',
     source: 'local',
@@ -179,12 +192,5 @@ export async function runSearch(
     metadata: { confidence: verdict.confidence, resultCount: evidence.length },
   });
 
-  return {
-    runId,
-    status: verdict.status,
-    confidence: verdict.confidence,
-    reason: verdict.reason,
-    flags: allFlags,
-    evidence,
-  };
+  return outcome;
 }
