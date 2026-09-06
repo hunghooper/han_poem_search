@@ -9,11 +9,18 @@ confidently answer.
 - **[docs/adr/](./docs/adr/)** — decisions that would be expensive to reverse.
 - **[docs/TODO.md](./docs/TODO.md)** — what is not built yet.
 
-Status: **Phase 1, in progress.** Contracts, normalization, and reading-order recovery are
-in place with tests. Index, ingest, API, and UI are not.
+Status: **Phase 1 complete.** Contracts, normalization, reading-order recovery, the pg_bigm
+exact-match index over 78,455 poems, the API with lossless event replay, and the trace UI all
+work end to end. Semantic search (Phase 2) and the agent (Phase 3) are not built.
 
 ```bash
 corepack enable && pnpm install
-pnpm test          # unit tests
-pnpm check         # typecheck + lint + tests
+docker compose up -d          # builds the pg_bigm image on first run
+pnpm db:migrate
+git clone --depth 1 https://github.com/chinese-poetry/chinese-poetry data/chinese-poetry
+pnpm --filter @han/corpus exec tsx src/ingest.ts
+pnpm dev
 ```
+
+Then paste a damaged fragment. `scripts/accept.ts` runs the §16 acceptance criteria and
+`scripts/golden-check.ts` runs the golden set, both against the real index.
