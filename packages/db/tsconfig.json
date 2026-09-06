@@ -5,5 +5,7 @@
     "outDir": "dist",
     "composite": false
   },
-  "include": ["src/**/*.ts", "drizzle.config.ts"]
+  "include": [
+    "src/**/*.ts"
+  ]
 }

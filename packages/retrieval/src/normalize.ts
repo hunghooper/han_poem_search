@@ -109,9 +109,15 @@ export function normalize(input: string): NormalizedText {
 /** The match form only — the hot path for query normalization. */
 export const toMatchForm = (input: string): string => normalize(input).textMatch;
 
-/** Split into visual lines, preserving order, dropping empties. Reordering starts here. */
+/**
+ * Split into visual segments, preserving order, dropping empties. Reordering starts here.
+ *
+ * Splits on whitespace as well as newlines. In CJK text a space is not a word separator — it
+ * is a deliberate segment break, the way a transcriber marks where one column ended. Treating
+ * a space-separated paste as a single line hides the grid from every reorder strategy.
+ */
 export const visualLines = (input: string): string[] =>
   input
-    .split(/\r?\n/)
+    .split(/[\s\u3000]+/u)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);

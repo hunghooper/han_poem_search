@@ -6,7 +6,8 @@
   "exports": {
     "./normalize": "./src/normalize.ts",
     "./reorder": "./src/reorder.ts",
-    "./confidence": "./src/confidence.ts"
+    "./confidence": "./src/confidence.ts",
+    "./sources/exact-ngram": "./src/sources/exact-ngram.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -15,7 +16,8 @@
   "dependencies": {
     "@han/shared": "workspace:*",
     "opencc-js": "^1.0.5",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "drizzle-orm": "^0.36.4"
   },
   "devDependencies": {
     "@types/opencc-js": "^1.0.3"
