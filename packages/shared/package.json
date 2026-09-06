@@ -1,0 +1,23 @@
+{
+  "name": "@han/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./status": "./src/status.ts",
+    "./flags": "./src/flags.ts",
+    "./errors": "./src/errors.ts",
+    "./evidence": "./src/evidence.ts",
+    "./events": "./src/events.ts",
+    "./tool-result": "./src/tool-result.ts",
+    "./state": "./src/state.ts",
+    "./serde": "./src/serde.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  }
+}

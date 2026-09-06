@@ -1,0 +1,41 @@
+{
+  "name": "han-search",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.17.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "check": "turbo run typecheck lint test",
+    "typecheck": "turbo run typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:int": "vitest run --project integration",
+    "db:generate": "pnpm --filter @han/db db:generate",
+    "db:migrate": "pnpm --filter @han/db db:migrate",
+    "corpus:fetch": "pnpm --filter @han/corpus fetch",
+    "corpus:ingest": "pnpm --filter @han/corpus ingest",
+    "flags:docs": "tsx scripts/flags-docs.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.15.0",
+    "prettier": "^3.4.0",
+    "tsx": "^4.19.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.16.0",
+    "vitest": "^2.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
