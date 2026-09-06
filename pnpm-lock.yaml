@@ -119,6 +119,24 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  packages/agent:
+    dependencies:
+      '@han/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@han/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
+      '@han/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.36.4
+        version: 0.36.4(@types/pg@8.23.1)(@types/react@19.2.18)(pg@8.23.0)(react@19.2.8)
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+
   packages/config:
     dependencies:
       dotenv:
