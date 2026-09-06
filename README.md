@@ -9,9 +9,10 @@ confidently answer.
 - **[docs/adr/](./docs/adr/)** — decisions that would be expensive to reverse.
 - **[docs/TODO.md](./docs/TODO.md)** — what is not built yet.
 
-Status: **Phase 1 complete.** Contracts, normalization, reading-order recovery, the pg_bigm
-exact-match index over 78,455 poems, the API with lossless event replay, and the trace UI all
-work end to end. Semantic search (Phase 2) and the agent (Phase 3) are not built.
+Status: **Phase 2.** Exact fragment matching, BM25 over character bigrams, dense retrieval
+with BGE-M3, RRF fusion, cross-encoder reranking, and deterministic verification of form,
+rhyme and 平仄 — the last using tables derived from the corpus itself (ADR 007). The agent
+fallback (Phase 3) is not built.
 
 ```bash
 corepack enable && pnpm install
