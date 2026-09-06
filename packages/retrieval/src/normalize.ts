@@ -26,13 +26,17 @@ export interface NormalizedText {
 }
 
 /**
- * CJK punctuation, ASCII punctuation, and whitespace — everything stripped from textMatch.
- * Deliberately explicit rather than a Unicode property escape: \p{P} also strips characters
- * that appear inside rare poem titles, and silently dropping a character from the match text
+ * Punctuation and whitespace — everything stripped from textMatch.
+ *
+ * Deliberately explicit rather than \p{P}: the Unicode property also strips characters that
+ * appear inside rare poem titles, and silently dropping a character from the match text
  * misaligns every span after it.
+ *
+ * Written with \u escapes rather than the literal characters. An ideographic space (U+3000)
+ * sitting in source is invisible and unreviewable.
  */
 const PUNCT =
-  /[\s　-〿！-／：-＠［-｀｛-･ -⁯!-/:-@[-`{-~·—…‘’“”]/u;
+  /[\s!-/:-@[-`{-~\u00B7\u2000-\u206F\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65]/u;
 
 const isPunct = (ch: string): boolean => PUNCT.test(ch);
 
@@ -74,9 +78,9 @@ export function normalize(input: string): NormalizedText {
   // Build textMatch from textTrad, keeping a position map back to textDisplay.
   //
   // OpenCC is character-for-character for the conversions we use, so index i of textTrad
-  // corresponds to index i of textDisplay. That invariant is asserted below rather than
-  // assumed — if a future OpenCC config changes length, spans would silently point at the
-  // wrong characters, which is exactly the class of bug this file exists to prevent.
+  // corresponds to index i of textDisplay. That invariant is checked rather than assumed —
+  // if a future OpenCC config changes length, spans would silently point at the wrong
+  // characters, which is exactly the class of bug this file exists to prevent.
   const aligned = textTrad.length === textDisplay.length;
 
   const matchChars: string[] = [];
@@ -84,9 +88,7 @@ export function normalize(input: string): NormalizedText {
   const trad = [...textTrad];
   let displayIdx = 0;
 
-  for (let i = 0; i < trad.length; i += 1) {
-    const ch = trad[i];
-    if (ch === undefined) continue;
+  for (const ch of trad) {
     const width = ch.length; // surrogate pairs count as 2 in the display string
     if (!isPunct(ch) && isCjk(ch)) {
       matchChars.push(foldVariant(ch));

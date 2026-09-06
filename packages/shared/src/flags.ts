@@ -15,7 +15,7 @@
  * Nothing outside this module may construct a flag from a string literal.
  */
 
-import { StepStatus, type SourceId } from './status.js';
+import type { SourceId, StepStatus } from './status.js';
 
 export const flag = <S extends SourceId, T extends StepStatus>(source: S, status: T) =>
   `${source}_${status}` as `${S}_${T}`;
