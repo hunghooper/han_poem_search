@@ -1,0 +1,28 @@
+# Model pricing, USD per million tokens — the spec §4.3, §18 Q2.
+#
+# Cost is NOT in the OpenAI response; it is computed from this table. A model absent here
+# yields costUsd: null, never a guess — §12's budget then degrades to a token cap, which the
+# brief calls acceptable provided it is a decision rather than a discovery.
+#
+# Model ids are gateway-specific opaque strings. These are the OpenAI-name shapes a gateway is
+# most likely to expose; add the ids YOUR gateway actually reports (they appear in the trace
+# as `model` on every call) and the prices from its own published rates.
+#
+# UNVERIFIED against Ramclouds' rates — nobody has looked. Treat every number here as a
+# placeholder until §18 Q2 is actually answered.
+models:
+  gpt-4o:
+    inputPerMTok: 2.50
+    outputPerMTok: 10.00
+  gpt-4o-mini:
+    inputPerMTok: 0.15
+    outputPerMTok: 0.60
+  deepseek-chat:
+    inputPerMTok: 0.27
+    outputPerMTok: 1.10
+  qwen-max:
+    inputPerMTok: 1.60
+    outputPerMTok: 6.40
+  glm-4-plus:
+    inputPerMTok: 0.60
+    outputPerMTok: 0.60

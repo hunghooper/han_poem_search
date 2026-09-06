@@ -1,0 +1,22 @@
+{
+  "name": "@han/llm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts",
+    "./pricing": "./src/pricing.ts",
+    "./failover": "./src/failover.ts",
+    "./adapters/openai-compatible": "./src/adapters/openai-compatible.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@han/shared": "workspace:*",
+    "openai": "^4.77.0",
+    "yaml": "^2.6.1",
+    "zod": "^3.23.8"
+  }
+}
