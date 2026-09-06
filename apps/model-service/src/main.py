@@ -181,6 +181,23 @@ def embed_dense(req: EmbedRequest) -> EmbedResponse:
     )
 
 
+@app.post("/unload/reranker")
+def unload_reranker() -> dict[str, bool]:
+    """Free the cross-encoder.
+
+    Both models resident is ~5.9GB on a 6GB card, which leaves the embedder thrashing: a bulk
+    index build measured at 27 poems/s dropped to under 1/s once a single rerank request had
+    loaded the cross-encoder. The reranker is lazy on the way in; this makes it lazy on the way
+    out too, so a long ingest can reclaim the memory a stray query took.
+    """
+    existed = "reranker" in _state
+    _state.pop("reranker", None)
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    log.info("reranker unloaded (was loaded: %s)", existed)
+    return {"unloaded": existed}
+
+
 @app.post("/rerank", response_model=RerankResponse)
 def rerank(req: RerankRequest) -> RerankResponse:
     if not req.query.strip():
