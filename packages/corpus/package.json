@@ -8,7 +8,8 @@
     "test": "vitest run",
     "fetch": "tsx src/fetch.ts",
     "ingest": "tsx src/ingest.ts",
-    "embed": "tsx src/embed.ts"
+    "embed": "tsx src/embed.ts",
+    "prosody": "tsx src/build-prosody.ts"
   },
   "dependencies": {
     "@han/config": "workspace:*",

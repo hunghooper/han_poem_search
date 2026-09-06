@@ -45,7 +45,10 @@ async function main(): Promise<void> {
 
   if (!databaseUrl) throw new Error('DATABASE_URL is not set');
 
-  const model = new ModelClient({ baseUrl: modelUrl, timeoutMs: 120000 });
+    // Generous: a 64-poem batch on a contended GPU can exceed two minutes, and an abort here
+  // wastes the whole run. The build is long and unattended; failing it on a slow batch is the
+  // wrong trade.
+  const model = new ModelClient({ baseUrl: modelUrl, timeoutMs: 600000 });
   const health = await model.health();
   console.log(`sidecar: ${health.modelId} dim=${health.dim} device=${health.device}`);
 

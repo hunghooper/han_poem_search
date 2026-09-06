@@ -81,6 +81,12 @@ export const poem = pgTable(
       .notNull()
       .references(() => work.id, { onDelete: 'cascade' }),
     edition: varchar('edition', { length: 64 }).notNull(),
+    /**
+     * The id from the upstream JSON, where the collection has one. Only 全唐诗/poet.*.json
+     * does (ADR 004). It is the join key for strains/, which is the corpus's own 平仄 data
+     * and the only tonal source available — there is no 平水韻 table in the repo.
+     */
+    upstreamId: varchar('upstream_id', { length: 64 }),
     titleDisplay: text('title_display'),
     titleMatch: text('title_match'),
     /** 詞牌, for 詞 records. Null for 詩. */
@@ -108,6 +114,7 @@ export const poem = pgTable(
     contentHashIdx: uniqueIndex('poem_content_hash_idx').on(t.contentHash),
     workIdx: index('poem_work_idx').on(t.workId),
     editionIdx: index('poem_edition_idx').on(t.edition),
+    upstreamIdx: index('poem_upstream_idx').on(t.upstreamId),
   }),
 );
 

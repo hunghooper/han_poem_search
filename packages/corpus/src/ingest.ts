@@ -32,6 +32,7 @@ interface Prepared {
   work: { workKey: string; title: string | null; authorId: string | null; dynasty: string | null };
   poem: {
     edition: string;
+    upstreamId: string | null;
     titleDisplay: string | null;
     titleMatch: string | null;
     rhythmic: string | null;
@@ -77,6 +78,7 @@ function prepare(
     },
     poem: {
       edition: raw.edition,
+      upstreamId: raw.upstreamId,
       titleDisplay: raw.title,
       titleMatch: raw.title ? toMatchForm(raw.title) : null,
       rhythmic: raw.rhythmic,
