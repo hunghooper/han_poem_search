@@ -21,6 +21,16 @@ export interface ModelHealth {
 export interface ModelClientOptions {
   baseUrl: string;
   timeoutMs?: number;
+  /**
+   * Separate, shorter budget for reranking.
+   *
+   * Reranking is a cross-encoder pass over up to 50 candidates and is by far the heaviest
+   * online call. Under GPU contention it was measured at 60s — long enough that a user gives
+   * up, and long past the point where the honest answer is "the reranker did not respond".
+   * §12 puts tool timeouts at 8s; the reranker is held to the same standard, and a timeout
+   * degrades the run to local_incomplete instead of blocking it.
+   */
+  rerankTimeoutMs?: number;
 }
 
 const request = async <T>(
@@ -56,10 +66,12 @@ const request = async <T>(
 export class ModelClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
+  private readonly rerankTimeoutMs: number;
 
   constructor(opts: ModelClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, '');
     this.timeoutMs = opts.timeoutMs ?? 15000;
+    this.rerankTimeoutMs = opts.rerankTimeoutMs ?? 8000;
   }
 
   async health(): Promise<ModelHealth> {
@@ -107,7 +119,7 @@ export class ModelClient {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ query, documents }),
       },
-      this.timeoutMs,
+      this.rerankTimeoutMs,
       'rerank',
     );
     return r.scores;

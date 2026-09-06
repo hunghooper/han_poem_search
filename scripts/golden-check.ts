@@ -9,8 +9,11 @@
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { exactNgramSearch } from '@han/retrieval/sources/exact-ngram';
+import { hybridSearch } from '@han/retrieval/hybrid';
 import { evaluateLocal } from '@han/retrieval/confidence';
+import { splitColophon } from '@han/retrieval/colophon';
+import { ModelClient } from '@han/retrieval/model-client';
+import { VectorStore } from '@han/retrieval/vector-store';
 
 interface Case {
   id: string;
@@ -27,6 +30,26 @@ const db = drizzle(pool);
 const raw = await readFile('fixtures/golden/user-queries.json', 'utf8');
 const cases = (JSON.parse(raw) as { cases: Case[] }).cases;
 
+// The semantic layer is optional; the run reports which retrievers were live so two runs are
+// never compared across different configurations by accident.
+let model: ModelClient | null = new ModelClient({
+  baseUrl: process.env.MODEL_SERVICE_URL ?? 'http://localhost:8000',
+  timeoutMs: 60000,
+});
+let vectors: VectorStore | null = new VectorStore(
+  process.env.QDRANT_URL ?? 'http://localhost:6333',
+  process.env.QDRANT_COLLECTION_ALIAS ?? 'poetry',
+);
+try {
+  await model.health();
+  if (!(await vectors.readMeta())) vectors = null;
+} catch {
+  model = null;
+  vectors = null;
+}
+console.log(`retrievers: exact + bm25${model && vectors ? ' + vector + reranker' : ' (semantic layer ABSENT)'}
+`);
+
 // A deliberately meaningless fragment — the §16 negative control.
 const NONSENSE = '龘龘龘龘龘龘';
 
@@ -35,16 +58,20 @@ let failed = 0;
 
 const report = async (id: string, query: string, expected: string, damage: string) => {
   const started = Date.now();
-  const exact = await exactNgramSearch(db, query);
+  // The 落款 is stripped before searching, exactly as the API does it.
+  const colophon = splitColophon(query);
+  const searchText = colophon.body.length > 0 ? colophon.body.join('\n') : query;
+  const r = await hybridSearch(searchText, { db, model, vectors });
+  const exact = r.exact;
   const verdict = evaluateLocal({
     intent: 'fragment_lookup',
     exactMatch: { kind: exact.kind, workIds: exact.workIds, windowsMatched: exact.windowsMatched },
-    candidateCount: exact.hits.length,
-    rerankScores: [],
+    candidateCount: r.evidence.length,
+    rerankScores: r.rerankScores,
   });
   const elapsed = Date.now() - started;
 
-  const top = exact.hits[0];
+  const top = r.evidence[0];
   const gotResult = verdict.flags.includes('local_result_found');
   const expectResult = expected === 'local_result_found';
   const ok = expected === 'unknown' ? true : gotResult === expectResult;
@@ -56,14 +83,15 @@ const report = async (id: string, query: string, expected: string, damage: strin
   const mark = expected === 'unknown' ? '?' : ok ? 'PASS' : 'FAIL';
   console.log(
     `${mark.padEnd(4)} ${id.padEnd(7)} ${damage.padEnd(22)} ${elapsed.toString().padStart(5)}ms  ` +
-      `kind=${exact.kind.padEnd(9)} works=${exact.workIds.length} run=${exact.longestRun} ` +
+      `kind=${exact.kind.padEnd(9)} n=${r.evidence.length} run=${exact.longestRun} ` +
+      `rr=${r.rerankScores[0]?.toFixed(2) ?? '—'} ` +
       `flags=[${[...new Set([...exact.flags, ...verdict.flags])].join(' ')}]`,
   );
   if (top) {
-    console.log(`       -> ${top.title ?? '(untitled)'} — ${top.author ?? '(unknown)'} [${top.edition}]`);
-    console.log(`          ${top.textDisplay}`);
+    console.log(`       -> ${top.title ?? '(untitled)'} — ${top.author ?? '(unknown)'} [${top.edition}] via ${top.source}`);
+    console.log(`          ${top.content.split('\n')[0]}`);
     if (exact.reading && exact.reading.reordered) {
-      console.log(`          via ${exact.reading.strategy}${exact.reading.cols ? ` cols=${exact.reading.cols}` : ''}`);
+      console.log(`          reading: ${exact.reading.strategy}${exact.reading.cols ? ` cols=${exact.reading.cols}` : ''}`);
     }
   }
 };
