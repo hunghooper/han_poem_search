@@ -21,7 +21,6 @@ import { sql } from 'drizzle-orm';
 import { hybridSearch } from '@han/retrieval/hybrid';
 import { ModelClient } from '@han/retrieval/model-client';
 import { VectorStore } from '@han/retrieval/vector-store';
-import { toMatchForm } from '@han/retrieval/normalize';
 
 type Damage = 'clean' | 'window' | 'line_reverse' | 'grid_transpose' | 'char_drop' | 'simplified' | 'one_per_line';
 
