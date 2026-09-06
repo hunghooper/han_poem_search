@@ -7,7 +7,12 @@
     "./normalize": "./src/normalize.ts",
     "./reorder": "./src/reorder.ts",
     "./confidence": "./src/confidence.ts",
-    "./sources/exact-ngram": "./src/sources/exact-ngram.ts"
+    "./sources/exact-ngram": "./src/sources/exact-ngram.ts",
+    "./colophon": "./src/colophon.ts",
+    "./fusion": "./src/fusion.ts",
+    "./model-client": "./src/model-client.ts",
+    "./vector-store": "./src/vector-store.ts",
+    "./sources/bm25": "./src/sources/bm25.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -17,7 +22,8 @@
     "@han/shared": "workspace:*",
     "opencc-js": "^1.0.5",
     "zod": "^3.23.8",
-    "drizzle-orm": "^0.36.4"
+    "drizzle-orm": "^0.36.4",
+    "@qdrant/js-client-rest": "~1.15.0"
   },
   "devDependencies": {
     "@types/opencc-js": "^1.0.3"

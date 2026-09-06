@@ -44,17 +44,43 @@ def _device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
+def _dtype():
+    """fp32 everywhere, unless the GPU has tensor cores.
+
+    MEASURED, not assumed: on the development GPU (GTX 1660 Ti) fp16 embedding ran at 2/s
+    against 14/s in fp32 — seven times SLOWER. That card is TU116, the one Turing die shipped
+    without tensor cores, so half precision gets no matmul acceleration and falls back to
+    slower kernels. Half precision is a real win on cards that have tensor cores (compute
+    capability >= 7.0 excluding TU11x), so it is enabled by capability rather than banned.
+    """
+    if not torch.cuda.is_available():
+        return torch.float32
+    major, minor = torch.cuda.get_device_capability()
+    name = torch.cuda.get_device_name(0)
+    has_tensor_cores = (major, minor) >= (7, 0) and "GTX 16" not in name
+    return torch.float16 if has_tensor_cores else torch.float32
+
+
 def embedder() -> SentenceTransformer:
     if "embedder" not in _state:
         log.info("loading %s on %s", EMBEDDING_MODEL_ID, _device())
-        _state["embedder"] = SentenceTransformer(EMBEDDING_MODEL_ID, device=_device())
+        _state["embedder"] = SentenceTransformer(
+            EMBEDDING_MODEL_ID,
+            device=_device(),
+            model_kwargs={"torch_dtype": _dtype()},
+        )
     return _state["embedder"]  # type: ignore[return-value]
 
 
 def reranker() -> CrossEncoder:
     if "reranker" not in _state:
         log.info("loading %s on %s", RERANKER_MODEL_ID, _device())
-        _state["reranker"] = CrossEncoder(RERANKER_MODEL_ID, device=_device(), max_length=512)
+        _state["reranker"] = CrossEncoder(
+            RERANKER_MODEL_ID,
+            device=_device(),
+            max_length=512,
+            model_kwargs={"torch_dtype": _dtype()},
+        )
     return _state["reranker"]  # type: ignore[return-value]
 
 
@@ -102,6 +128,7 @@ class HealthResponse(BaseModel):
     normalized: bool
     opencc_config: str
     device: str
+    dtype: str
     reranker_loaded: bool
 
 
@@ -116,6 +143,7 @@ def health() -> HealthResponse:
         normalized=True,
         opencc_config=OPENCC_CONFIG,
         device=_device(),
+        dtype=str(_dtype()).replace("torch.", ""),
         reranker_loaded="reranker" in _state,
     )
 
@@ -133,7 +161,7 @@ def embed_dense(req: EmbedRequest) -> EmbedResponse:
         normalize_embeddings=req.normalize,
         convert_to_numpy=True,
         show_progress_bar=False,
-        batch_size=32,
+        batch_size=64,
     )
     return EmbedResponse(
         vectors=[v.tolist() for v in vectors],
