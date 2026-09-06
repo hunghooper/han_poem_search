@@ -12,7 +12,11 @@
     "./fusion": "./src/fusion.ts",
     "./model-client": "./src/model-client.ts",
     "./vector-store": "./src/vector-store.ts",
-    "./sources/bm25": "./src/sources/bm25.ts"
+    "./sources/bm25": "./src/sources/bm25.ts",
+    "./verify": "./src/verify/index.ts",
+    "./verify/form": "./src/verify/form.ts",
+    "./verify/prosody": "./src/verify/prosody.ts",
+    "./hybrid": "./src/hybrid.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
