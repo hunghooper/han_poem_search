@@ -68,6 +68,7 @@ const report = async (id: string, query: string, expected: string, damage: strin
     exactMatch: { kind: exact.kind, workIds: exact.workIds, windowsMatched: exact.windowsMatched },
     candidateCount: r.evidence.length,
     rerankScores: r.rerankScores,
+    lexicalOverlap: r.lexicalOverlap,
   });
   const elapsed = Date.now() - started;
 

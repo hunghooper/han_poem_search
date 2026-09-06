@@ -26,6 +26,18 @@ export interface ConfidenceThresholds {
   noiseFloor: number;
   /** Windows that must agree for a partial exact match to count. */
   minAgreeingWindows: number;
+  /**
+   * Minimum share of the query's characters that must appear in a candidate before any rerank
+   * score is believed.
+   *
+   * MEASURED FAILURE. Reranker scores are not calibrated relevance probabilities. The nonsense
+   * control 龘龘龘龘龘龘 was scored 0.99 against 韓愈《駑驥》 — a poem sharing not one character
+   * with it. Trusting the score alone produced exactly the outcome §16 forbids: an answer
+   * assembled from irrelevant top-k. A cross-encoder given out-of-distribution input returns a
+   * confident number, not an admission of ignorance, so something deterministic has to bound
+   * it. Character overlap is cheap, has no failure mode of its own, and cannot be fooled.
+   */
+  minLexicalOverlap: number;
 }
 
 /**
@@ -37,14 +49,20 @@ export const PROVISIONAL_THRESHOLDS: ConfidenceThresholds = {
   verifyFloor: 0.6,
   noiseFloor: 0.35,
   minAgreeingWindows: 2,
+  minLexicalOverlap: 0.15,
 };
 
 export interface EvaluateInput {
   intent: QueryIntent;
   exactMatch: { kind: ExactMatchKind; workIds: string[]; windowsMatched: number };
   candidateCount: number;
-  /** Descending. Empty in Phase 1 — the reranker arrives in Phase 2. */
+  /** Descending. Empty when the reranker was unavailable or timed out. */
   rerankScores: number[];
+  /**
+   * Share of the query's distinct characters present in the best candidate, 0..1.
+   * Null when it could not be computed — treated as "unknown", never as "fine".
+   */
+  lexicalOverlap?: number | null;
 }
 
 export interface EvaluateOutput {
@@ -105,6 +123,18 @@ export function evaluateLocal(
       flags: [AggregateFlag.LOCAL_LOW_CONFIDENCE, AggregateFlag.LOCAL_INCOMPLETE],
       confidence: 0.3,
       reason: `${input.candidateCount} candidates exist but none has been scored — reranker not available`,
+    };
+  }
+
+  // Deterministic gate BEFORE the score is read. A candidate that shares almost nothing with
+  // the query is not a low-confidence answer; it is not an answer.
+  const overlap = input.lexicalOverlap;
+  if (overlap !== null && overlap !== undefined && overlap < thresholds.minLexicalOverlap) {
+    return {
+      status: StepStatus.NO_RESULT,
+      flags: [AggregateFlag.NO_LOCAL_RESULT],
+      confidence: 0,
+      reason: `candidates exist but the best shares only ${(overlap * 100).toFixed(0)}% of the query's characters — below the ${(thresholds.minLexicalOverlap * 100).toFixed(0)}% floor, so the rerank score of ${top1.toFixed(2)} is not believed`,
     };
   }
 

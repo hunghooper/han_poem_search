@@ -24,6 +24,22 @@ import type { ModelClient } from './model-client.js';
 import type { VectorStore } from './vector-store.js';
 import { toMatchForm } from './normalize.js';
 
+/**
+ * Share of the query's distinct characters that appear in a candidate.
+ *
+ * Deliberately character-level and set-based: it asks "is this candidate even about the same
+ * words", not "how similar is it". Cheap, deterministic, and immune to the confident-nonsense
+ * failure a cross-encoder exhibits on out-of-distribution input.
+ */
+export function lexicalOverlap(query: string, candidate: string): number | null {
+  const q = new Set(toMatchForm(query));
+  if (q.size === 0) return null;
+  const c = new Set(toMatchForm(candidate));
+  let shared = 0;
+  for (const ch of q) if (c.has(ch)) shared += 1;
+  return shared / q.size;
+}
+
 export interface SourceReport {
   status: StepStatus;
   count: number;
@@ -37,6 +53,8 @@ export interface HybridResult {
   evidence: Evidence[];
   /** Descending rerank scores of `evidence`, for the confidence policy. */
   rerankScores: number[];
+  /** Share of the query's distinct characters present in the best candidate, 0..1. */
+  lexicalOverlap: number | null;
   shortCircuited: boolean;
   reports: Record<string, SourceReport>;
 }
@@ -142,7 +160,7 @@ export async function hybridSearch(
     reports.bm25 = { status: StepStatus.SKIPPED, count: 0, latencyMs: 0 };
     reports.vector = { status: StepStatus.SKIPPED, count: 0, latencyMs: 0 };
     reports.reranker = { status: StepStatus.SKIPPED, count: 0, latencyMs: 0 };
-    return { exact, evidence, rerankScores: [], shortCircuited: true, reports };
+    return { exact, evidence, rerankScores: [], lexicalOverlap: null, shortCircuited: true, reports };
   }
 
   // ---- lexical and dense, in parallel ---------------------------------------
@@ -221,7 +239,7 @@ export async function hybridSearch(
   }
 
   if (lists.length === 0) {
-    return { exact, evidence: [], rerankScores: [], shortCircuited: false, reports };
+    return { exact, evidence: [], rerankScores: [], lexicalOverlap: null, shortCircuited: false, reports };
   }
 
   const fused = reciprocalRankFusion(
@@ -281,5 +299,13 @@ export async function hybridSearch(
     .map((e) => e.rerankScore)
     .filter((s): s is number => s !== null);
 
-  return { exact, evidence: top, rerankScores, shortCircuited: false, reports };
+  const best = top[0];
+  return {
+    exact,
+    evidence: top,
+    rerankScores,
+    lexicalOverlap: best ? lexicalOverlap(query, best.content) : null,
+    shortCircuited: false,
+    reports,
+  };
 }

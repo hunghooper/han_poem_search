@@ -29,7 +29,12 @@ log = logging.getLogger("model-service")
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
 
 EMBEDDING_MODEL_ID = os.environ.get("EMBEDDING_MODEL_ID", "BAAI/bge-m3")
-RERANKER_MODEL_ID = os.environ.get("RERANKER_MODEL_ID", "BAAI/bge-reranker-v2-m3")
+# MEASURED: bge-reranker-v2-m3 is 568M parameters, the same size as BGE-M3. Both resident in
+# fp32 is ~5.9GB on a 6GB card, and at that point everything thrashes — a single-text embed
+# went from 214ms to 57,740ms, a 270x regression, with GPU utilisation at 0% the whole time.
+# bge-reranker-base is 278M (~1.1GB), leaving the pair at roughly 3.4GB with room to work.
+# Override with RERANKER_MODEL_ID on a card that can hold the larger model.
+RERANKER_MODEL_ID = os.environ.get("RERANKER_MODEL_ID", "BAAI/bge-reranker-base")
 MAX_SEQ_LENGTH = int(os.environ.get("MAX_SEQ_LENGTH", "256"))
 EMBED_BATCH_SIZE = int(os.environ.get("EMBED_BATCH_SIZE", "32"))
 

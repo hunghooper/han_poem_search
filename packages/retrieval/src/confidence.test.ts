@@ -64,6 +64,42 @@ describe('evaluateLocal', () => {
     expect(r.reason).toMatch(/requires verification/);
   });
 
+  // REGRESSION, measured against the live index. The reranker scored the nonsense query
+  // 龘龘龘龘龘龘 at 0.99 against 韓愈《駑驥》 — a poem sharing not one character with it. A
+  // cross-encoder given out-of-distribution input returns a confident number, not an
+  // admission of ignorance, so the score alone must never be able to produce an answer.
+  // This is §16's explicit prohibition and CONTRIBUTING.md's first undeletable test.
+  it('refuses a high rerank score when the candidate shares nothing with the query', () => {
+    const r = evaluateLocal({ ...base, candidateCount: 8, rerankScores: [0.99], lexicalOverlap: 0 });
+    expect(r.status).toBe(StepStatus.NO_RESULT);
+    expect(r.flags).toContain('no_local_result');
+    expect(r.confidence).toBe(0);
+    expect(r.reason).toMatch(/not believed/);
+  });
+
+  it('accepts a high rerank score when the candidate does share the query characters', () => {
+    const r = evaluateLocal({ ...base, candidateCount: 8, rerankScores: [0.99], lexicalOverlap: 0.8 });
+    expect(r.status).toBe(StepStatus.LOW_CONFIDENCE);
+  });
+
+  it('treats unknown overlap as unknown, not as acceptable', () => {
+    // null means "could not compute", and must not be read as passing the gate.
+    const r = evaluateLocal({ ...base, candidateCount: 8, rerankScores: [0.99], lexicalOverlap: null });
+    expect(r.status).toBe(StepStatus.LOW_CONFIDENCE);
+  });
+
+  it('the lexical gate does not override an exact match', () => {
+    // An exact contiguous match is decided before any score is read.
+    const r = evaluateLocal({
+      ...base,
+      exactMatch: { kind: 'full', workIds: ['w1'], windowsMatched: 5 },
+      candidateCount: 8,
+      rerankScores: [0.99],
+      lexicalOverlap: 0,
+    });
+    expect(r.status).toBe(StepStatus.HAS_RESULT);
+  });
+
   it('is pure — the same input gives the same output', () => {
     const input = { ...base, candidateCount: 3, rerankScores: [0.5] };
     expect(evaluateLocal(input)).toEqual(evaluateLocal(input));

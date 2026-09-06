@@ -123,6 +123,7 @@ export async function runSearch(
     },
     candidateCount: result.evidence.length,
     rerankScores: result.rerankScores,
+    lexicalOverlap: result.lexicalOverlap,
   });
 
   store.emit(runId, {
