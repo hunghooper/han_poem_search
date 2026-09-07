@@ -28,6 +28,9 @@ interface Ev {
 }
 
 interface Result {
+  id: string;
+  /** Which retriever produced it — exact, bm25, vector or model. */
+  source: string;
   title: string | null;
   author: string | null;
   edition: string | null;
@@ -130,6 +133,14 @@ export default function Home() {
   const terminal = events.find((e) => e.step === 'final_answer');
   const flags = terminal?.flags ?? [];
   const found = flags.includes('local_result_found');
+  /**
+   * §7.1: when a fragment resolves to several works the system emits exact_ambiguous and
+   * "passes all candidates forward — do not guess". Showing only the first would put the
+   * guess back in at the presentation layer, which is §1's silent success wearing a different
+   * hat: the data said "these all match" and the page said "this one".
+   */
+  const ambiguous = flags.includes('exact_ambiguous');
+  const tied = ambiguous ? results.filter((r) => r.source === 'exact').slice(0, 5) : [];
 
   return (
     <main>
@@ -195,7 +206,27 @@ export default function Home() {
         </div>
       )}
 
-      {terminal && found && results[0] && (
+      {terminal && found && ambiguous && tied.length > 1 && (
+        <div className="answer">
+          <p className="ambiguous">{t(lang, 'answer.ambiguous', { n: tied.length })}</p>
+          <ul className="tied">
+            {tied.map((r) => (
+              <li key={r.id}>
+                <h3>{r.title ?? '(untitled)'}</h3>
+                <span className="byline">
+                  {r.author ?? '(unknown)'} · {r.edition}
+                </span>
+                <div className="poem">{r.content}</div>
+              </li>
+            ))}
+          </ul>
+          {tied[0]?.provenance && (
+            <p className="prov">{t(lang, 'answer.notAuthoritative')}</p>
+          )}
+        </div>
+      )}
+
+      {terminal && found && !(ambiguous && tied.length > 1) && results[0] && (
         <div className="answer">
           <h2>{results[0].title ?? '(untitled)'}</h2>
           <p className="byline">

@@ -59,6 +59,7 @@ const vi: Dict = {
   'answer.horizontal': 'Chữ ngang',
   'answer.vertical': 'Chữ dọc 直書',
   'trace.inscription': 'Lạc khoản đã tách ra',
+  'answer.ambiguous': 'Đoạn này xuất hiện trong {n} bài. Hệ thống không đoán — đây là tất cả các bài khớp:',
 };
 
 const en: Dict = {
@@ -103,6 +104,7 @@ const en: Dict = {
   'answer.horizontal': 'Horizontal',
   'answer.vertical': 'Vertical 直書',
   'trace.inscription': 'Inscription set aside',
+  'answer.ambiguous': 'This fragment appears in {n} poems. The system does not guess — these all match:',
 };
 
 const zh: Dict = {
@@ -147,6 +149,7 @@ const zh: Dict = {
   'answer.horizontal': '橫書',
   'answer.vertical': '直書',
   'trace.inscription': '已分離的落款',
+  'answer.ambiguous': '此片段見於 {n} 首詩。系統不作臆測，以下為全部相符者：',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };

@@ -22,7 +22,7 @@ const STATIC_KEYS = [
   'settings.confidence', 'settings.uncalibrated', 'settings.agent', 'settings.models',
   'settings.modelReasoning', 'settings.modelAnswer', 'settings.fromEnv',
   'answer.none', 'answer.notAuthoritative', 'answer.horizontal', 'answer.vertical',
-  'trace.inscription',
+  'trace.inscription', 'answer.ambiguous',
 ];
 
 describe('i18n', () => {
