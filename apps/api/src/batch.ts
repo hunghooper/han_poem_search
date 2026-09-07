@@ -12,7 +12,7 @@
  * mis-picked column without ever seeing a number.
  */
 
-import { mkdirSync, createReadStream, statSync } from 'node:fs';
+import { existsSync, mkdirSync, createReadStream, readdirSync, statSync } from 'node:fs';
 import { open, unlink } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import { createWriteStream } from 'node:fs';
@@ -22,7 +22,7 @@ import type { FastifyInstance } from 'fastify';
 // Imported for its type augmentation: without it `request.file()` does not exist on the
 // request type, even though the plugin is registered.
 import '@fastify/multipart';
-import { desc, eq } from 'drizzle-orm';
+import { count, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { batchJob, batchRow } from '@han/db/schema';
 import { StepStatus } from '@han/shared/status';
@@ -257,13 +257,105 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
     };
   });
 
+  /**
+   * Recent jobs.
+   *
+   * Without this the only way back to a job is to upload the file again — which creates a
+   * SECOND job, re-runs every row and pays for all of them. The history is what makes the
+   * cheap path reachable: reopen the job, re-run only what is unresolved.
+   */
   app.get('/api/batch', async () => {
     const jobs = await deps.db
       .select()
       .from(batchJob)
       .orderBy(desc(batchJob.createdAt))
       .limit(50);
-    return { jobs };
+    if (jobs.length === 0) return { jobs: [] };
+
+    // One grouped query rather than one per job: a list of 50 jobs should not be 50 round
+    // trips, and the counts are what make a row in the list worth reading.
+    const counts = await deps.db
+      .select({ jobId: batchRow.jobId, status: batchRow.status, n: count() })
+      .from(batchRow)
+      .where(
+        inArray(
+          batchRow.jobId,
+          jobs.map((j) => j.id),
+        ),
+      )
+      .groupBy(batchRow.jobId, batchRow.status);
+
+    const byJob = new Map<string, Record<string, number>>();
+    for (const c of counts) {
+      const entry = byJob.get(c.jobId) ?? {};
+      entry[c.status] = Number(c.n);
+      byJob.set(c.jobId, entry);
+    }
+
+    return {
+      jobs: jobs.map((j) => ({
+        jobId: j.id,
+        filename: j.filename,
+        kind: j.kind,
+        status: j.status,
+        totalRows: j.totalRows,
+        queryColumn: j.queryColumn,
+        costUsd: j.costUsd,
+        createdAt: j.createdAt,
+        byStatus: byJob.get(j.id) ?? {},
+        running: isRunning(j.id),
+        // What this job is costing on disk. Nothing deletes these files on its own, so the
+        // number has to be visible or it is a leak nobody can see.
+        bytes: sizeOnDisk(dataDir, j.id),
+      })),
+    };
+  });
+
+  /**
+   * Everything the panel needs to reopen a job, in the shape the upload returned.
+   *
+   * The column profiles are recomputed from the normalised file rather than stored: reading
+   * 200 rows costs nothing, and a stored profile would be a second copy of the truth that
+   * could disagree with the file it describes.
+   */
+  app.get('/api/batch/:id/scan', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const job = await loadJob(deps, id);
+    if (!job) return reply.code(404).send({ error: 'no such job' });
+
+    const sample: Array<Record<string, unknown>> = [];
+    for await (const row of readJsonl(job.dataPath, { limit: SCAN_ROWS })) sample.push(row.values);
+    const scanned = scanColumns(sample, job.headers.length > 0 ? job.headers : undefined);
+
+    return {
+      jobId: job.id,
+      kind: job.kind,
+      filename: job.filename,
+      totalRows: job.totalRows,
+      headers: job.headers,
+      columns: scanned.columns,
+      // A reopened job keeps the column the user chose. Re-suggesting would quietly invite
+      // them to change it, and a job searched on two different columns is not one job.
+      suggested: job.queryColumn ?? scanned.suggested,
+      abstainReason: job.queryColumn ? null : (scanned.abstainReason ?? null),
+      agentEnabled: job.agentEnabled,
+      agentCapUsd: job.agentCapUsd,
+    };
+  });
+
+  /** Delete a job and the files behind it. The only thing that bounds the data directory. */
+  app.delete('/api/batch/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const job = await loadJob(deps, id);
+    if (!job) return reply.code(404).send({ error: 'no such job' });
+    if (isRunning(id)) return reply.code(409).send({ error: 'cannot delete a running job' });
+
+    // Files first: a row deleted with its files left behind is a leak with no handle on it,
+    // whereas files deleted with the row left behind fails loudly on the next read.
+    for (const f of jobFiles(dataDir, id)) await unlink(f).catch(() => undefined);
+    // batch_row goes with it — the foreign key cascades.
+    await deps.db.delete(batchJob).where(eq(batchJob.id, id));
+    return { deleted: true };
   });
 
   app.get('/api/batch/:id/export', async (request, reply) => {
@@ -301,6 +393,58 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
     );
     return reply.send(createReadStream(outPath));
   });
+}
+
+/**
+ * Delete files in the data directory that no job owns.
+ *
+ * Called at boot, when nothing is running. Uploads write the normalised file BEFORE inserting
+ * the job row, so a failure between the two leaves a file with no handle on it — nothing knows
+ * it exists, nothing lists it, and nothing will ever delete it. Deleting a job through the API
+ * removes its files, so in the ordinary case this finds nothing; it exists for the case where
+ * the ordinary path did not complete.
+ *
+ * Safe by construction: a file is only removed when its id has no row in `batch_job`, so a
+ * live job's data can never be swept.
+ */
+export async function sweepOrphanFiles(
+  deps: BatchDeps,
+  dataDir: string,
+): Promise<{ files: number; bytes: number }> {
+  if (!existsSync(dataDir)) return { files: 0, bytes: 0 };
+
+  const rows = await deps.db.select({ id: batchJob.id }).from(batchJob);
+  const known = new Set(rows.map((r) => r.id));
+
+  let files = 0;
+  let bytes = 0;
+  for (const name of readdirSync(dataDir)) {
+    const id = name.split('.')[0] ?? '';
+    if (known.has(id)) continue;
+    const full = join(dataDir, name);
+    bytes += statSync(full).size;
+    await unlink(full).catch(() => undefined);
+    files += 1;
+  }
+  return { files, bytes };
+}
+
+/** The files one job owns: the normalised data and any export left from a download. */
+function jobFiles(dataDir: string, id: string): string[] {
+  return [
+    join(dataDir, `${id}.jsonl`),
+    join(dataDir, `${id}.export.jsonl`),
+    join(dataDir, `${id}.export.xlsx`),
+    join(dataDir, `${id}.upload`),
+  ];
+}
+
+function sizeOnDisk(dataDir: string, id: string): number {
+  let total = 0;
+  for (const f of jobFiles(dataDir, id)) {
+    if (existsSync(f)) total += statSync(f).size;
+  }
+  return total;
 }
 
 /**

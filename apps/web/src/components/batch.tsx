@@ -53,6 +53,20 @@ interface Progress {
   running: boolean;
 }
 
+interface JobSummary {
+  jobId: string;
+  filename: string;
+  kind: string;
+  status: string;
+  totalRows: number;
+  queryColumn: string | null;
+  costUsd: number;
+  createdAt: string;
+  byStatus: Record<string, number>;
+  running: boolean;
+  bytes: number;
+}
+
 interface ExportColumn {
   key: string;
   header: string;
@@ -95,6 +109,7 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmText, setConfirmText] = useState('');
   const [rerun, setRerun] = useState<'unresolved' | 'all'>('unresolved');
+  const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -117,6 +132,53 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
       .catch(() => setError('cannot reach the API'));
   }, []);
 
+  const loadJobs = useCallback(async () => {
+    const res = await fetch(`${API}/api/batch`);
+    if (res.ok) setJobs(((await res.json()) as { jobs: JobSummary[] }).jobs);
+  }, []);
+
+  useEffect(() => {
+    void loadJobs();
+  }, [loadJobs]);
+
+  /**
+   * Reopen a job instead of uploading its file again.
+   *
+   * Re-uploading makes a SECOND job that re-runs every row and pays for all of them. This is
+   * the cheap way back: the same job, its results intact, ready for a re-run of only what is
+   * unresolved.
+   */
+  const reopen = useCallback(async (jobId: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/api/batch/${jobId}/scan`);
+      if (!res.ok) {
+        setError(((await res.json()) as { error?: string }).error ?? 'cannot reopen');
+        return;
+      }
+      const data = (await res.json()) as Scan & { agentEnabled: boolean; agentCapUsd: number | null };
+      setScan(data);
+      setColumn(data.suggested ?? '');
+      setAgentEnabled(data.agentEnabled);
+      setCapUsd(data.agentCapUsd === null ? '' : String(data.agentCapUsd));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const remove = useCallback(
+    async (jobId: string) => {
+      const res = await fetch(`${API}/api/batch/${jobId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        setError(((await res.json()) as { error?: string }).error ?? 'cannot delete');
+        return;
+      }
+      await loadJobs();
+    },
+    [loadJobs],
+  );
+
   const upload = useCallback(async (file: File) => {
     setBusy(true);
     setError(null);
@@ -134,10 +196,11 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
       }
       setScan(data);
       setColumn(data.suggested ?? '');
+      void loadJobs();
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [loadJobs]);
 
   // Re-estimate whenever the options change, so the number on screen is always the number the
   // start button will act on.
@@ -214,9 +277,23 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
       <div style={S.panel} onClick={(e) => e.stopPropagation()}>
         <header style={S.header}>
           <h2 style={S.h2}>{t(lang, 'batch.title')}</h2>
-          <button onClick={onClose} style={S.ghost}>
-            {t(lang, 'batch.close')}
-          </button>
+          <div style={S.headerButtons}>
+            {scan && !progress?.running && (
+              <button
+                onClick={() => {
+                  setScan(null);
+                  setProgress(null);
+                  void loadJobs();
+                }}
+                style={S.ghost}
+              >
+                {t(lang, 'batch.back')}
+              </button>
+            )}
+            <button onClick={onClose} style={S.ghost}>
+              {t(lang, 'batch.close')}
+            </button>
+          </div>
         </header>
 
         {error && <p style={S.error}>{error}</p>}
@@ -237,6 +314,62 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
               {busy ? t(lang, 'batch.detecting') : t(lang, 'batch.upload')}
             </button>
             <p style={S.hint}>{t(lang, 'batch.formats')}</p>
+
+            {/* Reopening beats re-uploading: the same file uploaded twice is two jobs, and
+                the second pays for every row again. */}
+            {jobs.length > 0 && (
+              <div style={S.history}>
+                <h3 style={S.h3}>{t(lang, 'batch.history')}</h3>
+                <p style={S.hint}>{t(lang, 'batch.historyNote')}</p>
+                <table style={S.table}>
+                  <tbody>
+                    {jobs.map((j) => (
+                      <tr key={j.jobId} style={S.tr}>
+                        <td style={S.tdName}>
+                          <button style={S.link} onClick={() => void reopen(j.jobId)}>
+                            {j.filename}
+                          </button>
+                          <span style={S.muted}>
+                            {' '}
+                            {new Date(j.createdAt).toLocaleString()}
+                          </span>
+                        </td>
+                        <td style={S.td}>
+                          <span style={{ color: j.running ? '#0969da' : '#57606a' }}>
+                            {t(lang, `batch.${j.status}`)}
+                          </span>
+                        </td>
+                        <td style={S.td}>
+                          {/* The breakdown, not a bare count: which rows are still worth
+                              spending on is the question this list has to answer. */}
+                          {Object.entries(j.byStatus).map(([st, n]) => (
+                            <span key={st} style={{ ...S.chip, color: STATUS_COLOR[st] ?? '#57606a' }}>
+                              {st} {n}{' '}
+                            </span>
+                          ))}
+                          {Object.keys(j.byStatus).length === 0 && (
+                            <span style={S.muted}>{j.totalRows} —</span>
+                          )}
+                        </td>
+                        <td style={S.tdRight}>
+                          <span style={S.muted}>{kb(j.bytes)}</span>
+                        </td>
+                        <td style={S.tdRight}>
+                          <button
+                            style={S.linkDanger}
+                            disabled={j.running}
+                            onClick={() => void remove(j.jobId)}
+                            title={t(lang, 'batch.delete')}
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 
@@ -487,6 +620,9 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
   );
 }
 
+const kb = (bytes: number): string =>
+  bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+
 const pct = (done: number, total: number): number =>
   total === 0 ? 0 : Math.min(100, Math.round((done / total) * 100));
 
@@ -633,4 +769,29 @@ const S: Record<string, React.CSSProperties> = {
   code: { fontFamily: 'ui-monospace, monospace', fontSize: '.78rem' },
   exportRow: { display: 'flex', gap: '.6rem' },
   rerunRow: { margin: '0 0 .75rem' },
+  history: { marginTop: '1.25rem' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '.8rem' },
+  tr: { borderTop: '1px solid #eee' },
+  td: { padding: '.3rem .4rem', verticalAlign: 'top' },
+  tdName: { padding: '.3rem .4rem', verticalAlign: 'top', maxWidth: 240 },
+  tdRight: { padding: '.3rem .4rem', textAlign: 'right', verticalAlign: 'top' },
+  link: {
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    color: '#0969da',
+    cursor: 'pointer',
+    fontSize: '.8rem',
+    textDecoration: 'underline',
+  },
+  linkDanger: {
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    color: '#cf222e',
+    cursor: 'pointer',
+    fontSize: '.85rem',
+  },
+  headerButtons: { display: 'flex', gap: '.4rem' },
+
 };

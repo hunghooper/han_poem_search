@@ -30,7 +30,7 @@ import { loadRuntimeConfig } from '@han/config/runtime';
 import { applyOverrides, OverridesSchema, type RuntimeConfig } from '@han/shared/runtime-config';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
-import { registerBatchRoutes } from './batch.js';
+import { registerBatchRoutes, sweepOrphanFiles } from './batch.js';
 import { resumeInterrupted } from './batch-runner.js';
 
 /**
@@ -355,3 +355,7 @@ await app.listen({ port: PORT, host: HOST });
 // this it would sit at `running` forever, showing a progress bar nobody is advancing.
 const resumed = await resumeInterrupted({ ...deps, store, config: baseConfig });
 if (resumed.length > 0) app.log.info({ jobs: resumed }, 'resumed interrupted batch jobs');
+
+// After the resume, so a job about to be picked up still owns its file when the sweep runs.
+const swept = await sweepOrphanFiles({ ...deps, store, config: baseConfig }, BATCH_DIR);
+if (swept.files > 0) app.log.info(swept, 'swept orphaned batch files');

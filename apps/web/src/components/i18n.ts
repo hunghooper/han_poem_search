@@ -116,6 +116,10 @@ const vi: Dict = {
   'batch.rerunAll': 'Chạy lại toàn bộ {n} dòng',
   'batch.rerunNote': 'Dòng đã tìm thấy và ô trống được giữ nguyên — chạy lại chúng chỉ tốn tiền mà không đổi gì.',
   'batch.rerunStart': 'Chạy lại',
+  'batch.history': 'Lần chạy trước',
+  'batch.historyNote': 'Mở lại một job cũ thay vì upload lại — upload lại tạo job mới và chạy lại toàn bộ, tốn tiền cho cả những dòng đã tìm thấy.',
+  'batch.back': 'Danh sách',
+  'batch.delete': 'Xoá job và file của nó',
 };
 
 const en: Dict = {
@@ -217,6 +221,10 @@ const en: Dict = {
   'batch.rerunAll': 'Re-run all {n} rows',
   'batch.rerunNote': 'Rows already found, and empty cells, are left alone — re-running them costs money and changes nothing.',
   'batch.rerunStart': 'Re-run',
+  'batch.history': 'Earlier runs',
+  'batch.historyNote': 'Reopen a job instead of uploading the file again — a re-upload is a new job and re-runs every row, paying again for the ones already found.',
+  'batch.back': 'All jobs',
+  'batch.delete': 'Delete this job and its files',
 };
 
 const zh: Dict = {
@@ -318,6 +326,10 @@ const zh: Dict = {
   'batch.rerunAll': '重跑全部 {n} 列',
   'batch.rerunNote': '已找到的列與空白格保持原狀——重跑它們只會花錢而不會改變結果。',
   'batch.rerunStart': '重跑',
+  'batch.history': '先前的執行',
+  'batch.historyNote': '重新開啟舊工作，不要重新上傳——重新上傳會建立新工作並重跑所有列，已找到的列也要再付一次費。',
+  'batch.back': '工作列表',
+  'batch.delete': '刪除此工作及其檔案',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };
