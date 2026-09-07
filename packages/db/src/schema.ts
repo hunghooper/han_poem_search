@@ -13,6 +13,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   real,
   smallint,
   text,
@@ -243,6 +244,66 @@ export const ingestRun = pgTable('ingest_run', {
   finishedAt: timestamp('finished_at', { withTimezone: true }),
 });
 
+/**
+ * A batch job: one uploaded file, one column, one run over its rows.
+ *
+ * The uploaded file itself is NOT stored here. It lives on disk beside the job and is
+ * referenced by path — a 20MB workbook in a jsonb column would be paid for on every progress
+ * poll, and the file is already durable where it is.
+ */
+export const batchJob = pgTable('batch_job', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  filename: text('filename').notNull(),
+  kind: varchar('kind', { length: 8 }).notNull(),
+  /** The normalized JSONL every stage reads, whatever was uploaded. See packages/batch/xlsx.ts. */
+  dataPath: text('data_path').notNull(),
+  headers: jsonb('headers').$type<string[]>().notNull().default([]),
+  /** The column the user chose. Never inferred without being shown and confirmed. */
+  queryColumn: text('query_column'),
+  totalRows: integer('total_rows').notNull().default(0),
+
+  agentEnabled: boolean('agent_enabled').notNull().default(false),
+  /** Null means the user declined a cap, deliberately and with the estimate in front of them. */
+  agentCapUsd: real('agent_cap_usd'),
+
+  status: varchar('status', { length: 16 }).notNull().default('scanned'),
+  rowsDone: integer('rows_done').notNull().default(0),
+  costUsd: real('cost_usd').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  error: text('error'),
+});
+
+/**
+ * One row of the user's file, once searched.
+ *
+ * Written as each row finishes rather than accumulated in memory, so a batch that dies at row
+ * 40,000 resumes at 40,000 and the export can be produced from whatever is done. `status` is
+ * NOT NULL for the same reason the export column is locked: a row that was reached and left
+ * without a status is indistinguishable from one that was never reached.
+ */
+export const batchRow = pgTable(
+  'batch_row',
+  {
+    jobId: uuid('job_id')
+      .notNull()
+      .references(() => batchJob.id, { onDelete: 'cascade' }),
+    /** Zero-based position in the user's file. The join key back to their spreadsheet. */
+    rowIndex: integer('row_index').notNull(),
+    /** Null when the row was never reached, or when its cell was empty. */
+    runId: uuid('run_id'),
+    status: varchar('status', { length: 32 }).notNull(),
+    /** The whole export payload for this row, already mapped. */
+    result: jsonb('result').$type<Record<string, unknown>>(),
+    costUsd: real('cost_usd').notNull().default(0),
+    finishedAt: timestamp('finished_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.jobId, t.rowIndex] }),
+  }),
+);
+
 /** Aggregate export for the Drizzle client. */
 export const schema = {
   work,
@@ -254,4 +315,6 @@ export const schema = {
   searchResult,
   toolCall,
   ingestRun,
+  batchJob,
+  batchRow,
 };

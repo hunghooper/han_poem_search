@@ -3,12 +3,21 @@
  * Drizzle cannot express (the pg_bigm operator classes — ADR 001).
  */
 
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
+
+/**
+ * Load the repo-root .env before reading DATABASE_URL — same reasoning as the worker and the
+ * API (ADR 010). A migration runner that only works from one particular shell is a migration
+ * runner that fails at the worst moment.
+ */
+const envFile = fileURLToPath(new URL('../../../.env', import.meta.url));
+if (existsSync(envFile)) process.loadEnvFile(envFile);
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = join(here, '..', 'migrations');
