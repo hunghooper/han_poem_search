@@ -16,6 +16,8 @@ import { z } from 'zod';
 export const PriceSchema = z.object({
   inputPerMTok: z.number().nonnegative(),
   outputPerMTok: z.number().nonnegative(),
+  /** Optional. Defaults to inputPerMTok — a model with no cache discount is priced the same. */
+  cachedInputPerMTok: z.number().nonnegative().optional(),
 });
 export type Price = z.infer<typeof PriceSchema>;
 
@@ -42,15 +44,24 @@ export function loadPriceTable(path: string): PriceTable {
  * unrecognised id is unpriced, and the operator adds the exact string their gateway reports.
  */
 export function estimateCost(
-  usage: { inputTokens: number; outputTokens: number } | null | undefined,
+  usage: { inputTokens: number; outputTokens: number; cachedInputTokens?: number } | null | undefined,
   model: string,
   table: PriceTable | undefined,
 ): number | null {
   if (!usage || !table) return null;
   const price = table[model];
   if (!price) return null;
+
+  // OpenAI's convention: prompt_tokens INCLUDES the cached ones. So the uncached remainder is
+  // billed at the input rate and the cached portion at the cached rate. Adding the two token
+  // counts together would bill every cache hit twice.
+  const cached = Math.min(Math.max(usage.cachedInputTokens ?? 0, 0), usage.inputTokens);
+  const fresh = usage.inputTokens - cached;
+  const cachedRate = price.cachedInputPerMTok ?? price.inputPerMTok;
+
   return (
-    (usage.inputTokens / 1_000_000) * price.inputPerMTok +
+    (fresh / 1_000_000) * price.inputPerMTok +
+    (cached / 1_000_000) * cachedRate +
     (usage.outputTokens / 1_000_000) * price.outputPerMTok
   );
 }

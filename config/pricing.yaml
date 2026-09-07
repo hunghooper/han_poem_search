@@ -4,25 +4,26 @@
 # yields costUsd: null, never a guess — §12's budget then degrades to a token cap, which the
 # brief calls acceptable provided it is a decision rather than a discovery.
 #
-# Model ids are gateway-specific opaque strings. These are the OpenAI-name shapes a gateway is
-# most likely to expose; add the ids YOUR gateway actually reports (they appear in the trace
-# as `model` on every call) and the prices from its own published rates.
+# `cachedInputPerMTok` is optional and defaults to `inputPerMTok`. The gateway reports
+# `usage.prompt_tokens_details.cached_tokens`, and OpenAI's convention is that `prompt_tokens`
+# INCLUDES the cached ones — so cached tokens are billed at the cached rate and the remainder
+# at the input rate. Adding the two together would double-count every cache hit.
 #
-# UNVERIFIED against Ramclouds' rates — nobody has looked. Treat every number here as a
-# placeholder until §18 Q2 is actually answered.
+# Model ids are gateway-specific opaque strings. Add the ids YOUR gateway reports; they appear
+# in the trace as `model` on every call.
 models:
-  gpt-4o:
-    inputPerMTok: 2.50
-    outputPerMTok: 10.00
-  gpt-4o-mini:
-    inputPerMTok: 0.15
-    outputPerMTok: 0.60
-  deepseek-chat:
-    inputPerMTok: 0.27
-    outputPerMTok: 1.10
-  qwen-max:
-    inputPerMTok: 1.60
-    outputPerMTok: 6.40
-  glm-4-plus:
+  # Rates supplied by the maintainer, 2026-09-07.
+  glm-5.3:
+    inputPerMTok: 2.80
+    outputPerMTok: 8.80
+    cachedInputPerMTok: 2.80
+
+  glm-5.3-flash:
     inputPerMTok: 0.60
-    outputPerMTok: 0.60
+    outputPerMTok: 2.00
+    cachedInputPerMTok: 0.60
+
+# Every other model on the gateway is UNPRICED and reports costUsd: null. That is the honest
+# state, not an oversight — see docs/TODO.md. Note that the models currently configured in
+# .env (qwen-3.8-max for reasoning, gemini-3.8-flash for answers) are among them, so §12's
+# cost ceiling stays inert until either they are priced or the configured models change.

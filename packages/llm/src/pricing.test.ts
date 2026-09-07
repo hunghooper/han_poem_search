@@ -41,3 +41,52 @@ describe('loadPriceTable', () => {
     expect(() => loadPriceTable('config/does-not-exist.yaml')).toThrow();
   });
 });
+
+describe('cached input tokens', () => {
+  const glm = { inputPerMTok: 2.8, outputPerMTok: 8.8, cachedInputPerMTok: 2.8 };
+  const discounted = { inputPerMTok: 2.8, outputPerMTok: 8.8, cachedInputPerMTok: 0.28 };
+
+  it('prices the real glm-5.3 rates', () => {
+    const c = estimateCost({ inputTokens: 1_000_000, outputTokens: 1_000_000 }, 'glm-5.3', { 'glm-5.3': glm });
+    expect(c).toBeCloseTo(2.8 + 8.8);
+  });
+
+  it('bills cached tokens once, at the cached rate', () => {
+    // OpenAI's convention is that prompt_tokens INCLUDES cached_tokens. Adding the two counts
+    // together would bill every cache hit twice.
+    const c = estimateCost(
+      { inputTokens: 1_000_000, outputTokens: 0, cachedInputTokens: 400_000 },
+      'm',
+      { m: discounted },
+    );
+    expect(c).toBeCloseTo(0.6 * 2.8 + 0.4 * 0.28);
+  });
+
+  it('changes nothing when the cached rate equals the input rate', () => {
+    const withCache = estimateCost({ inputTokens: 1e6, outputTokens: 0, cachedInputTokens: 5e5 }, 'g', { g: glm });
+    const without = estimateCost({ inputTokens: 1e6, outputTokens: 0 }, 'g', { g: glm });
+    expect(withCache).toBeCloseTo(without!);
+  });
+
+  it('defaults the cached rate to the input rate when the model omits it', () => {
+    const noCacheField = { inputPerMTok: 2, outputPerMTok: 4 };
+    expect(estimateCost({ inputTokens: 1e6, outputTokens: 0, cachedInputTokens: 1e6 }, 'x', { x: noCacheField })).toBeCloseTo(2);
+  });
+
+  it('never lets a bogus cached count exceed the prompt total or go negative', () => {
+    // The count comes from the gateway; a wrong one must not produce a negative fresh-token
+    // charge and silently reduce the bill.
+    const over = estimateCost({ inputTokens: 1000, outputTokens: 0, cachedInputTokens: 99_999 }, 'm', { m: discounted });
+    expect(over).toBeCloseTo((1000 / 1e6) * 0.28);
+    const neg = estimateCost({ inputTokens: 1000, outputTokens: 0, cachedInputTokens: -5 }, 'm', { m: discounted });
+    expect(neg).toBeCloseTo((1000 / 1e6) * 2.8);
+  });
+});
+
+describe('the shipped table', () => {
+  it('prices the two GLM models the maintainer supplied', () => {
+    const t = loadPriceTable('config/pricing.yaml');
+    expect(t['glm-5.3']).toEqual({ inputPerMTok: 2.8, outputPerMTok: 8.8, cachedInputPerMTok: 2.8 });
+    expect(t['glm-5.3-flash']).toEqual({ inputPerMTok: 0.6, outputPerMTok: 2, cachedInputPerMTok: 0.6 });
+  });
+});

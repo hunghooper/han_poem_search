@@ -118,7 +118,11 @@ interface Parts {
   /** Raw tool calls, arguments still unparsed. */
   rawCalls: Array<{ id: string; name: string; args: string }>;
   finishReason: string | null | undefined;
-  usage: { prompt_tokens?: number; completion_tokens?: number } | null;
+  usage: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number } | null;
+  } | null;
   model: string;
   raw: unknown;
 }
@@ -149,6 +153,9 @@ function buildResponse(parts: Parts, cfg: AdapterConfig, req: LlmRequest): LlmRe
   const usage = {
     inputTokens: parts.usage?.prompt_tokens ?? 0,
     outputTokens: parts.usage?.completion_tokens ?? 0,
+    // Reported by this gateway as prompt_tokens_details.cached_tokens, and INCLUDED in
+    // prompt_tokens. estimateCost splits them so a cache hit is billed once, at its own rate.
+    cachedInputTokens: parts.usage?.prompt_tokens_details?.cached_tokens ?? 0,
   };
 
   return {
@@ -156,7 +163,9 @@ function buildResponse(parts: Parts, cfg: AdapterConfig, req: LlmRequest): LlmRe
     toolCalls,
     stopReason: toolCalls.length > 0 ? 'tool_use' : mapFinishReason(parts.finishReason),
     usage: {
-      ...usage,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cachedInputTokens: usage.cachedInputTokens,
       costUsd: hasUsage ? estimateCost(usage, parts.model || req.model, cfg.priceTable) : null,
     },
     model: parts.model || req.model,
@@ -205,7 +214,11 @@ async function accumulate(
     chunks.push(chunk);
     const c = chunk as {
       model?: string;
-      usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        prompt_tokens_details?: { cached_tokens?: number } | null;
+      } | null;
       choices?: Array<{
         delta?: {
           content?: string | null;

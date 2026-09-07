@@ -42,6 +42,8 @@ export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'error';
 export interface LlmUsage {
   inputTokens: number;
   outputTokens: number;
+  /** Subset of inputTokens served from the gateway's cache, priced at its own rate. */
+  cachedInputTokens?: number;
   /** null when the model is unpriced. NEVER a guess (§4.3). */
   costUsd: number | null;
 }
