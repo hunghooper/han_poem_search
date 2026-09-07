@@ -318,6 +318,21 @@ export async function runSearch(
   // opens a window where the answer is announced but not yet readable.
   store.setOutcome(runId, outcome);
 
+  // §11: search_run.final_* is a materialized convenience. It is written from exactly the
+  // values the final_answer event carries, so a fold over the log reproduces it — there is a
+  // test asserting that property against the real database.
+  store.finalize({
+    runId,
+    query: rawQuery,
+    normalizedQuery: norm.textMatch,
+    finalStatus: verdict.status,
+    finalConfidence: verdict.confidence,
+    finalFlags: allFlags,
+    finalAnswer: answerMessage(result.evidence[0], allFlags, agentPartial),
+    totalCostUsd: 0,
+    agentInvoked: !found,
+  });
+
   store.emit(runId, {
     step: 'final_answer',
     source: 'local',

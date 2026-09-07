@@ -6,6 +6,7 @@
  *   WS   /api/runs/:runId/stream  client sends { lastSeq }, server replays then streams live
  */
 
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
@@ -21,6 +22,7 @@ import { createOpenAiCompatibleProvider } from '@han/llm/adapters/openai-compati
 import { withFailover } from '@han/llm/failover';
 import { loadPriceTable } from '@han/llm/pricing';
 import type { LlmProvider } from '@han/llm/provider';
+import { PostgresEventSink, loadRun } from './event-sink.js';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
 
@@ -35,7 +37,11 @@ if (!DATABASE_URL) {
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 10 });
 const db = drizzle(pool);
-const store = new RunStore();
+// The event log outlives the process (§11). A write failure is logged loudly rather than
+// swallowed — a silently short log is the opaque failure §1 forbids.
+const store = new RunStore(
+  new PostgresEventSink(db, (err, what) => app.log.error({ err, what }, 'event log write failed')),
+);
 
 const MODEL_SERVICE_URL = process.env.MODEL_SERVICE_URL ?? 'http://localhost:8000';
 const QDRANT_URL = process.env.QDRANT_URL ?? 'http://localhost:6333';
@@ -100,7 +106,12 @@ function initLlm(): { provider: LlmProvider | null; reasoningModel: string | nul
 
   let priceTable;
   try {
-    priceTable = loadPriceTable('config/pricing.yaml');
+    // Resolved from THIS module, not from cwd. The API is started via `pnpm --filter`, whose
+    // cwd is apps/api, so a cwd-relative path silently never finds the file — and costUsd then
+    // reads as null for a reason that has nothing to do with the models being unpriced.
+    priceTable = loadPriceTable(
+      process.env.PRICING_FILE ?? fileURLToPath(new URL('../../../config/pricing.yaml', import.meta.url)),
+    );
   } catch (e) {
     // An unreadable pricing file must not silently disable cost accounting.
     app.log.warn({ err: e }, 'pricing table unreadable — costUsd will be null on every call');
@@ -170,7 +181,7 @@ app.post('/api/search', async (req, reply) => {
   const parsed = SearchBody.safeParse(req.body);
   if (!parsed.success) return reply.code(400).send({ error: 'query is required' });
 
-  const runId = store.create();
+  const runId = store.create(parsed.data.query);
   // Return immediately so the client can attach to the stream before work begins; the run is
   // then observable from its first event rather than only from its result.
   // runSearch settles the outcome into the store itself, before it emits final_answer.
@@ -182,22 +193,34 @@ app.post('/api/search', async (req, reply) => {
 
 app.get('/api/runs/:runId', async (req, reply) => {
   const { runId } = req.params as { runId: string };
-  if (!store.has(runId)) return reply.code(404).send({ error: 'run not found' });
-  const events = store.since(runId, -1);
-  return reply.send(encode({ state: fold(events), events }));
+  if (store.has(runId)) {
+    const events = store.since(runId, -1);
+    return reply.send(encode({ state: fold(events), events }));
+  }
+  // Not in memory: either an older run or one served by a process that has since restarted.
+  // The log is authoritative (§11), so read it back rather than reporting the run as missing.
+  const loaded = await loadRun(db, runId);
+  if (!loaded) return reply.code(404).send({ error: 'run not found' });
+  return reply.send(encode({ state: fold(loaded.events), events: loaded.events }));
 });
 
 app.get('/api/runs/:runId/results', async (req, reply) => {
   const { runId } = req.params as { runId: string };
-  if (!store.has(runId)) return reply.code(404).send({ error: 'run not found' });
-  const outcome = store.outcome(runId) as
+  // No in-memory guard: a run served by a previous process is still a real run, and the log
+  // is authoritative (§11). The 404 comes from the log having nothing, not from memory.
+  let outcome = store.outcome(runId) as
     | { evidence?: unknown[]; colophon?: unknown; verification?: unknown }
     | null;
+  if (!outcome) {
+    const loaded = await loadRun(db, runId);
+    outcome = (loaded?.outcome ?? null) as typeof outcome;
+  }
+  if (!outcome) return reply.code(404).send({ error: "run not found" });
   return reply.send(
     encode({
-      results: outcome?.evidence ?? [],
-      colophon: outcome?.colophon ?? null,
-      verification: outcome?.verification ?? null,
+      results: outcome.evidence ?? [],
+      colophon: outcome.colophon ?? null,
+      verification: outcome.verification ?? null,
     }),
   );
 });

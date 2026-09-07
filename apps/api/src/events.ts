@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { SearchEvent, SearchStep } from '@han/shared/events';
 import type { StepStatus } from '@han/shared/status';
+import { nullSink, type EventSink, type RunRecord } from './event-sink.js';
 
 export interface EmitInput {
   step: SearchStep;
@@ -33,9 +34,17 @@ export class RunStore {
   private readonly outcomes = new Map<string, unknown>();
   private readonly listeners = new Map<string, Set<Listener>>();
 
-  create(): string {
+  /**
+   * Memory is the READ path — the live WebSocket stream and reconnect replay both serve from
+   * it, and a database round trip per reconnect would be a poor trade. The sink is a
+   * write-through so the log outlives the process (§11).
+   */
+  constructor(private readonly sink: EventSink = nullSink) {}
+
+  create(query = ''): string {
     const runId = randomUUID();
     this.events.set(runId, []);
+    this.sink.runStarted(runId, query);
     return runId;
   }
 
@@ -57,7 +66,9 @@ export class RunStore {
     };
     list.push(event);
     this.events.set(runId, list);
+    // Subscribers first, sink second: the user is waiting on the stream, not on the write.
     for (const l of this.listeners.get(runId) ?? []) l(event);
+    this.sink.event(event);
     return event;
   }
 
@@ -69,6 +80,16 @@ export class RunStore {
   /** The settled result. Kept beside the log, never in place of it — the log stays authoritative. */
   setOutcome(runId: string, outcome: unknown): void {
     this.outcomes.set(runId, outcome);
+  }
+
+  /** Materialize search_run.final_* (§11). The fold over the events must reproduce these. */
+  finalize(record: RunRecord): void {
+    this.sink.runFinished(record);
+  }
+
+  /** Flush pending writes — for tests and graceful shutdown. */
+  flush(): Promise<void> {
+    return this.sink.drain();
   }
 
   outcome(runId: string): unknown {

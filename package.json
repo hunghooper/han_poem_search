@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:int": "vitest run --project integration",
+    "test:int": "vitest run --config vitest.int.config.ts",
     "db:generate": "pnpm --filter @han/db db:generate",
     "db:migrate": "pnpm --filter @han/db db:migrate",
     "corpus:fetch": "pnpm --filter @han/corpus fetch",
