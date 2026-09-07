@@ -11,6 +11,9 @@ importers:
       '@eslint/js':
         specifier: ^9.15.0
         version: 9.39.5
+      '@han/llm':
+        specifier: workspace:*
+        version: link:packages/llm
       '@han/retrieval':
         specifier: workspace:*
         version: link:packages/retrieval
@@ -53,6 +56,9 @@ importers:
       ws:
         specifier: ^8.21.3
         version: 8.21.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
 
   apps/api:
     dependencies:

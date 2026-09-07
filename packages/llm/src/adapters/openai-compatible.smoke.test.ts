@@ -15,14 +15,38 @@
  * people to ignore it, and this is the one suite that must never be ignored.
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createOpenAiCompatibleProvider } from './openai-compatible.js';
 import type { LlmToolDef } from '../provider.js';
 
-const apiKey = process.env.RAMCLOUDS_API_KEY ?? process.env.LLM_API_KEY ?? '';
-const baseURL = process.env.RAMCLOUDS_BASE_URL ?? process.env.LLM_BASE_URL ?? '';
-const models = (process.env.SMOKE_MODELS ?? process.env.LLM_MODEL_REASONING ?? '')
+/**
+ * Read .env directly. Vitest does not load it, and requiring every operator to export four
+ * variables by hand is how a blocking test quietly never gets run.
+ */
+function fromDotenv(): Record<string, string> {
+  try {
+    return Object.fromEntries(
+      readFileSync('.env', 'utf8')
+        .split(/\r?\n/)
+        .filter((l) => l.includes('=') && !l.trimStart().startsWith('#'))
+        .map((l) => {
+          const i = l.indexOf('=');
+          return [l.slice(0, i).trim(), l.slice(i + 1).replace(/\s+#.*$/u, '').trim()];
+        }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+const dotenv = fromDotenv();
+const env = (k: string): string => process.env[k] ?? dotenv[k] ?? '';
+
+const apiKey = env('RAMCLOUDS_API_KEY') || env('LLM_API_KEY');
+const baseURL = env('RAMCLOUDS_BASE_URL') || env('LLM_BASE_URL');
+const models = (env('SMOKE_MODELS') || env('LLM_MODEL_REASONING'))
   .split(',')
   .map((m) => m.trim())
   .filter(Boolean);
@@ -64,7 +88,7 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
 
       it('1. plain completion returns text', async () => {
         const r = await provider.complete(
-          { model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], maxTokens: 16 },
+          { model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], maxTokens: 2000 },
           signal(),
         );
         expect(r.text).toBeTruthy();
@@ -139,7 +163,7 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
 
       it('5. usage is present and non-zero', async () => {
         const r = await provider.complete(
-          { model, messages: [{ role: 'user', content: 'Say OK' }], maxTokens: 16 },
+          { model, messages: [{ role: 'user', content: 'Say OK' }], maxTokens: 2000 },
           signal(),
         );
         expect(r.flags).not.toContain('usage_unavailable');
@@ -149,7 +173,7 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
       it('6. AbortSignal actually cancels the request', async () => {
         const ac = new AbortController();
         const pending = provider.complete(
-          { model, messages: [{ role: 'user', content: 'Write a long essay about 唐詩.' }], maxTokens: 2048 },
+          { model, messages: [{ role: 'user', content: 'Write a long essay about 唐詩.' }], maxTokens: 2000 },
           ac.signal,
         );
         setTimeout(() => ac.abort(), 50);
@@ -158,7 +182,7 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
 
       it('7. a CJK prompt round-trips without mojibake', async () => {
         const r = await provider.complete(
-          { model, messages: [{ role: 'user', content: '請原樣重複這句話：細草微風岸，危檣獨夜舟。' }], maxTokens: 64 },
+          { model, messages: [{ role: 'user', content: '請原樣重複這句話：細草微風岸，危檣獨夜舟。' }], maxTokens: 2000 },
           signal(),
         );
         expect(r.text ?? '').toMatch(/細草微風岸/);

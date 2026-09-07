@@ -130,7 +130,12 @@ export async function runAgent(
         messages,
         tools: toolDefs(available),
         toolChoice: 'auto',
-        maxTokens: 512,
+        // Reasoning models consume this budget on internal reasoning before emitting
+        // anything. MEASURED on the Ramclouds gateway: glm-5.3 given 16 tokens returns
+        // finish_reason "length" with empty content and no tool calls, which the loop would
+        // read as "the model chose to finish" and end the run for the wrong reason. A
+        // reasoning budget is not an output budget.
+        maxTokens: 4096,
       },
       deps.signal,
     );
