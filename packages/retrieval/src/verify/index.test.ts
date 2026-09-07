@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyseForm, FORM_LABEL, formCompatible, isRegulated } from './form.js';
+import { verifyCandidate } from './index.js';
 import { checkRhyme, checkTone, prosodyStats, rhymeGroupOf, toneOf } from './prosody.js';
 
 const LU_YE = ['細草微風岸', '危檣獨夜舟', '星垂平野闊', '月湧大江流', '名豈文章著', '官應老病休', '飄飄何所似', '天地一沙鷗'];
@@ -122,5 +123,30 @@ describe('checkTone', () => {
 
   it('reports coverage so a weak judgement is visible as weak', () => {
     expect(checkTone(LU_YE).coverage).toBeGreaterThan(0);
+  });
+});
+
+describe('verifyCandidate on reordered input', () => {
+  // REGRESSION, seen in a live trace. The grid-transposed 旅夜書懷 query resolved CORRECTLY to
+  // 杜甫《旅夜書懷》 and the trace then said "Form check failed". The pasted grid has ten
+  // characters per row; the poem has five per line. Comparing those shapes is meaningless
+  // precisely when input_reordered is set, because the input's line structure is the damage.
+  it('abstains on the input-shape check rather than reporting a false failure', () => {
+    const gridRows = ['地何病著名涌平夜岸細', '一所休官章江野舟危草', '沙似老應文大闊星檣微', '鷗天飄飄豈流月垂獨風'];
+    const poem = ['細草微風岸', '危檣獨夜舟', '星垂平野闊', '月湧大江流', '名豈文章著', '官應老病休', '飄飄何所似', '天地一沙鷗'];
+
+    const naive = verifyCandidate(gridRows, poem);
+    expect(naive.checks.find((c) => c.name === 'form')?.outcome).toBe('fail');
+
+    const aware = verifyCandidate(gridRows, poem, true);
+    expect(aware.checks.find((c) => c.name === 'form')?.outcome).toBe('abstain');
+    expect(aware.outcome).not.toBe('fail');
+  });
+
+  it('still checks the candidate is well formed in itself', () => {
+    // Abstaining on input shape must not disable rhyme and tone on the candidate.
+    const poem = ['細草微風岸', '危檣獨夜舟', '星垂平野闊', '月湧大江流', '名豈文章著', '官應老病休', '飄飄何所似', '天地一沙鷗'];
+    const r = verifyCandidate(['短'], poem, true);
+    expect(r.checks.some((c) => c.name === 'rhyme' && c.outcome !== 'abstain')).toBe(true);
   });
 });

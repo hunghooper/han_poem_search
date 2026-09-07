@@ -156,10 +156,15 @@ export async function runSearch(
   // sees what the rules could not decide.
   let verification: ReturnType<typeof verifyCandidate> | null = null;
   const top = result.evidence[0];
+  const allFlagsSoFar = [...result.exact.flags, ...verdict.flags];
 
   if (top) {
     const inputLines = visualLines(searchText).map((l) => toMatchForm(l)).filter((l) => l.length > 0);
-    verification = verifyCandidate(inputLines, poemLines(top.content));
+    verification = verifyCandidate(
+      inputLines,
+      poemLines(top.content),
+      allFlagsSoFar.includes(AggregateFlag.INPUT_REORDERED),
+    );
     store.emit(runId, {
       step: 'rule_verification',
       source: 'rule_verify',

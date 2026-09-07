@@ -1,0 +1,640 @@
+{
+  "grid": {
+    "query": "地何病著名涌平夜岸細\n一所休官章江野舟危草\n沙似老應文大闊星檣微\n鷗天飄飄豈流月垂獨風",
+    "totalMs": 513,
+    "flags": [
+      "exact_full_match",
+      "input_reordered",
+      "local_result_found"
+    ],
+    "events": [
+      {
+        "step": "query_understanding",
+        "status": "started",
+        "message": "Reading your query",
+        "latencyMs": null
+      },
+      {
+        "step": "normalization",
+        "status": "has_result",
+        "message": "Normalised to 40 characters",
+        "latencyMs": null
+      },
+      {
+        "step": "local_search",
+        "status": "started",
+        "message": "Searching the corpus",
+        "latencyMs": null
+      },
+      {
+        "step": "exact",
+        "status": "has_result",
+        "message": "Exact match — 13 results",
+        "latencyMs": 72
+      },
+      {
+        "step": "bm25",
+        "status": "skipped",
+        "message": "Skipped — the exact match already resolved it",
+        "latencyMs": 0
+      },
+      {
+        "step": "vector",
+        "status": "skipped",
+        "message": "Skipped — the exact match already resolved it",
+        "latencyMs": 0
+      },
+      {
+        "step": "reranker",
+        "status": "skipped",
+        "message": "Skipped — the exact match already resolved it",
+        "latencyMs": 0
+      },
+      {
+        "step": "local_evaluation",
+        "status": "has_result",
+        "message": "exact contiguous match resolving to a single work",
+        "latencyMs": null
+      },
+      {
+        "step": "rule_verification",
+        "status": "has_result",
+        "message": "Form checks out — rhyme characters 舟、流、休、鷗 share a derived 韻部; 平仄 alternation holds at 二四六 (0 exception, 100% coverage)",
+        "latencyMs": null
+      },
+      {
+        "step": "final_answer",
+        "status": "has_result",
+        "message": "旅夜書懷 — 杜甫",
+        "latencyMs": null
+      }
+    ],
+    "top": {
+      "title": "旅夜書懷",
+      "author": "杜甫",
+      "edition": "全唐詩",
+      "source": "exact",
+      "content": "細草微風岸，危檣獨夜舟。\n星垂平野闊，月湧大江流。\n名豈文章著，官因老病休。\n飄飄何所似，天地一沙鷗。",
+      "provenance": {
+        "dataset": "chinese-poetry",
+        "file": "全唐诗/poet.tang.11000.json",
+        "commit_sha": "b8594f81a89752241442f2ce267d6f66f96704ee"
+      }
+    },
+    "verification": {
+      "outcome": "pass",
+      "checks": [
+        {
+          "name": "form",
+          "outcome": "abstain",
+          "detail": "五言律詩 — the input was reordered, so its line shape says nothing about the poem's"
+        },
+        {
+          "name": "rhyme",
+          "outcome": "pass",
+          "detail": "rhyme characters 舟、流、休、鷗 share a derived 韻部"
+        },
+        {
+          "name": "tone",
+          "outcome": "pass",
+          "detail": "平仄 alternation holds at 二四六 (0 exception, 100% coverage)"
+        }
+      ],
+      "input_form": {
+        "form": "gushi",
+        "line_count": 4,
+        "line_length": 10,
+        "regularity": 1,
+        "line_lengths": [
+          10,
+          10,
+          10,
+          10
+        ]
+      },
+      "candidate_form": {
+        "form": "wulu",
+        "line_count": 8,
+        "line_length": 5,
+        "regularity": 1,
+        "line_lengths": [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      },
+      "flags": [],
+      "summary": "Form checks out — rhyme characters 舟、流、休、鷗 share a derived 韻部; 平仄 alternation holds at 二四六 (0 exception, 100% coverage)"
+    },
+    "colophon": null
+  },
+  "nonsense": {
+    "query": "龘龘龘龘龘龘",
+    "totalMs": 29010,
+    "flags": [
+      "no_local_result",
+      "rule_verify_fail",
+      "model_has_result"
+    ],
+    "events": [
+      {
+        "step": "query_understanding",
+        "status": "started",
+        "message": "Reading your query",
+        "latencyMs": null
+      },
+      {
+        "step": "normalization",
+        "status": "has_result",
+        "message": "Normalised to 6 characters",
+        "latencyMs": null
+      },
+      {
+        "step": "local_search",
+        "status": "started",
+        "message": "Searching the corpus",
+        "latencyMs": null
+      },
+      {
+        "step": "exact",
+        "status": "no_result",
+        "message": "Exact match — nothing found",
+        "latencyMs": 3
+      },
+      {
+        "step": "vector",
+        "status": "has_result",
+        "message": "Semantic search — 50 results",
+        "latencyMs": 198
+      },
+      {
+        "step": "bm25",
+        "status": "no_result",
+        "message": "Keyword search — nothing found",
+        "latencyMs": 418
+      },
+      {
+        "step": "reranker",
+        "status": "has_result",
+        "message": "Re-ranked candidates — 50 results",
+        "latencyMs": 630
+      },
+      {
+        "step": "local_evaluation",
+        "status": "no_result",
+        "message": "candidates exist but the best shares only 0% of the query's characters — below the 15% floor, so the rerank score of 0.99 is not believed",
+        "latencyMs": null
+      },
+      {
+        "step": "rule_verification",
+        "status": "low_confidence",
+        "message": "Form check failed — 五言排律 has 5 characters per line but the input has 6; rhyme characters 稠、酬、芻、餘、儔、留、丘、州、流、求、遊、輈、愁、羞、收、由、頭、優、謀、謳 fall in different derived 韻部; 平仄 alternation broken at 13 positions (100% coverage)",
+        "latencyMs": null
+      },
+      {
+        "step": "agent",
+        "status": "started",
+        "message": "Agent took over",
+        "latencyMs": null
+      },
+      {
+        "step": "agent",
+        "status": "completed",
+        "message": "Deciding what to do next",
+        "latencyMs": null
+      },
+      {
+        "step": "agent",
+        "status": "completed",
+        "message": "Chose ask_model",
+        "latencyMs": null
+      },
+      {
+        "step": "tool_call",
+        "status": "has_result",
+        "message": "ask_model — 1 result",
+        "latencyMs": 17105
+      },
+      {
+        "step": "agent",
+        "status": "completed",
+        "message": "Found relevant evidence",
+        "latencyMs": null
+      },
+      {
+        "step": "agent",
+        "status": "has_result",
+        "message": "Agent found 1 result",
+        "latencyMs": null
+      },
+      {
+        "step": "final_answer",
+        "status": "no_result",
+        "message": "### Meaning and Classical Usag — via model",
+        "latencyMs": null
+      }
+    ],
+    "top": {
+      "title": null,
+      "author": null,
+      "edition": null,
+      "source": "model",
+      "content": "### Meaning and Classical Usage of 龘\n\n* **Pronunciation:** In modern Standard Mandarin, it is pronounced **dá**. In Middle Chinese, it was an entering-tone syllable, recorded with sounds homophonous or near-homophonous to 沓 (*dá* / *tà*).\n* **Composition:** The character is a triplicated ideograph composed of three traditional dragon characters (龍).\n* **Meaning:** It describes the flight or movement of dragons—specifically, dragons soaring or flying together (龍行貌 / 龍騰飛的樣子).\n* **Classical Sources:** \n  The character appears almost exclusively as a lexicographical entry rather than in ordinary literary prose or verse:\n  * The Liang dynasty dictionary *Yupian* (玉篇) by Gu Yewang defines it:  \n    > 「龘，音沓。龍行龘龘也。」  \n    > (*Dá*, pronounced like *tà*. It refers to the manner of dragons moving.)\n  * This definition was subsequently preserved in the Song dynasty rhyme book *Guangyun* (廣韻) and later in the Qing dynasty *Kangxi Dictionary* (康熙字典).\n\n---\n\n### Attestation in Tang or Song Poetry\n\n**There is no known Tang or Song poem consisting of, or containing, six consecutive 龘 characters (“龘龘龘龘龘龘”). This is completely unattested in classical Chinese poetry.**\n\nThe character 龘 is an obscure, dictionary-preserved curiosity. It does not appear in the standard classical poetic corpora, including the *Quan Tangshi* (全唐詩, *Complete Tang Poems*) and *Quan Songci* (全宋詞, *Complete Song Ci*). Any sequence of repeated 龘 characters presented as a poem is a modern internet fabrication or a visual/calligraphic novelty, not a historical work.",
+      "provenance": null
+    },
+    "verification": {
+      "outcome": "fail",
+      "checks": [
+        {
+          "name": "form",
+          "outcome": "fail",
+          "detail": "五言排律 has 5 characters per line but the input has 6"
+        },
+        {
+          "name": "rhyme",
+          "outcome": "fail",
+          "detail": "rhyme characters 稠、酬、芻、餘、儔、留、丘、州、流、求、遊、輈、愁、羞、收、由、頭、優、謀、謳 fall in different derived 韻部"
+        },
+        {
+          "name": "tone",
+          "outcome": "fail",
+          "detail": "平仄 alternation broken at 13 positions (100% coverage)"
+        }
+      ],
+      "input_form": {
+        "form": "gushi",
+        "line_count": 1,
+        "line_length": 6,
+        "regularity": 1,
+        "line_lengths": [
+          6
+        ]
+      },
+      "candidate_form": {
+        "form": "wupai",
+        "line_count": 40,
+        "line_length": 5,
+        "regularity": 1,
+        "line_lengths": [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      },
+      "flags": [
+        "rule_verify_fail"
+      ],
+      "summary": "Form check failed — 五言排律 has 5 characters per line but the input has 6; rhyme characters 稠、酬、芻、餘、儔、留、丘、州、流、求、遊、輈、愁、羞、收、由、頭、優、謀、謳 fall in different derived 韻部; 平仄 alternation broken at 13 positions (100% coverage)"
+    },
+    "colophon": null
+  },
+  "hannom": {
+    "query": "Nam quốc sơn hà nam đế cư 南國山河南帝居",
+    "totalMs": 18566,
+    "flags": [
+      "local_low_confidence",
+      "model_has_result"
+    ],
+    "events": [
+      {
+        "step": "query_understanding",
+        "status": "started",
+        "message": "Reading your query",
+        "latencyMs": null
+      },
+      {
+        "step": "normalization",
+        "status": "has_result",
+        "message": "Normalised to 7 characters",
+        "latencyMs": null
+      },
+      {
+        "step": "local_search",
+        "status": "started",
+        "message": "Searching the corpus",
+        "latencyMs": null
+      },
+      {
+        "step": "exact",
+        "status": "no_result",
+        "message": "Exact match — nothing found",
+        "latencyMs": 21
+      },
+      {
+        "step": "bm25",
+        "status": "has_result",
+        "message": "Keyword search — 50 results",
+        "latencyMs": 21
+      },
+      {
+        "step": "vector",
+        "status": "has_result",
+        "message": "Semantic search — 50 results",
+        "latencyMs": 193
+      },
+      {
+        "step": "reranker",
+        "status": "has_result",
+        "message": "Re-ranked candidates — 50 results",
+        "latencyMs": 556
+      },
+      {
+        "step": "local_evaluation",
+        "status": "low_confidence",
+        "message": "top rerank score 0.87 clears the verify floor but no exact match — requires verification",
+        "latencyMs": null
+      },
+      {
+        "step": "rule_verification",
+        "status": "has_result",
+        "message": "Form checks out — 七言律詩 — 7 characters per line, matching the input; rhyme characters 墟、居、如、餘 share a derived 韻部; 平仄 alternation holds at 二四六 (1 exception, 100% coverage)",
+        "latencyMs": null
+      },
+      {
+        "step": "agent",
+        "status": "started",
+        "message": "Agent took over",
+        "latencyMs": null
+      },
+      {
+        "step": "agent",
+        "status": "completed",
+        "message": "Deciding what to do next",
+        "latencyMs": null
+      },
+      {
+        "step": "agent",
+        "status": "completed",
+        "message": "Chose ask_model",
+        "latencyMs": null
+      },
+      {
+        "step": "tool_call",
+        "status": "has_result",
+        "message": "ask_model — 1 result",
+        "latencyMs": 13547
+      },
+      {
+        "step": "agent",
+        "status": "completed",
+        "message": "Found relevant evidence",
+        "latencyMs": null
+      },
+      {
+        "step": "agent",
+        "status": "has_result",
+        "message": "Agent found 1 result",
+        "latencyMs": null
+      },
+      {
+        "step": "final_answer",
+        "status": "low_confidence",
+        "message": "### Title\nThe poem is traditio — via model",
+        "latencyMs": null
+      }
+    ],
+    "top": {
+      "title": null,
+      "author": null,
+      "edition": null,
+      "source": "model",
+      "content": "### Title\nThe poem is traditionally titled **«Nam quốc sơn hà»** (chữ Hán: **南國山河**, *Mountains and Rivers of the Southern Country*). It is often celebrated in Vietnamese historiography as the nation’s \"first declaration of independence.\"\n\n---\n\n### Full Text\n\n**Hán tự (Classical Chinese):**\n> 南國山河南帝居，  \n> 截然定分在天書。  \n> 如何逆虜來侵犯，  \n> 汝等行看取敗虛。  \n\n*(Note: In some textual variants, line 2 reads 截然分定在天書, exchanging the positions of 定 and 分).*\n\n**Sino-Vietnamese Reading (Quốc ngữ):**\n> Nam quốc sơn hà Nam đế cư,  \n> Tiệt nhiên định phận tại thiên thư.  \n> Như hà nghịch lỗ lai xâm phạm,  \n> Nhữ đẳng hành khan thủ bại hư.  \n\n---\n\n### English Translation\n\n> The mountains and rivers of the Southern country are where the Southern Emperor dwells,  \n> This was clearly established and written in the Book of Heaven.  \n> How dare you rebellious bandits come and invade?  \n> You shall shortly witness your own utter defeat!\n\n---\n\n### Traditional Attribution\n\nThe poem is traditionally attributed to the renowned Lý dynasty general **Lý Thường Kiệt** (李常傑, 1019–1105). \n\nAccording to historical chronicles such as the *Đại Việt sử ký toàn thư* (Complete Annals of Đại Việt), the poem may have originated as a divine proclamation recited by the spirits of two hero-deities (Trương Hống and Trương Hát) from a temple near the river to rally the troops. Whether composed directly by Lý Thường Kiệt or an anonymous writer under his command, it is inextricably tied to his military campaign.\n\n---\n\n### Historical Context\n\nThe poem was deployed during the **Lý–Song War (1075–1077)**, specifically during the defense of the **Như Nguyệt River defense line** (on the Cầu River, northern Vietnam) in late 1076 or early 1077. \n\nFacing a massive land invasion by the northern Song dynasty forces under commanders Guo Kui and Zhao Xie, Lý Thường Kiệt arranged for the poem to be chanted aloud at night from a nearby river temple. The recitation served as psychological warfare:\n1. **To Đại Việt forces:** It framed their resistance as a sacred duty mandated by the Mandate of Heaven, dramatically boosting morale.\n2. **To the Song invaders:** It asserted Đại Việt's ruler as an *Emperor* (Đế / 帝) of equal celestial standing to the Chinese Emperor, portraying the Song forces not as imperial pacifiers, but as illegitimate invaders defying cosmic order.",
+      "provenance": null
+    },
+    "verification": {
+      "outcome": "pass",
+      "checks": [
+        {
+          "name": "form",
+          "outcome": "pass",
+          "detail": "七言律詩 — 7 characters per line, matching the input"
+        },
+        {
+          "name": "rhyme",
+          "outcome": "pass",
+          "detail": "rhyme characters 墟、居、如、餘 share a derived 韻部"
+        },
+        {
+          "name": "tone",
+          "outcome": "pass",
+          "detail": "平仄 alternation holds at 二四六 (1 exception, 100% coverage)"
+        }
+      ],
+      "input_form": {
+        "form": "gushi",
+        "line_count": 1,
+        "line_length": 7,
+        "regularity": 1,
+        "line_lengths": [
+          7
+        ]
+      },
+      "candidate_form": {
+        "form": "qilu",
+        "line_count": 8,
+        "line_length": 7,
+        "regularity": 1,
+        "line_lengths": [
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7
+        ]
+      },
+      "flags": [],
+      "summary": "Form checks out — 七言律詩 — 7 characters per line, matching the input; rhyme characters 墟、居、如、餘 share a derived 韻部; 平仄 alternation holds at 二四六 (1 exception, 100% coverage)"
+    },
+    "colophon": null
+  },
+  "colophon": {
+    "query": "細草微風岸\n危檣獨夜舟\n星垂平野闊\n月湧大江流\n杜甫詩\n辛亥年秋月書",
+    "totalMs": 453,
+    "flags": [
+      "exact_full_match",
+      "local_result_found"
+    ],
+    "events": [
+      {
+        "step": "query_understanding",
+        "status": "started",
+        "message": "Reading your query",
+        "latencyMs": null
+      },
+      {
+        "step": "query_understanding",
+        "status": "has_result",
+        "message": "Set aside an inscription: 杜甫詩 · 辛亥年秋月書 (辛亥年秋月)",
+        "latencyMs": null
+      },
+      {
+        "step": "normalization",
+        "status": "has_result",
+        "message": "Normalised to 20 characters",
+        "latencyMs": null
+      },
+      {
+        "step": "local_search",
+        "status": "started",
+        "message": "Searching the corpus",
+        "latencyMs": null
+      },
+      {
+        "step": "exact",
+        "status": "has_result",
+        "message": "Exact match — 12 results",
+        "latencyMs": 18
+      },
+      {
+        "step": "bm25",
+        "status": "skipped",
+        "message": "Skipped — the exact match already resolved it",
+        "latencyMs": 0
+      },
+      {
+        "step": "vector",
+        "status": "skipped",
+        "message": "Skipped — the exact match already resolved it",
+        "latencyMs": 0
+      },
+      {
+        "step": "reranker",
+        "status": "skipped",
+        "message": "Skipped — the exact match already resolved it",
+        "latencyMs": 0
+      },
+      {
+        "step": "local_evaluation",
+        "status": "has_result",
+        "message": "exact contiguous match resolving to a single work",
+        "latencyMs": null
+      },
+      {
+        "step": "rule_verification",
+        "status": "has_result",
+        "message": "Form checks out — 五言律詩 — 5 characters per line, matching the input; rhyme characters 舟、流、休、鷗 share a derived 韻部; 平仄 alternation holds at 二四六 (0 exception, 100% coverage)",
+        "latencyMs": null
+      },
+      {
+        "step": "final_answer",
+        "status": "has_result",
+        "message": "旅夜書懷 — 杜甫",
+        "latencyMs": null
+      }
+    ],
+    "top": {
+      "title": "旅夜書懷",
+      "author": "杜甫",
+      "edition": "全唐詩",
+      "source": "exact",
+      "content": "細草微風岸，危檣獨夜舟。\n星垂平野闊，月湧大江流。\n名豈文章著，官因老病休。\n飄飄何所似，天地一沙鷗。",
+      "provenance": {
+        "dataset": "chinese-poetry",
+        "file": "全唐诗/poet.tang.11000.json",
+        "commit_sha": "b8594f81a89752241442f2ce267d6f66f96704ee"
+      }
+    },
+    "verification": {
+      "outcome": "pass",
+      "checks": [
+        {
+          "name": "form",
+          "outcome": "pass",
+          "detail": "五言律詩 — 5 characters per line, matching the input"
+        },
+        {
+          "name": "rhyme",
+          "outcome": "pass",
+          "detail": "rhyme characters 舟、流、休、鷗 share a derived 韻部"
+        },
+        {
+          "name": "tone",
+          "outcome": "pass",
+          "detail": "平仄 alternation holds at 二四六 (0 exception, 100% coverage)"
+        }
+      ],
+      "input_form": {
+        "form": "wujue",
+        "line_count": 4,
+        "line_length": 5,
+        "regularity": 1,
+        "line_lengths": [
+          5,
+          5,
+          5,
+          5
+        ]
+      },
+      "candidate_form": {
+        "form": "wulu",
+        "line_count": 8,
+        "line_length": 5,
+        "regularity": 1,
+        "line_lengths": [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      },
+      "flags": [],
+      "summary": "Form checks out — 五言律詩 — 5 characters per line, matching the input; rhyme characters 舟、流、休、鷗 share a derived 韻部; 平仄 alternation holds at 二四六 (0 exception, 100% coverage)"
+    },
+    "colophon": {
+      "lines": [
+        "杜甫詩",
+        "辛亥年秋月書"
+      ],
+      "cyclical_date": "辛亥年秋月"
+    }
+  }
+}

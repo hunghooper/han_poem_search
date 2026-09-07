@@ -48,16 +48,30 @@ const outcomeOf = (b: boolean | null): CheckOutcome => (b === null ? 'abstain' :
 export function verifyCandidate(
   inputLines: readonly string[],
   candidateLines: readonly string[],
+  /**
+   * True when the input was recognised as reordered (§7.3). Its line structure is then NOT the
+   * poem's line structure — a transposed 4x10 grid has ten characters per row for a 五言 poem
+   * with five — so comparing the two shapes reports a false failure on a correct answer. The
+   * candidate's own form is still checked; only the input-shape comparison abstains.
+   */
+  inputReordered = false,
 ): Verification {
   const inputForm = analyseForm(inputLines);
   const candidateForm = analyseForm(candidateLines);
   const checks: Check[] = [];
 
-  const formOk = formCompatible(inputForm, candidateForm);
+  const formOk = inputReordered ? true : formCompatible(inputForm, candidateForm);
   checks.push({
     name: 'form',
-    outcome: inputForm.lineLength === null || candidateForm.lineLength === null ? 'abstain' : formOk ? 'pass' : 'fail',
-    detail: formOk
+    outcome:
+      inputReordered || inputForm.lineLength === null || candidateForm.lineLength === null
+        ? 'abstain'
+        : formOk
+          ? 'pass'
+          : 'fail',
+    detail: inputReordered
+      ? `${FORM_LABEL[candidateForm.form]} — the input was reordered, so its line shape says nothing about the poem's`
+      : formOk
       ? `${FORM_LABEL[candidateForm.form]} — ${candidateForm.lineLength ?? '?'} characters per line, matching the input`
       : `${FORM_LABEL[candidateForm.form]} has ${candidateForm.lineLength} characters per line but the input has ${inputForm.lineLength}`,
   });
