@@ -362,6 +362,7 @@ export async function runSearch(
     finalConfidence: verdict.confidence,
     finalFlags: allFlags,
     finalAnswer: answerMessage(result.evidence[0], allFlags, agentPartial),
+    evidence: result.evidence,
     totalCostUsd: 0,
     agentInvoked: !found,
   });

@@ -13,7 +13,7 @@ import pg from 'pg';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { fold } from '@han/shared/state';
-import { PostgresEventSink, rowToEvent } from './event-sink.js';
+import { PostgresEventSink, loadRun, rowToEvent } from './event-sink.js';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
 import { DEFAULT_RUNTIME_CONFIG } from '@han/shared/runtime-config';
@@ -115,5 +115,60 @@ describe.skipIf(!configured)('the event log is authoritative (§11)', () => {
     const persisted = await readEvents(runId);
     expect(persisted).toHaveLength(1);
     expect(persisted[0]!.eventId).toBe(first.eventId);
+  });
+});
+
+describe.skipIf(!configured)('evidence survives the process (§11)', () => {
+  it('persists the evidence and reads it back in rank order', async () => {
+    const runId = store.create('撥雲尋古道');
+    const outcome = await runSearch(
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      store,
+      runId,
+      '撥雲尋古道',
+    );
+    await store.flush();
+    expect(outcome.evidence.length).toBeGreaterThan(0);
+
+    // loadRun is the path the API uses when a run is not in memory — after a restart, say.
+    const loaded = await loadRun(db, runId);
+    expect(loaded, 'run could not be read back').not.toBeNull();
+
+    const reloaded = (loaded!.outcome as { evidence: Array<{ title: string | null; workId: string | null }> }).evidence;
+    expect(reloaded).toHaveLength(outcome.evidence.length);
+    // Rank order is the answer's order; losing it would silently promote a runner-up.
+    expect(reloaded.map((e) => e.workId)).toEqual(outcome.evidence.map((e) => e.workId));
+    expect(reloaded[0]!.title).toBe(outcome.evidence[0]!.title);
+  });
+
+  it('reports what it does not store rather than reconstructing it', async () => {
+    const runId = store.create('撥雲尋古道');
+    await runSearch(
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      store,
+      runId,
+      '撥雲尋古道',
+    );
+    await store.flush();
+    const loaded = await loadRun(db, runId);
+    const o = loaded!.outcome as { verification: unknown; colophon: unknown; reloadedFromLog: boolean };
+    // Verification is derivable from the trace text, and deriving it would present a guess as
+    // a record. Absent is the honest answer.
+    expect(o.verification).toBeNull();
+    expect(o.colophon).toBeNull();
+    expect(o.reloadedFromLog).toBe(true);
+  });
+
+  it('a run that found nothing stores no evidence rows', async () => {
+    const runId = store.create('龘龘龘龘龘龘');
+    await runSearch(
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      store,
+      runId,
+      '龘龘龘龘龘龘',
+    );
+    await store.flush();
+    const loaded = await loadRun(db, runId);
+    expect((loaded!.outcome as { evidence: unknown[] }).evidence).toEqual([]);
   });
 });

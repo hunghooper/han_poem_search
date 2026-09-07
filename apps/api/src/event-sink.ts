@@ -47,6 +47,12 @@ export function rowToEvent(row: Record<string, unknown>): SearchEvent {
 
 export interface RunRecord {
   runId: string;
+  /**
+   * The evidence the answer rests on, in rank order. Persisted alongside the run so a reloaded
+   * run can show the poems and not merely the trace of having found them — the difference
+   * between a record of what happened and a record you can read.
+   */
+  evidence: unknown[];
   query: string;
   normalizedQuery: string | null;
   finalStatus: string | null;
@@ -138,6 +144,23 @@ export class PostgresEventSink implements EventSink {
   }
 
   runFinished(r: RunRecord): void {
+    this.push('results insert', async () => {
+      if (r.evidence.length === 0) return;
+      // One statement for the whole set: eight round trips to record eight rows nobody is
+      // waiting on is eight chances for the writer to fall behind the next run.
+      //
+      // Built from sql fragments rather than string concatenation — the evidence is poem text
+      // from a crawled corpus and query-derived metadata, so it is parameterised, not pasted.
+      const rows = r.evidence.map(
+        (e, i) => sql`(gen_random_uuid(), ${r.runId}, ${i}, ${JSON.stringify(e)}::jsonb)`,
+      );
+      await this.db.execute(sql`
+        INSERT INTO search_result (id, run_id, rank, evidence)
+        VALUES ${sql.join(rows, sql`, `)}
+        ON CONFLICT (run_id, rank) DO NOTHING
+      `);
+    });
+
     this.push('run finalize', async () => {
       await this.db.execute(sql`
         UPDATE search_run SET
@@ -185,11 +208,15 @@ export async function loadRun(
   `);
   const run = (Array.isArray(runRes) ? runRes : runRes.rows)[0];
 
+  const resRes = await db.execute<{ evidence: unknown }>(sql`
+    SELECT evidence FROM search_result WHERE run_id = ${runId} ORDER BY rank
+  `);
+  const evidence = (Array.isArray(resRes) ? resRes : resRes.rows).map((row) => row.evidence);
+
   return {
     events: rows.map(rowToEvent),
-    // Evidence is not persisted yet (see docs/TODO.md), so a reloaded run can show its trace
-    // and its verdict but not its result rows. Reporting an empty list is honest; inventing
-    // one from the trace text would not be.
+    // Evidence is read back from search_result, so a reloaded run shows the poems and not
+    // only the trace of having found them.
     outcome: run
       ? {
           runId,
@@ -197,8 +224,11 @@ export async function loadRun(
           confidence: run.final_confidence ?? null,
           flags: (run.final_flags as string[] | null) ?? [],
           reason: (run.final_answer as string | null) ?? null,
-          evidence: [],
+          evidence,
           colophon: null,
+          // Verification and the colophon split are derivable from the trace but are not
+          // stored, so a reloaded run reports them absent rather than reconstructing them
+          // from event text and presenting a guess as a record.
           verification: null,
           reloadedFromLog: true,
         }
