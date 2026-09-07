@@ -16,6 +16,11 @@ import { encode } from '@han/shared/serde';
 import { fold } from '@han/shared/state';
 import { ModelClient } from '@han/retrieval/model-client';
 import { VectorStore, assertModelMatch } from '@han/retrieval/vector-store';
+import { createTools } from '@han/agent/tools';
+import { createOpenAiCompatibleProvider } from '@han/llm/adapters/openai-compatible';
+import { withFailover } from '@han/llm/failover';
+import { loadPriceTable } from '@han/llm/pricing';
+import type { LlmProvider } from '@han/llm/provider';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
 
@@ -79,7 +84,70 @@ const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 await app.register(cors, { origin: true });
 await app.register(websocket);
 
-const deps = await initSemanticLayer().then((d) => ({ db, ...d }));
+/**
+ * The LLM provider, or null. Null is a supported state: exact matching and the semantic layer
+ * work without it, and the agent step then reports UNAVAILABLE rather than being invisible.
+ */
+function initLlm(): { provider: LlmProvider | null; reasoningModel: string | null; answerModel: string | null } {
+  const apiKey = process.env.RAMCLOUDS_API_KEY;
+  const baseURL = process.env.RAMCLOUDS_BASE_URL;
+  const reasoningModel = process.env.LLM_MODEL_REASONING ?? null;
+  const answerModel = process.env.LLM_MODEL_ANSWER ?? reasoningModel;
+  if (!apiKey || !baseURL) {
+    app.log.warn('no LLM gateway configured — the agent fallback is unavailable');
+    return { provider: null, reasoningModel: null, answerModel: null };
+  }
+
+  let priceTable;
+  try {
+    priceTable = loadPriceTable('config/pricing.yaml');
+  } catch (e) {
+    // An unreadable pricing file must not silently disable cost accounting.
+    app.log.warn({ err: e }, 'pricing table unreadable — costUsd will be null on every call');
+  }
+
+  const primary = createOpenAiCompatibleProvider({
+    name: process.env.LLM_PRIMARY_PROVIDER ?? 'ramclouds',
+    apiKey,
+    baseURL,
+    ...(priceTable ? { priceTable } : {}),
+  });
+
+  const fbKey = process.env.FALLBACK_API_KEY;
+  const fbUrl = process.env.FALLBACK_BASE_URL;
+  const fbName = process.env.LLM_FALLBACK_PROVIDER;
+  const fallback =
+    fbName && fbKey && fbUrl
+      ? createOpenAiCompatibleProvider({ name: fbName, apiKey: fbKey, baseURL: fbUrl, ...(priceTable ? { priceTable } : {}) })
+      : null;
+
+  return {
+    provider: withFailover({
+      primary,
+      fallback,
+      onFailover: (i) => app.log.warn(i, 'llm_failover'),
+    }),
+    reasoningModel,
+    answerModel,
+  };
+}
+
+const llm = initLlm();
+const semantic = await initSemanticLayer();
+const deps = {
+  db,
+  ...semantic,
+  provider: llm.provider,
+  reasoningModel: llm.reasoningModel,
+  tools: createTools({
+    db,
+    model: semantic.model,
+    vectors: semantic.vectors,
+    provider: llm.provider,
+    answerModel: llm.answerModel,
+  }),
+  debug: process.env.DEBUG_MODE_ENABLED === 'true',
+};
 
 const SearchBody = z.object({ query: z.string().min(1).max(2000) });
 const HelloFrame = z.object({ lastSeq: z.number().int().min(-1).default(-1) });
@@ -89,9 +157,12 @@ app.get('/health', async () => {
   return {
     ok: true,
     poems: r.rows[0]?.n ?? 0,
-    phase: 2,
+    phase: 3,
     semantic: deps.vectors !== null,
     reranker: deps.model !== null,
+    agent: deps.provider !== null && deps.reasoningModel !== null,
+    reasoningModel: deps.reasoningModel,
+    tools: deps.tools.filter((t) => !t.unavailableReason?.()).map((t) => t.name),
   };
 });
 

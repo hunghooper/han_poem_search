@@ -16,7 +16,9 @@ import { StepStatus } from '@han/shared/status';
 import { okResult, type Tool, type ToolContext } from '../tool.js';
 
 const Args = z.object({
-  question: z.string().min(1).max(500),
+  // 500 was arbitrary and too small: the model wrote a longer question, the call was rejected,
+  // and an agent iteration was spent learning our own limit.
+  question: z.string().min(1).max(4000),
 });
 
 export function createAskModelTool(provider: LlmProvider | null, model: string | null): Tool<z.infer<typeof Args>> {
@@ -35,7 +37,11 @@ export function createAskModelTool(provider: LlmProvider | null, model: string |
       properties: { question: { type: 'string', description: 'The question to ask' } },
       required: ['question'],
     },
-    timeoutMs: 20_000,
+    // Must fit INSIDE the agent's wall-clock budget (§12: 60s), or the tool can never finish
+    // and every call is cut off by the run rather than by its own timeout. Reasoning models
+    // also need room to think before emitting, so the token budget rises as the clock falls —
+    // a generous token budget is useless if the wall clock ends the call first.
+    timeoutMs: 25_000,
     unavailableReason: () =>
       provider && model ? null : 'no LLM provider configured — set RAMCLOUDS_API_KEY and LLM_MODEL_ANSWER',
 
@@ -54,7 +60,7 @@ export function createAskModelTool(provider: LlmProvider | null, model: string |
             },
             { role: 'user', content: args.question },
           ],
-          maxTokens: 600,
+          maxTokens: 2048,
         },
         ctx.signal,
       );

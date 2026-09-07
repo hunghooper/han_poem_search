@@ -19,6 +19,11 @@ import type { VectorStore } from '@han/retrieval/vector-store';
 import type { Evidence } from '@han/shared/evidence';
 import { StepStatus } from '@han/shared/status';
 import { AggregateFlag } from '@han/shared/flags';
+import { runAgent, type AgentEvent } from '@han/agent/loop';
+import { initialAgentState } from '@han/agent/state';
+import { runTool, type Tool } from '@han/agent/tool';
+import { DEFAULT_BUDGET } from '@han/agent/budget';
+import type { LlmProvider } from '@han/llm/provider';
 import type { RunStore } from './events.js';
 
 export interface SearchOutcome {
@@ -36,6 +41,12 @@ export interface SearchDeps {
   db: NodePgDatabase<Record<string, never>>;
   model: ModelClient | null;
   vectors: VectorStore | null;
+  /** Null when no gateway is configured — the agent step then reports UNAVAILABLE, not absent. */
+  provider: LlmProvider | null;
+  /** Must be a model that passed §4.5 checks 2-4. See docs/adr/002-llm-gateway.md. */
+  reasoningModel: string | null;
+  tools: Array<Tool<never>>;
+  debug: boolean;
 }
 
 /** 句 of a poem's display text, in match form — what the verifier needs. */
@@ -176,14 +187,89 @@ export async function runSearch(
   const allFlags = [...new Set([...result.exact.flags, ...verdict.flags, ...(verification?.flags ?? [])])];
   const found = allFlags.includes(AggregateFlag.LOCAL_RESULT_FOUND);
 
+  // §9: the agent fires only when local retrieval could not confidently answer. Given the
+  // §7.1 short-circuit this should be a minority of queries.
+  let agentPartial = false;
   if (!found) {
-    store.emit(runId, {
-      step: 'agent',
-      source: 'model',
-      phase: 'completed',
-      status: StepStatus.NOT_EXECUTED,
-      message: 'Agent fallback is not available yet (Phase 3)',
-    });
+    if (!deps.provider || !deps.reasoningModel) {
+      store.emit(runId, {
+        step: 'agent',
+        source: 'model',
+        phase: 'completed',
+        status: StepStatus.UNAVAILABLE,
+        message: 'No LLM gateway is configured — the agent could not run',
+        metadata: { errorCode: 'TOOL_UNAVAILABLE' },
+      });
+    } else {
+      store.emit(runId, { step: 'agent', source: 'model', phase: 'started', message: 'Agent took over' });
+
+      try {
+      const agentOut = await runAgent(
+        initialAgentState(
+          searchText,
+          allFlags,
+          Object.entries(result.reports).map(([source, r]) => ({
+            source,
+            status: r.status,
+            resultCount: r.count,
+            latencyMs: r.latencyMs,
+          })),
+        ),
+        {
+          provider: deps.provider,
+          model: deps.reasoningModel,
+          tools: deps.tools,
+          budget: DEFAULT_BUDGET,
+          now: () => Date.now(),
+          debug: deps.debug,
+          signal: AbortSignal.timeout(DEFAULT_BUDGET.maxWallClockMs),
+          emit: (e: AgentEvent) => emitAgentEvent(store, runId, e),
+        },
+        runTool,
+      );
+
+      agentPartial = agentOut.partial;
+      for (const f of [...agentOut.flags, ...agentOut.state.flags]) {
+        if (!allFlags.includes(f)) allFlags.push(f);
+      }
+
+      // Agent evidence goes FIRST, not last. The agent only ran because the local results were
+      // judged insufficient, so leaving them ranked above what the agent found means the
+      // answer reports the very candidate the confidence policy just rejected — which is what
+      // happened: a Vietnamese poem correctly identified by the agent was displayed as
+      // 憶潼關 via bm25, the low-confidence local hit.
+      const fresh = agentOut.state.evidence.filter((ev) => !result.evidence.some((x) => x.id === ev.id));
+      result.evidence = [...fresh, ...result.evidence];
+
+      store.emit(runId, {
+        step: 'agent',
+        source: 'model',
+        phase: 'completed',
+        status: agentOut.state.evidence.length > 0 ? StepStatus.HAS_RESULT : StepStatus.NO_RESULT,
+        flags: agentOut.flags,
+        message:
+          agentOut.state.evidence.length > 0
+            ? `Agent found ${agentOut.state.evidence.length} result${agentOut.state.evidence.length === 1 ? '' : 's'}`
+            : `Agent stopped — ${agentOut.stoppedBecause.replace(/_/gu, ' ')}`,
+        metadata: { resultCount: agentOut.state.evidence.length },
+      });
+      } catch (e) {
+        // Belt and braces. runAgent already converts its own failures into a partial outcome,
+        // but nothing may prevent this run from reaching final_answer — a run that never
+        // terminates is worse than one that terminates badly, because the caller cannot tell
+        // the difference between "still working" and "dead".
+        const message = e instanceof Error ? e.message : String(e);
+        agentPartial = true;
+        store.emit(runId, {
+          step: 'agent',
+          source: 'model',
+          phase: 'failed',
+          status: StepStatus.ERROR,
+          message: 'The agent failed — answering from the evidence collected so far',
+          metadata: { errorCode: 'INTERNAL', errorMessage: message },
+        });
+      }
+    }
   }
 
   const outcome: SearchOutcome = {
@@ -209,14 +295,48 @@ export async function runSearch(
     phase: 'completed',
     status: verdict.status,
     flags: allFlags,
-    message:
-      top && found
-        ? `${top.title ?? '(untitled)'} — ${top.author ?? '(unknown)'}`
-        : 'No confident answer from the local corpus',
+    message: answerMessage(result.evidence[0], allFlags, agentPartial),
     metadata: { confidence: verdict.confidence, resultCount: result.evidence.length },
   });
 
   return outcome;
+}
+
+/**
+ * Agent events onto the §5.2 event stream. The whole agent path must be visible — §16's Phase 3
+ * criterion is not just that the fallback works but that the user can see it working.
+ */
+function emitAgentEvent(store: RunStore, runId: string, e: AgentEvent): void {
+  const step = e.kind === 'tool_call' ? 'tool_call' : 'agent';
+  store.emit(runId, {
+    step,
+    source: e.tool ?? 'model',
+    phase: e.kind === 'budget_exhausted' ? 'failed' : 'completed',
+    ...(e.status ? { status: e.status } : {}),
+    flags: e.flags ?? [],
+    agentIteration: e.iteration,
+    message: e.message,
+    metadata: {
+      ...(e.latencyMs !== undefined ? { latencyMs: e.latencyMs } : {}),
+      ...(e.provider ? { provider: e.provider } : {}),
+      ...(e.model ? { model: e.model } : {}),
+      ...(e.costUsd !== undefined && e.costUsd !== null ? { costUsd: e.costUsd } : {}),
+    },
+  });
+}
+
+function answerMessage(
+  top: Evidence | undefined,
+  flags: string[],
+  partial: boolean,
+): string {
+  const suffix = partial ? ' (partial — the agent ran out of budget)' : '';
+  if (!top) return `No confident answer${suffix}`;
+  if (flags.includes(AggregateFlag.LOCAL_RESULT_FOUND)) {
+    return `${top.title ?? '(untitled)'} — ${top.author ?? '(unknown)'}${suffix}`;
+  }
+  // Reached only via the agent: label the source, since it is not the local corpus.
+  return `${top.title ?? top.content.slice(0, 30)} — via ${top.source}${suffix}`;
 }
 
 function describeSource(

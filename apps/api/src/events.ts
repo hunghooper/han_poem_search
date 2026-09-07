@@ -16,6 +16,8 @@ export interface EmitInput {
   phase: 'started' | 'completed' | 'failed';
   status?: StepStatus;
   flags?: string[];
+  /** Which agent iteration produced this, for the trace (§5.2). */
+  agentIteration?: number;
   message?: string;
   metadata?: SearchEvent['metadata'];
 }
@@ -49,6 +51,7 @@ export class RunStore {
       phase: input.phase,
       ...(input.status ? { status: input.status } : {}),
       flags: input.flags ?? [],
+      ...(input.agentIteration !== undefined ? { agentIteration: input.agentIteration } : {}),
       ...(input.message ? { message: input.message } : {}),
       metadata: input.metadata ?? {},
     };

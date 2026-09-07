@@ -14,7 +14,7 @@
 
 import type { Evidence } from '@han/shared/evidence';
 import type { ToolResult } from '@han/shared/tool-result';
-import { StepStatus } from '@han/shared/status';
+import type { StepStatus } from '@han/shared/status';
 
 export interface SourceSummary {
   source: string;
@@ -100,6 +100,16 @@ export function compact(state: AgentState, maxCandidates = 5): CompactState {
   };
 }
 
-/** Has the run collected enough to stop? Cheap check before spending another iteration. */
-export const satisfied = (state: AgentState): boolean =>
-  state.sources.some((s) => s.status === StepStatus.HAS_RESULT && s.resultCount > 0);
+/**
+ * Has the AGENT collected enough to stop?
+ *
+ * Judges `evidence`, which only ever grows from a tool result, and NOT `sources` — which is
+ * seeded with the local retrieval summaries so the model can see what has already been tried.
+ *
+ * MEASURED BUG. Checking `sources` meant the agent inspected the local run that had just been
+ * judged insufficient, saw bm25 and vector reporting has_result, and declared itself satisfied
+ * on its first pass — after its one tool call had TIMED OUT. It stopped having achieved
+ * nothing, and reported success. The agent fires precisely because local retrieval was not
+ * good enough; it cannot then treat local retrieval as its own success.
+ */
+export const satisfied = (state: AgentState): boolean => state.evidence.length > 0;

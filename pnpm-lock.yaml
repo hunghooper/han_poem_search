@@ -68,12 +68,18 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.1
         version: 11.3.0
+      '@han/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
       '@han/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@han/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@han/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@han/retrieval':
         specifier: workspace:*
         version: link:../../packages/retrieval

@@ -166,6 +166,47 @@ describe('runAgent', () => {
   });
 });
 
+describe('satisfaction is judged on what the AGENT found', () => {
+  // REGRESSION, seen against the live gateway. The agent is seeded with the local retrieval
+  // summaries so the model can see what has been tried. Judging satisfaction from those meant
+  // the agent saw bm25/vector reporting has_result — the very results local evaluation had
+  // just called insufficient — and declared success on its first pass, immediately after its
+  // one tool call had TIMED OUT. It stopped having achieved nothing and reported success.
+  it('does not treat the seeded local results as its own success', async () => {
+    const seeded = initialAgentState('a query', ['local_low_confidence'], [
+      { source: 'bm25', status: StepStatus.HAS_RESULT, resultCount: 50, latencyMs: 1267 },
+      { source: 'vector', status: StepStatus.HAS_RESULT, resultCount: 50, latencyMs: 793 },
+    ]);
+    const out = await runAgent(
+      seeded,
+      deps({
+        provider: scriptedProvider([toolCall('search_thivien'), llmResponse({ text: 'nothing more to try' })]),
+        tools: [fakeTool('search_thivien', StepStatus.TIMEOUT)],
+      }),
+      runTool,
+    );
+    // It must keep going after the timeout, then stop because the MODEL finished.
+    expect(out.stoppedBecause).toBe('model_finished');
+    expect(out.state.evidence).toHaveLength(0);
+  });
+
+  it('stops as satisfied only once a tool actually returned evidence', async () => {
+    const seeded = initialAgentState('a query', [], [
+      { source: 'bm25', status: StepStatus.HAS_RESULT, resultCount: 50, latencyMs: 10 },
+    ]);
+    const out = await runAgent(
+      seeded,
+      deps({
+        provider: scriptedProvider([toolCall('search_thivien')]),
+        tools: [fakeTool('search_thivien', StepStatus.HAS_RESULT, 3)],
+      }),
+      runTool,
+    );
+    expect(out.stoppedBecause).toBe('satisfied');
+    expect(out.state.evidence).toHaveLength(3);
+  });
+});
+
 describe('the loop knows nothing about specific tools (§9.2)', () => {
   it('never branches on a tool name — adding a tool requires zero loop changes', () => {
     const src = readFileSync(new URL('./loop.ts', import.meta.url), 'utf8');
@@ -196,5 +237,37 @@ describe('compaction keeps raw evidence out of the reasoning context (§9.1)', (
   it('caps how many candidates reach the model', () => {
     const many = Array.from({ length: 50 }, (_, i) => evidenceItem('bm25', i));
     expect(compact({ ...state(), evidence: many }).candidates).toHaveLength(5);
+  });
+});
+
+describe('failures never leave the run unfinished', () => {
+  // REGRESSION, seen live. When the reasoning call threw, the error escaped runAgent, escaped
+  // the search pipeline, and was swallowed by a .catch() in the server. No final_answer event
+  // was ever emitted, so the client waited forever — indistinguishable from a slow run. §1
+  // calls opaque failure unacceptable, and this was the most opaque failure available.
+  it('converts a reasoning-model failure into a partial outcome instead of throwing', async () => {
+    const events: AgentEvent[] = [];
+    const exploding: LlmProvider = {
+      name: 'fake',
+      supportsTools: true,
+      supportsStreaming: false,
+      complete: () => Promise.reject(Object.assign(new Error('gateway exploded'), { code: 'INTERNAL' })),
+    };
+    const out = await runAgent(state(), deps({ provider: exploding, emit: (e) => events.push(e) }), runTool);
+    expect(out.stoppedBecause).toBe('budget_exhausted');
+    expect(out.partial).toBe(true);
+    expect(out.flags).toContain(AGENT_BUDGET_EXHAUSTED);
+    expect(events.at(-1)?.message).toMatch(/reasoning model failed/);
+  });
+
+  it('reports an aborted reasoning call rather than hanging', async () => {
+    const aborting: LlmProvider = {
+      name: 'fake',
+      supportsTools: true,
+      supportsStreaming: false,
+      complete: () => Promise.reject(Object.assign(new Error('request aborted'), { code: 'TOOL_TIMEOUT' })),
+    };
+    const out = await runAgent(state(), deps({ provider: aborting }), runTool);
+    expect(out.partial).toBe(true);
   });
 });

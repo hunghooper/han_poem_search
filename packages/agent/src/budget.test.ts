@@ -51,3 +51,26 @@ describe('recording', () => {
     expect(s.toolCalls).toBe(1);
   });
 });
+
+describe('tool timeouts must fit inside the run budget', () => {
+  // REGRESSION. ask_model was given a 90s timeout inside a 60s wall-clock budget, so the call
+  // could never complete on its own terms: every invocation was cut off by the run instead,
+  // and the trace blamed the budget rather than the tool. A timeout longer than the budget it
+  // sits inside is always a bug, so it is checked structurally rather than per tool.
+  it('no registered tool can outlive the agent wall clock', async () => {
+    const { createTools } = await import('./tools/index.js');
+    const tools = createTools({
+      db: null as never,
+      model: null,
+      vectors: null,
+      provider: null,
+      answerModel: null,
+    });
+    expect(tools.length).toBeGreaterThan(0);
+    for (const t of tools) {
+      expect(t.timeoutMs, `${t.name} outlives the run budget`).toBeLessThan(
+        DEFAULT_BUDGET.maxWallClockMs,
+      );
+    }
+  });
+});

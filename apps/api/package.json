@@ -20,7 +20,11 @@
     "fastify": "^5.1.0",
     "pg": "^8.13.1",
     "pino": "^9.5.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@han/agent": "workspace:*",
+    "@han/llm": "workspace:*"
   },
-  "devDependencies": { "tsx": "^4.19.0" }
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
 }

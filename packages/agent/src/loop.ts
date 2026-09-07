@@ -124,7 +124,9 @@ export async function runAgent(
 
     deps.emit({ kind: 'iteration', iteration: state.iteration, message: `Deciding what to do next` });
 
-    const res = await deps.provider.complete(
+    let res;
+    try {
+      res = await deps.provider.complete(
       {
         model: deps.model,
         messages,
@@ -138,7 +140,22 @@ export async function runAgent(
         maxTokens: 4096,
       },
       deps.signal,
-    );
+      );
+    } catch (e) {
+      // The reasoning call failed or was cut off. That ends the AGENT, not the run: §12 says
+      // answer from the evidence collected, marked partial. Letting this escape would leave
+      // the caller with no final_answer at all — an opaque failure, the one outcome §1 calls
+      // unacceptable, and the hardest kind to notice because the run simply never finishes.
+      const err = e as { code?: string; message?: string };
+      deps.emit({
+        kind: 'budget_exhausted',
+        iteration: state.iteration,
+        message: `Agent stopped — the reasoning model failed (${err.code ?? 'error'}: ${err.message ?? String(e)}). Answering from the evidence collected so far.`,
+        flags: [AGENT_BUDGET_EXHAUSTED],
+      });
+      flags.push(AGENT_BUDGET_EXHAUSTED);
+      return { state, stoppedBecause: 'budget_exhausted', partial: true, flags };
+    }
     budgetState = recordLlmCall(budgetState, res.usage.costUsd);
     state = { ...state, iteration: state.iteration + 1 };
     deps.emit({
