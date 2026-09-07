@@ -57,7 +57,9 @@ export function estimate(input: EstimateInput): Estimate {
   const concurrency = Math.max(1, input.concurrency ?? DEFAULT_CONCURRENCY);
   const rate = input.agent.enabled ? clamp01(input.agentRate ?? DEFAULT_AGENT_RATE) : 0;
 
-  const wanted = Math.round(rows * rate);
+  // Ceil, not round. A cost estimate must err high: rounding down turned a one-row re-run
+  // with the agent on into "$0.00", which reads as free for work that is not.
+  const wanted = Math.ceil(rows * rate);
   const cap = input.agent.capUsd;
 
   // The cap binds on COST, and cost only accrues on rows that reach the agent. A cap of $5

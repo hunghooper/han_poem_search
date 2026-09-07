@@ -33,7 +33,15 @@ import { JsonlWriter, countJsonlRows, readJsonl } from '@han/batch/jsonl';
 import { EXPORT_COLUMNS, headerFor, resolveColumns } from '@han/batch/export-schema';
 import { buildRow } from '@han/batch/row';
 import { estimate } from '@han/batch/estimate';
-import { cancel, isRunning, runBatch, type BatchDeps, type JobRow } from './batch-runner.js';
+import {
+  cancel,
+  countPending,
+  isRunning,
+  runBatch,
+  type BatchDeps,
+  type JobRow,
+  type RerunMode,
+} from './batch-runner.js';
 
 /** How many rows the column profiler looks at. Enough to be representative, not to be slow. */
 const SCAN_ROWS = 200;
@@ -45,6 +53,13 @@ const StartSchema = z.object({
     /** Null is a deliberate choice to run uncapped, not a missing value. */
     capUsd: z.number().positive().max(10_000).nullable(),
   }),
+  /**
+   * Required to start a job that already has results, and it must be said out loud.
+   *
+   * `unresolved` re-runs only the rows the corpus could not settle — the cheap-then-escalate
+   * workflow. `all` re-runs everything and pays for it again.
+   */
+  rerun: z.enum(['unresolved', 'all']).optional(),
   /** Must match the estimate the user was shown. Guards against a stale confirmation. */
   acknowledgedCostUsd: z.number().nonnegative().optional(),
 });
@@ -142,11 +157,15 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
     if (!job) return reply.code(404).send({ error: 'no such job' });
 
     const body = z
-      .object({ agent: StartSchema.shape.agent })
+      .object({ agent: StartSchema.shape.agent, rerun: StartSchema.shape.rerun })
       .safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: body.error.message });
 
-    return estimate({ rows: job.totalRows, agent: body.data.agent });
+    // Estimated over the rows this run would ACTUALLY search, not over the whole file. A
+    // second pass on the 1,200 rows that came back empty is a different number from a first
+    // pass on 50,000, and quoting the larger one would make the confirmation meaningless.
+    const rows = await countPending(deps.db, id, job.totalRows, body.data.rerun ?? null);
+    return { ...estimate({ rows, agent: body.data.agent }), pendingRows: rows };
   });
 
   app.post('/api/batch/:id/start', async (request, reply) => {
@@ -161,7 +180,25 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
       return reply.code(400).send({ error: `no such column: ${parsed.data.column}` });
     }
 
-    const est = estimate({ rows: job.totalRows, agent: parsed.data.agent });
+    // A job that already has results must say what a second run means. Without this the
+    // request was accepted, `started: true` was returned with a real cost estimate, and then
+    // nothing ran at all — the worst of both, because the caller is told work began.
+    const already = await countPending(deps.db, id, job.totalRows, null);
+    const isRerun = already < job.totalRows;
+    if (isRerun && !parsed.data.rerun) {
+      return reply.code(409).send({
+        error: 'this job already has results — pass rerun: "unresolved" or "all"',
+        settledRows: job.totalRows - already,
+      });
+    }
+
+    const mode: RerunMode | null = isRerun ? (parsed.data.rerun ?? null) : null;
+    const pending = await countPending(deps.db, id, job.totalRows, mode);
+    if (pending === 0) {
+      return reply.code(409).send({ error: 'nothing left to run in this mode', pendingRows: 0 });
+    }
+
+    const est = estimate({ rows: pending, agent: parsed.data.agent });
     // A confirmation is only meaningful against the number the user actually saw. If the
     // options changed after the dialog was shown, the estimate moved and the confirmation is
     // stale — which is exactly when an expensive run gets started by accident.
@@ -184,8 +221,8 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
       .where(eq(batchJob.id, id));
 
     const updated = await loadJob(deps, id);
-    void runBatch(updated as JobRow, deps);
-    return { started: true, estimate: est };
+    void runBatch(updated as JobRow, deps, mode);
+    return { started: true, pendingRows: pending, estimate: est };
   });
 
   app.post('/api/batch/:id/cancel', async (request, reply) => {

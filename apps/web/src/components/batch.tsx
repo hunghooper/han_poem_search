@@ -35,6 +35,7 @@ interface Scan {
 
 interface Estimate {
   rows: number;
+  pendingRows?: number;
   agentRows: number;
   seconds: number;
   costUsd: number;
@@ -93,9 +94,18 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
   const [available, setAvailable] = useState<ExportColumn[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmText, setConfirmText] = useState('');
+  const [rerun, setRerun] = useState<'unresolved' | 'all'>('unresolved');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // A finished job cannot simply be started again: the server refuses without an explicit
+  // mode, because a silent no-op that reports `started` is the worst possible answer.
+  const finished = Boolean(progress && !progress.running && progress.rowsDone > 0);
+  const settled =
+    (progress?.byStatus.has_result ?? 0) + (progress?.byStatus.skipped ?? 0);
+  const unresolved = (progress?.rowsDone ?? 0) - settled;
+
 
   useEffect(() => {
     void fetch(`${API}/api/batch/columns`)
@@ -137,13 +147,18 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
     void fetch(`${API}/api/batch/${scan.jobId}/estimate`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ agent: { enabled: agentEnabled, capUsd: cap } }),
+      body: JSON.stringify({
+        agent: { enabled: agentEnabled, capUsd: cap },
+        // The estimate has to be for the rows this run would actually search. Quoting the
+        // whole file for a second pass over the leftovers would make the number meaningless.
+        rerun: finished ? rerun : undefined,
+      }),
     })
       .then((r) => r.json() as Promise<Estimate>)
       .then(setEstimate)
       .catch(() => undefined);
     setConfirmText('');
-  }, [scan, agentEnabled, capUsd]);
+  }, [scan, agentEnabled, capUsd, finished, rerun]);
 
   // Poll while the job runs. A batch is long enough that a page left open must keep telling
   // the truth about it.
@@ -175,6 +190,7 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
         body: JSON.stringify({
           column,
           agent: { enabled: agentEnabled, capUsd: cap },
+          rerun: finished ? rerun : undefined,
           acknowledgedCostUsd: estimate?.costUsd,
         }),
       });
@@ -347,9 +363,41 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
                   {t(lang, 'batch.cancel')}
                 </button>
               ) : (
-                <button style={S.primary} disabled={!canStart} onClick={() => void start()}>
-                  {t(lang, 'batch.start')}
-                </button>
+                <>
+                  {/* A finished job needs the second run to say what it means. The server
+                      refuses a bare restart, so offering one here would only produce an
+                      error the user cannot act on. */}
+                  {finished && (
+                    <div style={S.rerunRow}>
+                      <label style={S.check}>
+                        <input
+                          type="radio"
+                          name="rerun"
+                          checked={rerun === 'unresolved'}
+                          onChange={() => setRerun('unresolved')}
+                        />
+                        {t(lang, 'batch.rerunUnresolved').replace('{n}', String(unresolved))}
+                      </label>
+                      <label style={S.check}>
+                        <input
+                          type="radio"
+                          name="rerun"
+                          checked={rerun === 'all'}
+                          onChange={() => setRerun('all')}
+                        />
+                        {t(lang, 'batch.rerunAll').replace('{n}', String(progress?.totalRows ?? 0))}
+                      </label>
+                      <p style={S.hint}>{t(lang, 'batch.rerunNote')}</p>
+                    </div>
+                  )}
+                  <button
+                    style={S.primary}
+                    disabled={!canStart || (finished && rerun === 'unresolved' && unresolved === 0)}
+                    onClick={() => void start()}
+                  >
+                    {finished ? t(lang, 'batch.rerunStart') : t(lang, 'batch.start')}
+                  </button>
+                </>
               )}
 
               {progress && progress.status !== 'scanned' && (
@@ -584,4 +632,5 @@ const S: Record<string, React.CSSProperties> = {
   group: { marginBottom: '.4rem' },
   code: { fontFamily: 'ui-monospace, monospace', fontSize: '.78rem' },
   exportRow: { display: 'flex', gap: '.6rem' },
+  rerunRow: { margin: '0 0 .75rem' },
 };

@@ -20,7 +20,7 @@
  * the UI says another" is a bug with no good failure mode.
  */
 
-import { and, eq, max, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { batchJob, batchRow } from '@han/db/schema';
 import { StepStatus } from '@han/shared/status';
@@ -69,7 +69,12 @@ export function cancel(jobId: string): boolean {
  * Resumable by construction: the set of remaining rows comes from what is in the table, so
  * calling this twice on one job is safe, and calling it after a crash is how the job finishes.
  */
-export async function runBatch(job: JobRow, deps: BatchDeps): Promise<void> {
+export async function runBatch(
+  job: JobRow,
+  deps: BatchDeps,
+  /** Null continues an unfinished run; a mode re-runs a job that already has results. */
+  mode: RerunMode | null = null,
+): Promise<void> {
   if (running.has(job.id)) return;
   const handle = { cancelled: false };
   running.set(job.id, handle);
@@ -90,17 +95,19 @@ export async function runBatch(job: JobRow, deps: BatchDeps): Promise<void> {
     .where(eq(batchJob.id, job.id));
 
   let spent = job.costUsd;
-  let done = job.rowsDone;
-  const resumeFrom = await highestFinishedIndex(deps.db, job.id);
+  const skip = await indexesToSkip(deps.db, job.id, mode);
+  let done = skip.size;
 
   try {
     let inFlight: Array<Promise<void>> = [];
 
     for await (const row of readJsonl(job.dataPath)) {
       if (handle.cancelled) break;
-      // Rows already written are skipped rather than redone. This is what makes a resume
-      // cheap, and what stops a restart paying the model twice for the same row.
-      if (resumeFrom !== null && row.index <= resumeFrom) continue;
+      // A SET of indexes, not "everything below the highest one written". Rows finish four at
+      // a time, so a process killed mid-group can leave index 5 unwritten while index 7 is
+      // committed — and a high-water mark would then skip row 5 for good, marking the job
+      // done with a row that was never searched.
+      if (skip.has(row.index)) continue;
 
       // The cap stops the AGENT, not the run. Remaining rows still get a local search and a
       // real status: reporting them as unexecuted would say "we did not look" about rows we
@@ -242,15 +249,55 @@ function costOf(store: RunStore, runId: string): number {
   return Math.round(total * 1e6) / 1e6;
 }
 
-async function highestFinishedIndex(
+/**
+ * How a second run over a job that already has results should treat those results.
+ *
+ * `unresolved` is the one people actually want, and the workflow it serves is the reason this
+ * exists: run the whole file locally for nothing, look at what came back, then spend money
+ * only on the rows the corpus could not settle. Re-running the rows that already matched
+ * exactly would pay a model to re-confirm answers that are already certain.
+ */
+export type RerunMode = 'unresolved' | 'all';
+
+/**
+ * Statuses a re-run leaves alone. Everything else is worth another attempt.
+ *
+ * SKIPPED is here because in a batch it means one thing only: the cell was empty. No amount of
+ * agent will find a poem in a blank cell, so counting those rows as pending would inflate
+ * every estimate — on a file with many blanks, by a lot — and quote for work that returns
+ * immediately. A row that errored or timed out IS worth retrying, and is not in this list.
+ */
+const SETTLED: readonly string[] = [StepStatus.HAS_RESULT, StepStatus.SKIPPED];
+
+/** Exported for its test: the line between "leave it alone" and "worth another attempt". */
+export const isSettled = (status: string): boolean => SETTLED.includes(status);
+
+async function indexesToSkip(
   db: NodePgDatabase<Record<string, never>>,
   jobId: string,
-): Promise<number | null> {
-  const [row] = await db
-    .select({ n: max(batchRow.rowIndex) })
+  mode: RerunMode | null,
+): Promise<Set<number>> {
+  if (mode === 'all') return new Set();
+
+  const rows = await db
+    .select({ rowIndex: batchRow.rowIndex })
     .from(batchRow)
-    .where(eq(batchRow.jobId, jobId));
-  return row?.n ?? null;
+    .where(
+      mode === 'unresolved'
+        ? and(eq(batchRow.jobId, jobId), inArray(batchRow.status, [...SETTLED]))
+        : eq(batchRow.jobId, jobId),
+    );
+  return new Set(rows.map((r) => r.rowIndex));
+}
+
+/** How many rows a run in this mode would actually search. What the estimate must be built on. */
+export async function countPending(
+  db: NodePgDatabase<Record<string, never>>,
+  jobId: string,
+  totalRows: number,
+  mode: RerunMode | null,
+): Promise<number> {
+  return totalRows - (await indexesToSkip(db, jobId, mode)).size;
 }
 
 /**

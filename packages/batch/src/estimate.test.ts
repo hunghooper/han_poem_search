@@ -34,6 +34,14 @@ describe('estimate', () => {
     expect(e.rowsNotExecuted).toBe(0);
   });
 
+  // A single row with the agent on is not free, and an estimate that says $0.00 for it is
+  // the one direction a cost estimate must never round.
+  it('never quotes zero for a run that will call the model', () => {
+    const e = estimate({ rows: 1, agent: { enabled: true, capUsd: null } });
+    expect(e.agentRows).toBe(1);
+    expect(e.costUsd).toBeGreaterThan(0);
+  });
+
   it('reports a small local-only run as trivial', () => {
     expect(estimate({ rows: 100, agent: noAgent }).severity).toBe('trivial');
   });

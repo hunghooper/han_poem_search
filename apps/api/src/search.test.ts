@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { StepStatus } from '@han/shared/status';
 import type { AgentRunOutput } from '@han/worker/shared';
 import { agentStatusOf } from './search.js';
+import { isSettled } from './batch-runner.js';
 
 const out = (over: Partial<AgentRunOutput>): AgentRunOutput => ({
   evidence: [],
@@ -40,5 +41,33 @@ describe('agentStatusOf', () => {
 
   it('reports an empty-handed but healthy agent as NO_RESULT', () => {
     expect(agentStatusOf(out({ stoppedBecause: 'model_finished' }))).toBe(StepStatus.NO_RESULT);
+  });
+});
+
+describe('isSettled — what a re-run leaves alone', () => {
+  it('leaves a match alone', () => {
+    expect(isSettled(StepStatus.HAS_RESULT)).toBe(true);
+  });
+
+  // An empty cell will never resolve, however much agent is thrown at it. Counting those rows
+  // as pending inflates every estimate — on a file with many blanks, by a lot — and quotes for
+  // work that returns immediately.
+  it('leaves an empty cell alone', () => {
+    expect(isSettled(StepStatus.SKIPPED)).toBe(true);
+  });
+
+  // The whole point of the cheap-then-escalate workflow: these are the rows a second pass with
+  // the agent exists to attempt.
+  it('retries anything the corpus could not settle', () => {
+    for (const s of [
+      StepStatus.NO_RESULT,
+      StepStatus.LOW_CONFIDENCE,
+      StepStatus.ERROR,
+      StepStatus.TIMEOUT,
+      StepStatus.UNAVAILABLE,
+      StepStatus.NOT_EXECUTED,
+    ]) {
+      expect(isSettled(s)).toBe(false);
+    }
   });
 });

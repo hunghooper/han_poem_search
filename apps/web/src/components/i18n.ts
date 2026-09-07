@@ -112,6 +112,10 @@ const vi: Dict = {
   'batch.unitMinute': 'phút',
   'batch.unitHour': 'giờ',
   'batch.unitDay': 'ngày',
+  'batch.rerunUnresolved': 'Chạy lại {n} dòng chưa ra kết quả',
+  'batch.rerunAll': 'Chạy lại toàn bộ {n} dòng',
+  'batch.rerunNote': 'Dòng đã tìm thấy và ô trống được giữ nguyên — chạy lại chúng chỉ tốn tiền mà không đổi gì.',
+  'batch.rerunStart': 'Chạy lại',
 };
 
 const en: Dict = {
@@ -209,6 +213,10 @@ const en: Dict = {
   'batch.unitMinute': 'minutes',
   'batch.unitHour': 'hours',
   'batch.unitDay': 'days',
+  'batch.rerunUnresolved': 'Re-run the {n} unresolved rows',
+  'batch.rerunAll': 'Re-run all {n} rows',
+  'batch.rerunNote': 'Rows already found, and empty cells, are left alone — re-running them costs money and changes nothing.',
+  'batch.rerunStart': 'Re-run',
 };
 
 const zh: Dict = {
@@ -306,6 +314,10 @@ const zh: Dict = {
   'batch.unitMinute': '分鐘',
   'batch.unitHour': '小時',
   'batch.unitDay': '天',
+  'batch.rerunUnresolved': '重跑 {n} 列未決結果',
+  'batch.rerunAll': '重跑全部 {n} 列',
+  'batch.rerunNote': '已找到的列與空白格保持原狀——重跑它們只會花錢而不會改變結果。',
+  'batch.rerunStart': '重跑',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };
