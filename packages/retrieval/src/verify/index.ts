@@ -79,11 +79,44 @@ export function verifyCandidate(
   // Tone and rhyme rules only bind regulated verse. Applying them to 古詩 or 詞 would produce
   // failures that say nothing about whether the candidate is the right poem.
   if (isRegulated(candidateForm.form)) {
+    // RHYME can reject — but not for 排律. `analyseForm` calls any uniform 5- or 7-character
+    // poem of more than eight lines 排律, and in this corpus most of those are 古詩. Measured
+    // over 25,000 poems (scripts/prosody-calibration.ts, ADR 011): rhyme fails on 10% of
+    // 五排 and 72% of 七排, against 1-3% for 絕句 and 律詩. The bucket is a shape guess, so a
+    // failure inside it is evidence about the guess, not about the match.
+    const shapeGuess = candidateForm.form === 'wupai' || candidateForm.form === 'qipai';
     const rhyme = checkRhyme(candidateLines);
-    checks.push({ name: 'rhyme', outcome: outcomeOf(rhyme.consistent), detail: rhyme.reason });
+    checks.push({
+      name: 'rhyme',
+      outcome: shapeGuess ? 'abstain' : outcomeOf(rhyme.consistent),
+      detail: shapeGuess
+        ? `${rhyme.reason} — but a poem of this shape may be 古詩 rather than ${FORM_LABEL[candidateForm.form]}, so this decides nothing`
+        : rhyme.reason,
+    });
 
+    // TONE NEVER REJECTS, and this is the important line in the file.
+    //
+    // 平仄 is computed from the candidate ALONE. Two different 七言律詩 both have clean 平仄,
+    // so the check cannot tell them apart — it can only say whether this candidate is
+    // well-formed regulated verse, which is a fact about the poem and not about the match.
+    //
+    // The corpus agrees: over 25,000 poems, 22% of everything the shape classifier calls
+    // regulated FAILS its own tone check (6% of 七絕 up to 81% of 七排) — all of them correct
+    // answers by construction. A `fail` that fires on a fifth of correct answers is worse
+    // than no check, because a column of failures beside a column of correct titles teaches
+    // the reader to ignore it. §16 agrees too: it asks that the "form/rhyme checker" reject a
+    // mismatched candidate, and does not name tone.
+    //
+    // A PASS still corroborates, and the detail still reports what was found.
     const tone = checkTone(candidateLines);
-    checks.push({ name: 'tone', outcome: outcomeOf(tone.consistent), detail: tone.reason });
+    checks.push({
+      name: 'tone',
+      outcome: tone.consistent === true ? 'pass' : 'abstain',
+      detail:
+        tone.consistent === false
+          ? `${tone.reason} — which makes this 古體, not a different poem`
+          : tone.reason,
+    });
   } else {
     checks.push({
       name: 'rhyme',

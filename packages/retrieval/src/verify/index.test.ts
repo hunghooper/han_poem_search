@@ -150,3 +150,49 @@ describe('verifyCandidate on reordered input', () => {
     expect(r.checks.some((c) => c.name === 'rhyme' && c.outcome !== 'abstain')).toBe(true);
   });
 });
+
+/**
+ * MEASURED, not argued — scripts/prosody-calibration.ts over 25,000 corpus poems, ADR 011.
+ * Every poem there is a correct answer by construction, so every `fail` is a false negative.
+ */
+describe('what prosody is allowed to reject', () => {
+  // 靜夜思 is a 五言古絕: four lines of five characters, so the shape classifier calls it
+  // 五言絕句, and its 平仄 does not follow the regulated pattern. Shape cannot tell 古絕 from
+  // 近體絕句 — the only thing that can is the tone pattern being tested, which makes rejecting
+  // on it circular. 22% of shape-classified regulated poems fail their own tone check.
+  it('never rejects a candidate on 平仄 alone', () => {
+    const lines = ['牀前看月光', '疑是地上霜', '舉頭望山月', '低頭思故鄉'];
+    const v = verifyCandidate(lines, lines);
+    expect(v.checks.find((c) => c.name === 'tone')?.outcome).not.toBe('fail');
+    expect(v.outcome).not.toBe('fail');
+    expect(v.flags).not.toContain('rule_verify_fail');
+  });
+
+  it('still reports what the tone check found, so the information is not lost', () => {
+    const lines = ['牀前看月光', '疑是地上霜', '舉頭望山月', '低頭思故鄉'];
+    const tone = verifyCandidate(lines, lines).checks.find((c) => c.name === 'tone');
+    expect(tone?.detail).toMatch(/平仄/u);
+  });
+
+  // `analyseForm` calls any uniform 5- or 7-character poem of more than eight lines 排律, and
+  // in this corpus most of those are 古詩. Rhyme fails on 10% of 五排 and 72% of 七排 there,
+  // against 1-3% for 絕句 and 律詩, so a failure inside that bucket is evidence about the
+  // shape guess rather than about the match.
+  it('does not reject a 排律-shaped candidate on rhyme', () => {
+    const lines = Array.from({ length: 12 }, (_, i) => (i % 2 === 0 ? '春眠不覺曉' : '處處聞啼鳥'));
+    const v = verifyCandidate(lines, lines);
+    expect(v.checks.find((c) => c.name === 'rhyme')?.outcome).toBe('abstain');
+    expect(v.outcome).not.toBe('fail');
+  });
+
+  // The other half. Verification still has to be able to say no, and the form comparison —
+  // the one check that actually compares the input against the candidate — is what does it.
+  it('still rejects a candidate whose shape cannot hold the input', () => {
+    const input = ['牀前看月光', '疑是地上霜'];
+    const candidate = ['羣峭碧摩天逍遙不記年', '撥雲尋古道倚石聽流泉'];
+    const v = verifyCandidate(input, candidate);
+    expect(v.checks.find((c) => c.name === 'form')?.outcome).toBe('fail');
+    expect(v.outcome).toBe('fail');
+    expect(v.flags).toContain('rule_verify_fail');
+  });
+});
