@@ -11,7 +11,8 @@
     "./events": "./src/events.ts",
     "./tool-result": "./src/tool-result.ts",
     "./state": "./src/state.ts",
-    "./serde": "./src/serde.ts"
+    "./serde": "./src/serde.ts",
+    "./runtime-config": "./src/runtime-config.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

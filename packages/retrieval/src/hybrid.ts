@@ -67,6 +67,16 @@ export interface HybridOptions {
   fuseTopN?: number;
   /** Results out (§7.2 default 8). */
   topK?: number;
+  /**
+   * Which sources take part. exact_ngram is deliberately not listed: it is the primary
+   * retriever (§7.1), and a search that cannot run it is not this system.
+   */
+  sources?: { bm25?: boolean; vector?: boolean; reranker?: boolean };
+  /** RRF constant (§7.2). */
+  rrfK?: number;
+  /** Reorder fan-out limits (ADR 003). */
+  maxWindowsPerReading?: number;
+  maxReadings?: number;
 }
 
 const evidenceFromExact = (m: ExactMatch): Evidence[] => {
@@ -146,7 +156,10 @@ export async function hybridSearch(
 
   // ---- exact, first and possibly last (§7.1) --------------------------------
   const exactStarted = Date.now();
-  const exact = await exactNgramSearch(db, query);
+  const exact = await exactNgramSearch(db, query, {
+    ...(opts.maxWindowsPerReading !== undefined ? { maxWindowsPerReading: opts.maxWindowsPerReading } : {}),
+    ...(opts.maxReadings !== undefined ? { maxReadings: opts.maxReadings } : {}),
+  });
   reports.exact = {
     status: exact.kind === 'none' ? StepStatus.NO_RESULT : StepStatus.HAS_RESULT,
     count: exact.hits.length,
@@ -164,9 +177,26 @@ export async function hybridSearch(
   }
 
   // ---- lexical and dense, in parallel ---------------------------------------
+  // A source switched off reports SKIPPED, not NO_RESULT: "we did not look" and "we looked
+  // and found nothing" are the distinction §5.4 exists to preserve, and a settings toggle must
+  // not be able to erase it.
+  const on = { bm25: opts.sources?.bm25 !== false, vector: opts.sources?.vector !== false };
+  const rerankOn = opts.sources?.reranker !== false;
+
+  // The toggle is decided HERE, not inside runSource: runSource sets the report from what the
+  // function returned, so a SKIPPED written inside it is immediately overwritten with
+  // NO_RESULT — turning "we did not look" into "we looked and found nothing", which is the one
+  // conflation §5.4 exists to prevent.
+  const skip = (name: string) => {
+    reports[name] = { status: StepStatus.SKIPPED, count: 0, latencyMs: 0 };
+    return Promise.resolve([]);
+  };
+
   const [bm25Hits, vectorHits] = await Promise.all([
-    runSource('bm25', reports, () => bm25Search(db, query, fuseTopN)),
-    runSource('vector', reports, async () => {
+    on.bm25 ? runSource('bm25', reports, () => bm25Search(db, query, fuseTopN)) : skip('bm25'),
+    !on.vector
+      ? skip('vector')
+      : runSource('vector', reports, async () => {
       if (!model || !vectors) {
         reports.vector = {
           status: StepStatus.UNAVAILABLE,
@@ -180,7 +210,7 @@ export async function hybridSearch(
       const [vec] = await model.embed([query]);
       if (!vec) return [];
       return vectors.search(vec, fuseTopN);
-    }),
+        }),
   ]);
 
   // ---- fuse -----------------------------------------------------------------
@@ -247,6 +277,7 @@ export async function hybridSearch(
     (e) => e.workId ?? e.id,
     // Keep the richer record: exact hits carry matchedLines, vector hits carry the payload.
     (a, b) => ({ ...b, ...a, metadata: { ...b.metadata, ...a.metadata } }),
+    opts.rrfK,
   ).slice(0, fuseTopN);
 
   // ---- rerank ---------------------------------------------------------------
@@ -257,7 +288,9 @@ export async function hybridSearch(
   }));
 
   const rerankStarted = Date.now();
-  if (model && evidence.length > 0) {
+  if (!rerankOn) {
+    reports.reranker = { status: StepStatus.SKIPPED, count: 0, latencyMs: 0 };
+  } else if (model && evidence.length > 0) {
     try {
       const scores = await model.rerank(
         toMatchForm(query) || query,

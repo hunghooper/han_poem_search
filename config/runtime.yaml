@@ -1,0 +1,50 @@
+# Runtime configuration — the committed source of truth.
+#
+# The settings panel in the UI produces SESSION OVERRIDES that travel with one request and are
+# never written back here. That separation is deliberate: CONTRIBUTING.md requires a recorded
+# calibration run before retrieval thresholds change, and §8 labels the numbers below
+# provisional and uncalibrated. Experiment freely in the panel; changing the project's actual
+# defaults is a commit, a calibration run and an ADR.
+#
+# Every field is bounded by the schema in packages/shared/src/runtime-config.ts.
+
+retrieval:
+  fuseTopN: 50            # candidates into the reranker (§7.2)
+  topK: 8                 # results out (§7.2)
+  rrfK: 60                # RRF constant (§7.2)
+  maxWindowsPerReading: 400
+  maxReadings: 12
+  sources:
+    bm25: true
+    vector: true
+    reranker: true
+    # exact_ngram is absent on purpose: it is the primary retriever (§7.1), not a toggle.
+
+confidence:
+  # PROVISIONAL AND UNCALIBRATED (§8). Do not change without a calibration run in an ADR.
+  verifyFloor: 0.60
+  noiseFloor: 0.35
+  minAgreeingWindows: 2
+  minLexicalOverlap: 0.15   # ADR 008 — the floor that stops a confident 0.99 on nonsense
+
+agent:
+  enabled: true
+  maxIterations: 6          # §12
+  maxToolCalls: 12
+  maxWallClockMs: 60000
+  maxCostUsd: 0.50
+  skipWhenNoOverlap: true
+
+# null means "take it from the environment" (LLM_MODEL_*). Only ever set REASONING to a model
+# that passed §4.5 checks 2-4 — see docs/adr/002-llm-gateway.md.
+models:
+  reasoning: null
+  answer: null
+  verify: null
+  rewrite: null
+
+ui:
+  language: vi
+  vertical: false
+  debug: false
+  hideSkipped: false

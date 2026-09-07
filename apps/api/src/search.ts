@@ -22,8 +22,8 @@ import { AggregateFlag } from '@han/shared/flags';
 import { runAgent, type AgentEvent } from '@han/agent/loop';
 import { initialAgentState } from '@han/agent/state';
 import { runTool, type Tool } from '@han/agent/tool';
-import { DEFAULT_BUDGET } from '@han/agent/budget';
 import type { LlmProvider } from '@han/llm/provider';
+import type { RuntimeConfig } from '@han/shared/runtime-config';
 import type { RunStore } from './events.js';
 
 export interface SearchOutcome {
@@ -47,6 +47,8 @@ export interface SearchDeps {
   reasoningModel: string | null;
   tools: Array<Tool<never>>;
   debug: boolean;
+  /** Committed defaults with this request's session overrides already applied. */
+  config: RuntimeConfig;
 }
 
 /** 句 of a poem's display text, in match form — what the verifier needs. */
@@ -105,7 +107,17 @@ export async function runSearch(
     message: 'Searching the corpus',
   });
 
-  const result = await hybridSearch(searchText, deps);
+  const result = await hybridSearch(searchText, {
+    db: deps.db,
+    model: deps.model,
+    vectors: deps.vectors,
+    fuseTopN: deps.config.retrieval.fuseTopN,
+    topK: deps.config.retrieval.topK,
+    rrfK: deps.config.retrieval.rrfK,
+    maxWindowsPerReading: deps.config.retrieval.maxWindowsPerReading,
+    maxReadings: deps.config.retrieval.maxReadings,
+    sources: deps.config.retrieval.sources,
+  });
 
   for (const [source, report] of Object.entries(result.reports)) {
     const step = source === 'reranker' ? 'reranker' : source === 'exact' ? 'exact' : source === 'bm25' ? 'bm25' : 'vector';
@@ -135,7 +147,7 @@ export async function runSearch(
     candidateCount: result.evidence.length,
     rerankScores: result.rerankScores,
     lexicalOverlap: result.lexicalOverlap,
-  });
+  }, deps.config.confidence);
 
   store.emit(runId, {
     step: 'local_evaluation',
@@ -208,7 +220,10 @@ export async function runSearch(
    * agent and this does not.
    */
   const notEvenClose =
-    result.exact.kind === 'none' && result.lexicalOverlap !== null && result.lexicalOverlap === 0;
+    deps.config.agent.skipWhenNoOverlap &&
+    result.exact.kind === 'none' &&
+    result.lexicalOverlap !== null &&
+    result.lexicalOverlap === 0;
 
   if (!found && notEvenClose) {
     store.emit(runId, {
@@ -220,7 +235,15 @@ export async function runSearch(
         'Agent skipped — the query shares no characters with anything in the corpus, so there is nothing here to reason about',
     });
   } else if (!found) {
-    if (!deps.provider || !deps.reasoningModel) {
+    if (!deps.config.agent.enabled) {
+      store.emit(runId, {
+        step: 'agent',
+        source: 'model',
+        phase: 'completed',
+        status: StepStatus.SKIPPED,
+        message: 'Agent is switched off in settings',
+      });
+    } else if (!deps.provider || !deps.reasoningModel) {
       store.emit(runId, {
         step: 'agent',
         source: 'model',
@@ -246,12 +269,17 @@ export async function runSearch(
         ),
         {
           provider: deps.provider,
-          model: deps.reasoningModel,
+          model: deps.config.models.reasoning ?? deps.reasoningModel,
           tools: deps.tools,
-          budget: DEFAULT_BUDGET,
+          budget: {
+            maxIterations: deps.config.agent.maxIterations,
+            maxToolCalls: deps.config.agent.maxToolCalls,
+            maxWallClockMs: deps.config.agent.maxWallClockMs,
+            maxCostUsd: deps.config.agent.maxCostUsd,
+          },
           now: () => Date.now(),
           debug: deps.debug,
-          signal: AbortSignal.timeout(DEFAULT_BUDGET.maxWallClockMs),
+          signal: AbortSignal.timeout(deps.config.agent.maxWallClockMs),
           emit: (e: AgentEvent) => emitAgentEvent(store, runId, e),
         },
         runTool,

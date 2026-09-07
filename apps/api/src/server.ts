@@ -23,6 +23,8 @@ import { withFailover } from '@han/llm/failover';
 import { loadPriceTable } from '@han/llm/pricing';
 import type { LlmProvider } from '@han/llm/provider';
 import { PostgresEventSink, loadRun } from './event-sink.js';
+import { loadRuntimeConfig } from '@han/config/runtime';
+import { applyOverrides, OverridesSchema, type RuntimeConfig } from '@han/shared/runtime-config';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
 
@@ -160,7 +162,37 @@ const deps = {
   debug: process.env.DEBUG_MODE_ENABLED === 'true',
 };
 
-const SearchBody = z.object({ query: z.string().min(1).max(2000) });
+/** Committed defaults. Session overrides are applied per request and never written back. */
+const baseConfig: RuntimeConfig = loadRuntimeConfig();
+
+/**
+ * Model ids the gateway actually serves, so the settings panel can offer a list without the
+ * schema ever hardcoding one (§4.1 rule 5: model names are gateway-specific opaque strings).
+ * Best-effort — a gateway that will not list its models is not a reason to refuse to start.
+ */
+let availableModels: string[] = [];
+async function loadAvailableModels(): Promise<void> {
+  const apiKey = process.env.RAMCLOUDS_API_KEY;
+  const baseURL = process.env.RAMCLOUDS_BASE_URL;
+  if (!apiKey || !baseURL) return;
+  try {
+    const res = await fetch(`${baseURL.replace(/\/+$/, '')}/models`, {
+      headers: { authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = (await res.json()) as { data?: Array<{ id?: string }> };
+    availableModels = (body.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id)).sort();
+  } catch (e) {
+    app.log.warn({ err: e }, 'could not list gateway models — the settings panel will accept free text');
+  }
+}
+void loadAvailableModels();
+
+const SearchBody = z.object({
+  query: z.string().min(1).max(2000),
+  /** Session overrides from the settings panel. Untrusted: bounded and .strict() by schema. */
+  overrides: OverridesSchema.optional(),
+});
 const HelloFrame = z.object({ lastSeq: z.number().int().min(-1).default(-1) });
 
 app.get('/health', async () => {
@@ -179,16 +211,45 @@ app.get('/health', async () => {
 
 app.post('/api/search', async (req, reply) => {
   const parsed = SearchBody.safeParse(req.body);
-  if (!parsed.success) return reply.code(400).send({ error: 'query is required' });
+  if (!parsed.success) {
+    // Name the field and the rule. "query is required" on an out-of-range threshold sends the
+    // reader looking in entirely the wrong place.
+    const issues = parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`);
+    return reply.code(400).send({ error: 'invalid request', issues });
+  }
 
   const runId = store.create(parsed.data.query);
   // Return immediately so the client can attach to the stream before work begins; the run is
   // then observable from its first event rather than only from its result.
   // runSearch settles the outcome into the store itself, before it emits final_answer.
-  void runSearch(deps, store, runId, parsed.data.query).catch((e: unknown) => {
+  const config = applyOverrides(baseConfig, parsed.data.overrides);
+  void runSearch({ ...deps, config }, store, runId, parsed.data.query).catch((e: unknown) => {
     app.log.error({ err: e, runId }, 'search run failed');
   });
   return reply.code(202).send(encode({ runId }));
+});
+
+/**
+ * What is configurable, what it currently is, and what the gateway can serve.
+ *
+ * The UI reads this rather than shipping its own copy of the defaults — one definition, in
+ * packages/shared, that both sides speak.
+ */
+app.get('/api/config', async (_req, reply) => {
+  return reply.send(
+    encode({
+      config: baseConfig,
+      availableModels,
+      // Named so the panel can say plainly that changing a threshold affects this browser only.
+      overridesArePerSession: true,
+      envModels: {
+        reasoning: process.env.LLM_MODEL_REASONING ?? null,
+        answer: process.env.LLM_MODEL_ANSWER ?? null,
+        verify: process.env.LLM_MODEL_VERIFY ?? null,
+        rewrite: process.env.LLM_MODEL_REWRITE ?? null,
+      },
+    }),
+  );
 });
 
 app.get('/api/runs/:runId', async (req, reply) => {

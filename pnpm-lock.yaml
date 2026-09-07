@@ -151,9 +151,15 @@ importers:
 
   packages/config:
     dependencies:
+      '@han/shared':
+        specifier: workspace:*
+        version: link:../shared
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      yaml:
+        specifier: ^2.6.1
+        version: 2.9.0
       zod:
         specifier: ^3.23.8
         version: 3.25.76

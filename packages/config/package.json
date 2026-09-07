@@ -3,7 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { "./env": "./src/env.ts" },
-  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run" },
-  "dependencies": { "dotenv": "^16.4.5", "zod": "^3.23.8" }
+  "exports": {
+    "./env": "./src/env.ts",
+    "./runtime": "./src/runtime.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8",
+    "@han/shared": "workspace:*",
+    "yaml": "^2.6.1"
+  }
 }
