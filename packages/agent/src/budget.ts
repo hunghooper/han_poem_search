@@ -75,6 +75,17 @@ export const recordLlmCall = (state: BudgetState, costUsd: number | null): Budge
   costUnknown: state.costUnknown || costUsd === null,
 });
 
+/**
+ * Record spend that did not come from the agent's own reasoning call — a tool that called a
+ * model on its own. Separate from recordLlmCall because it is not an iteration, and counting
+ * it as one would shorten the run for spending money rather than for thinking.
+ */
+export const recordSpend = (state: BudgetState, costUsd: number | null): BudgetState => ({
+  ...state,
+  costUsd: state.costUsd + (costUsd ?? 0),
+  costUnknown: state.costUnknown || costUsd === null,
+});
+
 export const recordToolCall = (state: BudgetState): BudgetState => ({
   ...state,
   toolCalls: state.toolCalls + 1,

@@ -23,7 +23,15 @@
 import type { LlmProvider, LlmMessage, LlmToolDef } from '@han/llm/provider';
 import { StepStatus } from '@han/shared/status';
 import type { ToolResult } from '@han/shared/tool-result';
-import { checkBudget, initialBudgetState, recordLlmCall, recordToolCall, type Budget, type BudgetState } from './budget.js';
+import {
+  checkBudget,
+  initialBudgetState,
+  recordLlmCall,
+  recordSpend,
+  recordToolCall,
+  type Budget,
+  type BudgetState,
+} from './budget.js';
 import { compact, reduceToolResult, satisfied, type AgentState } from './state.js';
 import type { Tool, ToolContext } from './tool.js';
 
@@ -226,6 +234,26 @@ export async function runAgent(
       return { state, stoppedBecause: 'satisfied', partial: false, flags };
     }
   }
+}
+
+/**
+ * What a tool spent, if it spent anything.
+ *
+ *   undefined — the tool made no model call, so there is nothing to bill.
+ *   null      — it did, and the model is unpriced. Budget accounting is degraded from here.
+ *   number    — the actual cost.
+ */
+function toolSpend(r: ToolResult): number | null | undefined {
+  let seen = false;
+  let total = 0;
+  for (const e of r.results) {
+    if (!('costUsd' in e.metadata)) continue;
+    seen = true;
+    const c = e.metadata.costUsd;
+    if (typeof c !== 'number') return null;
+    total += c;
+  }
+  return seen ? total : undefined;
 }
 
 function describeToolResult(name: string, r: ToolResult): string {

@@ -43,7 +43,8 @@
     "vitest": "^2.1.0",
     "ws": "^8.21.3",
     "@han/llm": "workspace:*",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@han/agent": "workspace:*"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

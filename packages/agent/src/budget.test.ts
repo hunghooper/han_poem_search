@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkBudget, DEFAULT_BUDGET, initialBudgetState, recordLlmCall, recordToolCall } from './budget.js';
+import { checkBudget, DEFAULT_BUDGET, initialBudgetState, recordLlmCall, recordSpend, recordToolCall } from './budget.js';
 
 const at = (t: number) => initialBudgetState(t);
 
@@ -72,5 +72,30 @@ describe('tool timeouts must fit inside the run budget', () => {
         DEFAULT_BUDGET.maxWallClockMs,
       );
     }
+  });
+});
+
+describe('tool spend', () => {
+  // REGRESSION. ask_model calls a model and was discarding what it cost, so §12's ceiling
+  // covered only the agent's own reasoning calls — and ask_model is usually the largest single
+  // spend in a run. A ceiling that cannot see the biggest cost is not a ceiling.
+  it('adds tool spend to the run cost without consuming an iteration', () => {
+    const s = recordSpend(initialBudgetState(0), 0.02);
+    expect(s.costUsd).toBeCloseTo(0.02);
+    expect(s.iterations).toBe(0);
+  });
+
+  it('marks the accounting degraded when a tool used an unpriced model', () => {
+    const s = recordSpend(initialBudgetState(0), null);
+    expect(s.costUnknown).toBe(true);
+    // And the ceiling then stops being enforced, rather than being enforced against a fiction.
+    expect(checkBudget({ ...s, costUsd: 999 }, DEFAULT_BUDGET, 0).withinBudget).toBe(true);
+  });
+
+  it('combines agent and tool spend against one ceiling', () => {
+    let s = recordLlmCall(initialBudgetState(0), 0.3);
+    s = recordSpend(s, 0.25);
+    expect(s.costUsd).toBeCloseTo(0.55);
+    expect(checkBudget(s, DEFAULT_BUDGET, 0).exhausted).toBe('cost');
   });
 });

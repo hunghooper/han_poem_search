@@ -37,11 +37,18 @@ export function createAskModelTool(provider: LlmProvider | null, model: string |
       properties: { question: { type: 'string', description: 'The question to ask' } },
       required: ['question'],
     },
-    // Must fit INSIDE the agent's wall-clock budget (§12: 60s), or the tool can never finish
-    // and every call is cut off by the run rather than by its own timeout. Reasoning models
-    // also need room to think before emitting, so the token budget rises as the clock falls —
-    // a generous token budget is useless if the wall clock ends the call first.
-    timeoutMs: 25_000,
+    /**
+     * Must fit INSIDE the agent's wall-clock budget (§12: 60s), or the tool can never finish
+     * and every call is cut off by the run rather than by its own timeout. 40s leaves room for
+     * one reasoning call alongside it, which in practice means one external answer per run.
+     *
+     * MEASURED, and the number is a compromise rather than a safe margin: glm-5.3-flash on
+     * this gateway ranged from 6.4s to 108.6s across eight calls on the same prompt. No
+     * timeout that fits in a 60s budget covers that spread, so some calls will time out. That
+     * is handled correctly — TIMEOUT, never NO_RESULT, and the agent carries on — but it is a
+     * property of the gateway, not something this number fixes.
+     */
+    timeoutMs: 40_000,
     unavailableReason: () =>
       provider && model ? null : 'no LLM provider configured — set RAMCLOUDS_API_KEY and LLM_MODEL_ANSWER',
 
@@ -54,7 +61,12 @@ export function createAskModelTool(provider: LlmProvider | null, model: string |
             {
               role: 'system',
               content:
-                'Answer about classical Chinese poetry from your own knowledge. If you are not ' +
+                // Brevity is not cosmetic here. Unconstrained, this model wrote 1100-1650 token
+                // essays; asked for 80 words it wrote 350-480. That is roughly a third of the
+                // cost and, when the gateway cooperates, a third of the latency — and the agent
+                // only ever passes a compacted form of this on anyway (§9.1).
+                'Answer about classical Chinese poetry from your own knowledge. Be BRIEF: at ' +
+                'most 80 words. Give the title, author and origin, nothing more. If you are not ' +
                 'confident, say so plainly rather than guessing — a wrong attribution is worse ' +
                 'than no answer. Do not invent poem text.',
             },
@@ -90,7 +102,17 @@ export function createAskModelTool(provider: LlmProvider | null, model: string |
             matchedSpan: null,
             score: 0,
             rerankScore: null,
-            metadata: { unsourced: true, provider: res.provider, model: res.model },
+            metadata: {
+              unsourced: true,
+              provider: res.provider,
+              model: res.model,
+              // Carried so the loop can bill it. A tool that spends money invisibly makes
+              // §12's cost ceiling a ceiling on only part of the spend — and ask_model is
+              // usually the largest single cost in a run.
+              costUsd: res.usage.costUsd,
+              inputTokens: res.usage.inputTokens,
+              outputTokens: res.usage.outputTokens,
+            },
           },
         ],
         latencyMs: ctx.now() - started,
