@@ -12,6 +12,7 @@ import {
   type Settings,
 } from '@/components/settings';
 import { t } from '@/components/i18n';
+import { BatchPanel } from '@/components/batch';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const WS = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:3001';
@@ -62,6 +63,7 @@ export default function Home() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [server, setServer] = useState<ServerConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const lang = settings.ui.language;
   const vertical = settings.ui.vertical;
 
@@ -146,11 +148,16 @@ export default function Home() {
     <main>
       <div className="topbar">
         <h1>漢詩檢索</h1>
+        <button type="button" className="ghost" onClick={() => setBatchOpen(true)}>
+          {t(lang, 'batch.open')}
+        </button>
         <button type="button" className="ghost" onClick={() => setSettingsOpen(true)}>
           {t(lang, 'settings.title')}
         </button>
       </div>
       <p className="sub">{t(lang, 'app.tagline', { n: '78,455' })}</p>
+
+      {batchOpen && <BatchPanel lang={lang} onClose={() => setBatchOpen(false)} />}
 
       <SettingsPanel
         open={settingsOpen}
