@@ -29,12 +29,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
+    "@han/agent": "workspace:*",
+    "@han/llm": "workspace:*",
     "@han/retrieval": "workspace:*",
     "@han/shared": "workspace:*",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.11.10",
     "drizzle-orm": "^0.36.4",
     "eslint": "^9.15.0",
+    "exceljs": "^4.4.0",
     "pg": "^8.13.1",
     "prettier": "^3.4.0",
     "tsx": "^4.19.0",
@@ -43,9 +46,7 @@
     "typescript-eslint": "^8.16.0",
     "vitest": "^2.1.0",
     "ws": "^8.21.3",
-    "@han/llm": "workspace:*",
-    "zod": "^3.23.8",
-    "@han/agent": "workspace:*"
+    "zod": "^3.23.8"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
