@@ -8,6 +8,8 @@
  * `alternatives` instead of downward into extra rows.
  */
 
+import { StepStatus } from '@han/shared/status';
+import type { Evidence } from '@han/shared/evidence';
 import type { ExportRowInput, ExportValue } from './types.js';
 import { cellText } from './columns.js';
 
@@ -29,9 +31,27 @@ export function buildRow(
   return out;
 }
 
+/**
+ * Statuses that carry an answer.
+ *
+ * LOW_CONFIDENCE is here on purpose: a flagged candidate is exactly what the user should see,
+ * with the warning in the status column beside it. NO_RESULT is not, and that distinction is
+ * the reason this set exists.
+ */
+const ANSWERING: readonly StepStatus[] = [StepStatus.HAS_RESULT, StepStatus.LOW_CONFIDENCE];
+
 function valueFor(key: string, input: ExportRowInput): ExportValue {
-  const { outcome, top } = input;
-  const verification = outcome?.verification ?? null;
+  const { outcome } = input;
+  // A run can hold evidence the confidence policy REJECTED — the trace keeps it, which is
+  // right. Writing it into title/author beside a no_result status is not: the row then reads
+  // as an answer to anyone scanning the column, and the one cell that contradicts it is the
+  // one they are least likely to look at. Found live: nonsense input returned no_result with
+  // 駑驥 / 韩愈 filled in from a vector near-miss.
+  const top = ANSWERING.includes(input.status) ? input.top : null;
+  // Gated with `top`, and for the same reason: these columns describe the candidate. Checks
+  // reported against a candidate the row does not name read as findings about nothing.
+  // The full picture stays one click away through run_id.
+  const verification = ANSWERING.includes(input.status) ? (outcome?.verification ?? null) : null;
   const check = (name: 'form' | 'rhyme' | 'tone'): ExportValue =>
     verification?.checks.find((c) => c.name === name)?.outcome ?? null;
 
@@ -42,7 +62,7 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
     case 'status':
       return input.status;
     case 'match_kind':
-      return input.matchKind ?? null;
+      return input.matchKind ?? matchKindOf(input);
     case 'confidence':
       return outcome ? round(outcome.confidence) : null;
     case 'flags':
@@ -60,7 +80,7 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
       return top?.edition ?? null;
 
     case 'matched_text':
-      return matchedText(input);
+      return matchedText(top);
     case 'input_normalized':
       return input.normalizedQuery ?? null;
     case 'colophon':
@@ -114,13 +134,28 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
 }
 
 /**
+ * How the match was made, from the flags the run already recorded.
+ *
+ * `ambiguous` is the one that earns its place: several poems matched the fragment equally
+ * well, the system said so, and a spreadsheet that showed only the first title would be
+ * presenting a coin toss as a finding.
+ */
+function matchKindOf(input: ExportRowInput): ExportValue {
+  if (!ANSWERING.includes(input.status)) return 'none';
+  const flags = input.outcome?.flags ?? [];
+  if (flags.includes('exact_ambiguous')) return 'ambiguous';
+  if (flags.includes('exact_full_match')) return 'full';
+  if (flags.includes('exact_partial_match')) return 'partial';
+  return input.top ? 'partial' : 'none';
+}
+
+/**
  * The corpus text that matched, narrowed to the matched span when there is one.
  *
  * Without the span this would be the whole poem, which defeats the point of the column: the
  * user wants to see WHICH line their fragment hit, beside the fragment they pasted.
  */
-function matchedText(input: ExportRowInput): ExportValue {
-  const top = input.top;
+function matchedText(top: Evidence | null): ExportValue {
   if (!top) return null;
   if (!top.matchedSpan) return top.content;
   const { start, end } = top.matchedSpan;
@@ -136,6 +171,7 @@ function matchedText(input: ExportRowInput): ExportValue {
  * difference is what tells them so.
  */
 function alternatives(input: ExportRowInput): ExportValue {
+  if (!ANSWERING.includes(input.status)) return null;
   const rest = input.outcome?.evidence.slice(1, 4) ?? [];
   if (rest.length === 0) return null;
   return rest

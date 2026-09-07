@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { foldVariant, isCjk, normalize, toMatchForm, visualLines } from './normalize.js';
+import {
+  foldVariant,
+  isCjk,
+  normalize,
+  prosodyLines,
+  toMatchForm,
+  visualLines,
+} from './normalize.js';
 
 describe('normalize', () => {
   it('produces all four forms', () => {
@@ -76,5 +83,39 @@ describe('visualLines', () => {
 
   it('returns an empty list for blank input', () => {
     expect(visualLines('   \n\n  ')).toEqual([]);
+  });
+});
+
+describe('prosodyLines', () => {
+  it('splits a punctuated single line into its couplet lines', () => {
+    expect(prosodyLines('床前明月光，疑是地上霜')).toEqual(['床前明月光', '疑是地上霜']);
+  });
+
+  it('handles a full quatrain in one cell, the spreadsheet case', () => {
+    expect(prosodyLines('春眠不覺曉，處處聞啼鳥。夜來風雨聲，花落知多少。')).toEqual([
+      '春眠不覺曉',
+      '處處聞啼鳥',
+      '夜來風雨聲',
+      '花落知多少',
+    ]);
+  });
+
+  it('still splits on whitespace, and on both together', () => {
+    expect(prosodyLines('床前明月光，疑是地上霜\n舉頭望明月，低頭思故鄉')).toEqual([
+      '床前明月光',
+      '疑是地上霜',
+      '舉頭望明月',
+      '低頭思故鄉',
+    ]);
+  });
+
+  // Nothing to split on. Inventing a caesura here would be manufacturing structure the input
+  // does not have; the form check abstains instead, which is the honest answer.
+  it('leaves an unpunctuated run as one line', () => {
+    expect(prosodyLines('床前明月光疑是地上霜')).toEqual(['床前明月光疑是地上霜']);
+  });
+
+  it('drops trailing punctuation without leaving empty lines', () => {
+    expect(prosodyLines('空山不見人。')).toEqual(['空山不見人']);
   });
 });

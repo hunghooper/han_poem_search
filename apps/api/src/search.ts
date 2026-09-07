@@ -9,7 +9,7 @@
  */
 
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { normalize, toMatchForm, visualLines } from '@han/retrieval/normalize';
+import { normalize, prosodyLines, toMatchForm } from '@han/retrieval/normalize';
 import { splitColophon } from '@han/retrieval/colophon';
 import { hybridSearch } from '@han/retrieval/hybrid';
 import { evaluateLocal } from '@han/retrieval/confidence';
@@ -202,7 +202,12 @@ export async function runSearch(
   const allFlagsSoFar = [...result.exact.flags, ...verdict.flags];
 
   if (top) {
-    const inputLines = visualLines(searchText).map((l) => toMatchForm(l)).filter((l) => l.length > 0);
+    // prosodyLines, not visualLines: a spreadsheet cell holds a whole couplet on one line
+    // separated by 、，。 and the form check would otherwise compare ten characters against a
+    // 五言 poem's five and fail a poem it matched exactly. See normalize.ts.
+    const inputLines = prosodyLines(searchText)
+      .map((l) => toMatchForm(l))
+      .filter((l) => l.length > 0);
     verification = verifyCandidate(
       inputLines,
       poemLines(top.content),

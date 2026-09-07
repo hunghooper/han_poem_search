@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import websocket from '@fastify/websocket';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -29,6 +30,8 @@ import { loadRuntimeConfig } from '@han/config/runtime';
 import { applyOverrides, OverridesSchema, type RuntimeConfig } from '@han/shared/runtime-config';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
+import { registerBatchRoutes } from './batch.js';
+import { resumeInterrupted } from './batch-runner.js';
 
 /**
  * Same reasoning as the worker's loadRootEnv: the process must be able to start correctly on
@@ -100,6 +103,11 @@ async function initSemanticLayer(): Promise<{ model: ModelClient | null; vectors
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 await app.register(cors, { origin: true });
 await app.register(websocket);
+await app.register(multipart, {
+  // A 200,000-row workbook measured 20.9 MB, so 128 MB is generous for the stated scale while
+  // still refusing an upload that would be a mistake rather than a batch.
+  limits: { fileSize: 128 * 1024 * 1024, files: 1 },
+});
 
 /**
  * The LLM provider, or null. Null is a supported state: exact matching and the semantic layer
@@ -338,4 +346,12 @@ app.get('/api/runs/:runId/stream', { websocket: true }, (socket, req) => {
   socket.on('close', () => unsubscribe?.());
 });
 
+const BATCH_DIR = process.env.BATCH_DIR ?? fileURLToPath(new URL('../../../.data/batch', import.meta.url));
+registerBatchRoutes(app, { ...deps, store, config: baseConfig }, BATCH_DIR);
+
 await app.listen({ port: PORT, host: HOST });
+
+// A batch interrupted by a restart resumes from the highest row already written. Without
+// this it would sit at `running` forever, showing a progress bar nobody is advancing.
+const resumed = await resumeInterrupted({ ...deps, store, config: baseConfig });
+if (resumed.length > 0) app.log.info({ jobs: resumed }, 'resumed interrupted batch jobs');

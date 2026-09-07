@@ -121,3 +121,27 @@ export const visualLines = (input: string): string[] =>
     .split(/[\s\u3000]+/u)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
+
+/**
+ * Split into PROSODIC lines, for the rule checks in verify/ only.
+ *
+ * `visualLines` deliberately splits on whitespace alone, because reordering reads a paste as a
+ * grid and a space is where the transcriber ended a column. Punctuation is not a column break,
+ * so splitting on it there would corrupt the grid.
+ *
+ * For prosody the opposite is true, and pasting from a spreadsheet is what makes it urgent: a
+ * cell holds `床前明月光，疑是地上霜` on one line, and the form check then compares "one line of
+ * ten characters" against a 五言絕句 of five and reports a FAILURE for a poem it matched exactly.
+ * On a batch of 50,000 spreadsheet rows that fires on nearly every correct row, which is worse
+ * than not checking: a column of `fail` beside a column of correct titles teaches the reader to
+ * ignore the check.
+ *
+ * A line with no punctuation and no spaces stays one line. There is nothing to split on, and
+ * guessing a caesura would be inventing structure the input does not have — the form check
+ * then abstains, which is the honest outcome.
+ */
+export const prosodyLines = (input: string): string[] =>
+  visualLines(input)
+    .flatMap((line) => line.split(/[，。、；：？！,.;:?!·．｡､]+/u))
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);

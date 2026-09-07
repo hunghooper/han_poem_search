@@ -157,4 +157,67 @@ describe('buildRow', () => {
   it('emits exactly the requested columns, in the requested order', () => {
     expect(Object.keys(buildRow(found(), ['status', 'title']))).toEqual(['status', 'title']);
   });
+  // FOUND LIVE. A nonsense input came back no_result — correctly — while the identity columns
+  // carried 駑驥 / 韩愈, picked up from a vector near-miss the confidence policy had already
+  // rejected. In a spreadsheet those two cells ARE the answer; the status that contradicts
+  // them is the cell nobody filters on. The trace still holds the rejected candidate, and
+  // run_id still points at it.
+  it('writes no identity for a row the confidence policy rejected', () => {
+    const input = found({ status: StepStatus.NO_RESULT, matchKind: 'none' });
+    const row = buildRow(input, ['status', 'title', 'author', 'matched_text', 'alternatives']);
+    expect(row.status).toBe(StepStatus.NO_RESULT);
+    expect(row.title).toBeNull();
+    expect(row.author).toBeNull();
+    expect(row.matched_text).toBeNull();
+    expect(row.alternatives).toBeNull();
+  });
+
+  it('still points at the trace for a rejected row, so the evidence is not lost', () => {
+    const input = found({ status: StepStatus.NO_RESULT });
+    expect(buildRow(input, ['run_id']).run_id).toBe('run-1');
+  });
+
+  // The other half of the rule. A low-confidence candidate is exactly what the user wants to
+  // see — flagged, not withheld.
+  it('does write identity for a low-confidence candidate', () => {
+    const input = found({ status: StepStatus.LOW_CONFIDENCE });
+    expect(buildRow(input, ['title']).title).toBe('靜夜思');
+  });
+
+  it('writes no identity for a skipped or errored row', () => {
+    for (const status of [StepStatus.SKIPPED, StepStatus.ERROR, StepStatus.NOT_EXECUTED]) {
+      expect(buildRow(found({ status }), ['author']).author).toBeNull();
+    }
+  });
+  it('derives match_kind from the flags the run recorded', () => {
+    // matchKind cleared so the derivation runs — the caller may or may not supply one.
+    const derive = (flags: string[]): unknown =>
+      buildRow(found({ matchKind: undefined, outcome: outcome({ flags }) }), ['match_kind'])
+        .match_kind;
+    expect(derive(['exact_full_match'])).toBe('full');
+    expect(derive(['exact_partial_match'])).toBe('partial');
+    // Several poems matched equally well and the run said so. A spreadsheet showing only the
+    // first title would present a coin toss as a finding.
+    expect(derive(['exact_ambiguous'])).toBe('ambiguous');
+  });
+
+  it('reports match_kind none for a row with no answer', () => {
+    const input = found({ matchKind: undefined, status: StepStatus.NO_RESULT });
+    expect(buildRow(input, ['match_kind']).match_kind).toBe('none');
+  });
+  it('reports no verification for a row it does not name a candidate for', () => {
+    const input = found({
+      status: StepStatus.NO_RESULT,
+      outcome: outcome({
+        verification: {
+          outcome: 'fail',
+          checks: [{ name: 'form', outcome: 'fail' }],
+          candidateForm: { form: '五言絕句' },
+        },
+      }),
+    });
+    const row = buildRow(input, ['form', 'verify_form']);
+    expect(row.form).toBeNull();
+    expect(row.verify_form).toBeNull();
+  });
 });
