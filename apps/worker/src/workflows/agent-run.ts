@@ -36,6 +36,7 @@ import {
 } from '@han/agent/budget';
 import { compact, initialAgentState, reduceToolResult, satisfied, type AgentState } from '@han/agent/state';
 import { AGENT_BUDGET_EXHAUSTED } from '@han/agent/loop';
+import { AggregateFlag } from '@han/shared/flags';
 import type * as activities from '../activities/index.js';
 import type { AgentRunInput, AgentRunOutput, ToolCallResult, WorkflowEvent } from '../shared.js';
 
@@ -46,11 +47,19 @@ import type { AgentRunInput, AgentRunOutput, ToolCallResult, WorkflowEvent } fro
  */
 const { reason, callTool, emitEvent, listTools } = workflow.proxyActivities<typeof activities>({
   startToCloseTimeout: '2 minutes',
+  // Without this, a worker that dies mid-activity is invisible to Temporal until
+  // startToCloseTimeout expires: the replacement worker replays the history in a second and
+  // then waits out the rest of those two minutes before the activity is even rescheduled. The
+  // run survives — and arrives at its budget check with the budget already spent on the
+  // outage. Heartbeating turns a two-minute stall into a ten-second one.
+  heartbeatTimeout: '30 seconds',
   retry: {
     maximumAttempts: 3,
     initialInterval: '500ms',
     backoffCoefficient: 2,
-    // A bad request fails identically on retry; a config error is not transient.
+    // A bad request fails identically on retry; a config error is not transient. These match
+    // the `type` of an ApplicationFailure, NOT the message — an activity that throws a plain
+    // Error reading 'CONFIG_INVALID: ...' is retried regardless of what this list says.
     nonRetryableErrorTypes: ['CONFIG_INVALID', 'LLM_BAD_TOOL_ARGS'],
   },
 });
@@ -78,10 +87,12 @@ const stop = (
   flags: string[],
   stoppedBecause: string,
   partial: boolean,
+  stopDetail?: string,
 ): AgentRunOutput => ({
   evidence: state.evidence,
   flags,
   stoppedBecause,
+  ...(stopDetail !== undefined ? { stopDetail } : {}),
   partial,
   iterations: state.iteration,
 });
@@ -97,14 +108,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
 
   const available = await listTools(input.config);
   if (available.length === 0) {
-    await emit({
-      step: 'agent',
-      source: 'model',
-      phase: 'completed',
-      status: StepStatus.SKIPPED,
-      message: 'No external tools are configured',
-    });
-    return stop(state, flags, 'no_tools_available', false);
+    return stop(state, flags, 'no_tools_available', false, 'No external tools are configured');
   }
 
   const messages: Msg[] = [
@@ -117,16 +121,13 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
     if (!check.withinBudget) {
       // Not an error path (§12): answer from what was collected, marked partial.
       flags.push(AGENT_BUDGET_EXHAUSTED);
-      await emit({
-        step: 'agent',
-        source: 'model',
-        phase: 'failed',
-        status: StepStatus.LOW_CONFIDENCE,
-        flags: [AGENT_BUDGET_EXHAUSTED],
-        agentIteration: state.iteration,
-        message: `Agent stopped — ${check.reason}. Answering from the evidence collected so far.`,
-      });
-      return stop(state, flags, 'budget_exhausted', true);
+      return stop(
+        state,
+        flags,
+        'budget_exhausted',
+        true,
+        `Agent stopped — ${check.reason}. Answering from the evidence collected so far.`,
+      );
     }
 
     let decision;
@@ -141,17 +142,20 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
       // Ends the AGENT, not the run. Letting this escape would leave the caller with no
       // final_answer — the opaque failure §1 forbids, and the hardest kind to notice because
       // the run simply never finishes.
-      flags.push(AGENT_BUDGET_EXHAUSTED);
-      await emit({
-        step: 'agent',
-        source: 'model',
-        phase: 'failed',
-        status: StepStatus.ERROR,
-        flags: [AGENT_BUDGET_EXHAUSTED],
-        agentIteration: state.iteration,
-        message: `Agent stopped — the reasoning model failed (${String(e)}). Answering from the evidence collected so far.`,
-      });
-      return stop(state, flags, 'budget_exhausted', true);
+      //
+      // Reported as agent_model_failed, NOT as budget exhaustion. They are opposite
+      // diagnoses: exhaustion says the agent worked until it ran out of room and the fix is
+      // more budget; this says the model never answered and more budget would change
+      // nothing. This path once carried the budget flag, and an unconfigured gateway on a
+      // restarted worker duly reported itself as a run that had simply run out of time.
+      flags.push(AggregateFlag.AGENT_MODEL_FAILED);
+      return stop(
+        state,
+        flags,
+        'model_failed',
+        true,
+        `Agent stopped — the reasoning model failed (${String(e)}). Answering from the evidence collected so far.`,
+      );
     }
 
     budget = recordLlmCall(budget, decision.costUsd);
@@ -172,17 +176,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
     });
 
     const call = decision.toolCalls[0];
-    if (!call) {
-      await emit({
-        step: 'agent',
-        source: 'model',
-        phase: 'completed',
-        status: state.evidence.length > 0 ? StepStatus.HAS_RESULT : StepStatus.NO_RESULT,
-        agentIteration: state.iteration,
-        message: decision.text ?? 'Finished',
-      });
-      return stop(state, flags, 'model_finished', false);
-    }
+    if (!call) return stop(state, flags, 'model_finished', false, decision.text ?? 'Finished');
 
     if (!available.some((t) => t.name === call.name)) {
       // A hallucinated tool name is the model's mistake to fix, so it goes back as a tool
@@ -245,17 +239,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
       }),
     });
 
-    if (satisfied(state)) {
-      await emit({
-        step: 'agent',
-        source: 'model',
-        phase: 'completed',
-        status: StepStatus.HAS_RESULT,
-        agentIteration: state.iteration,
-        message: `Agent found ${state.evidence.length} result${state.evidence.length === 1 ? '' : 's'}`,
-      });
-      return stop(state, flags, 'satisfied', false);
-    }
+    if (satisfied(state)) return stop(state, flags, 'satisfied', false);
   }
 }
 

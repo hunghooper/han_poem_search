@@ -250,8 +250,11 @@ correct itself; do not crash the run.
 
 Workflow code is sandboxed and replayed. Inside `apps/worker/src/workflows/`:
 
-- No `Date.now()` — use `workflow.now()`.
-- No `Math.random()` or `crypto.randomUUID()` — use `workflow.uuid4()`.
+- `Date.now()` and `Math.random()` are **safe** here. The TypeScript SDK sandbox replaces
+  both, so they return the same values on replay. (An earlier version of this file said to use
+  `workflow.now()`; that function does not exist in the TS SDK. Corrected 2026-09-08 while
+  building `apps/worker`.)
+- No `crypto.randomUUID()` — it is not available in the sandbox. Use `workflow.uuid4()`.
 - No `fetch`, no database access, no file I/O, no importing anything that does. Every side
   effect belongs in an activity.
 - Do not change the shape of an in-flight workflow's logic without a

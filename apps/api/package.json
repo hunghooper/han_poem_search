@@ -22,7 +22,9 @@
     "pino": "^9.5.0",
     "zod": "^3.23.8",
     "@han/agent": "workspace:*",
-    "@han/llm": "workspace:*"
+    "@han/llm": "workspace:*",
+    "ioredis": "^5.4.1",
+    "@han/worker": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

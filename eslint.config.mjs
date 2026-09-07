@@ -61,8 +61,21 @@ export default tseslint.config(
     },
   },
   {
-    // the spec §9.1 — Temporal workflow code is deterministic and sandboxed.
+    /**
+     * Temporal workflow code is deterministic and sandboxed (§9.1).
+     *
+     * CORRECTED after building the worker. CONTRIBUTING.md says to replace `Date.now()` with
+     * `workflow.now()` and `Math.random()` with `workflow.uuid4()`. The TypeScript SDK has
+     * no `workflow.now()` at all, and its sandbox REPLACES the global `Date` and
+     * `Math.random` — inside a workflow they are already deterministic and replay to the same
+     * values. Banning them here rejected correct code and would have pushed the next person
+     * toward an API that does not exist.
+     *
+     * What genuinely breaks determinism in this SDK is I/O and host randomness the sandbox
+     * cannot intercept, so those are what the rules cover.
+     */
     files: ['apps/worker/src/workflows/**/*.ts'],
+    ignores: ['apps/worker/src/workflows/**/*.test.ts'],
     rules: {
       'no-restricted-globals': [
         'error',
@@ -70,9 +83,23 @@ export default tseslint.config(
       ],
       'no-restricted-properties': [
         'error',
-        { object: 'Date', property: 'now', message: 'Use workflow.now() — workflow code must be deterministic.' },
-        { object: 'Math', property: 'random', message: 'Use workflow.uuid4() — workflow code must be deterministic.' },
-        { object: 'crypto', property: 'randomUUID', message: 'Use workflow.uuid4() — workflow code must be deterministic.' },
+        {
+          object: 'crypto',
+          property: 'randomUUID',
+          message: 'Not available in the workflow sandbox — use workflow.uuid4().',
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['node:fs', 'node:net', 'node:http*', 'pg', 'ioredis', 'openai', '@han/db*'],
+              message:
+                'Workflow code cannot reach the network, the database or the filesystem, even transitively — move it to an activity.',
+            },
+          ],
+        },
       ],
     },
   },

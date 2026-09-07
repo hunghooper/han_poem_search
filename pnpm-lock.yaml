@@ -89,12 +89,18 @@ importers:
       '@han/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@han/worker':
+        specifier: workspace:*
+        version: link:../worker
       drizzle-orm:
         specifier: ^0.36.4
         version: 0.36.4(@types/pg@8.23.1)(@types/react@19.2.18)(pg@8.23.0)(react@19.2.8)
       fastify:
         specifier: ^5.1.0
         version: 5.12.3
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.11.1
       pg:
         specifier: ^8.13.1
         version: 8.23.0

@@ -14,9 +14,17 @@ import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { fold } from '@han/shared/state';
 import { PostgresEventSink, loadRun, rowToEvent } from './event-sink.js';
+import type { AgentEventBridge } from './agent-bridge.js';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
 import { DEFAULT_RUNTIME_CONFIG } from '@han/shared/runtime-config';
+
+/** These cases resolve locally and never invoke the agent, so the bridge is never used. */
+const noBridge = {
+  available: false,
+  relay: async () => async () => {},
+  close: async () => {},
+} as unknown as AgentEventBridge;
 
 const url = process.env.DATABASE_URL ?? '';
 const configured = url.length > 0;
@@ -53,7 +61,7 @@ describe.skipIf(!configured)('the event log is authoritative (§11)', () => {
   it('persists every emitted event, in order, with no gaps', async () => {
     const runId = store.create('撥雲尋古道');
     await runSearch(
-      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], bridge: noBridge, debug: false, config: DEFAULT_RUNTIME_CONFIG },
       store,
       runId,
       '撥雲尋古道',
@@ -73,7 +81,7 @@ describe.skipIf(!configured)('the event log is authoritative (§11)', () => {
   it('the fold over the persisted log reproduces search_run.final_*', async () => {
     const runId = store.create('撥雲尋古道');
     const outcome = await runSearch(
-      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], bridge: noBridge, debug: false, config: DEFAULT_RUNTIME_CONFIG },
       store,
       runId,
       '撥雲尋古道',
@@ -122,7 +130,7 @@ describe.skipIf(!configured)('evidence survives the process (§11)', () => {
   it('persists the evidence and reads it back in rank order', async () => {
     const runId = store.create('撥雲尋古道');
     const outcome = await runSearch(
-      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], bridge: noBridge, debug: false, config: DEFAULT_RUNTIME_CONFIG },
       store,
       runId,
       '撥雲尋古道',
@@ -144,7 +152,7 @@ describe.skipIf(!configured)('evidence survives the process (§11)', () => {
   it('reports what it does not store rather than reconstructing it', async () => {
     const runId = store.create('撥雲尋古道');
     await runSearch(
-      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], bridge: noBridge, debug: false, config: DEFAULT_RUNTIME_CONFIG },
       store,
       runId,
       '撥雲尋古道',
@@ -162,7 +170,7 @@ describe.skipIf(!configured)('evidence survives the process (§11)', () => {
   it('a run that found nothing stores no evidence rows', async () => {
     const runId = store.create('龘龘龘龘龘龘');
     await runSearch(
-      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], bridge: noBridge, debug: false, config: DEFAULT_RUNTIME_CONFIG },
       store,
       runId,
       '龘龘龘龘龘龘',

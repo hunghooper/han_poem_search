@@ -27,6 +27,17 @@ export interface AgentRunOutput {
   evidence: Evidence[];
   flags: string[];
   stoppedBecause: string;
+  /**
+   * Why it stopped, in words, for the one terminal event the caller emits.
+   *
+   * Returned rather than emitted from inside the workflow on purpose. A terminal event
+   * emitted by the workflow races its own return: the caller tears the Redis relay down the
+   * instant the workflow resolves, and an event still in flight is simply lost. That is not a
+   * cosmetic loss — the run whose agent gave up would report no reason at all, which §11's
+   * authoritative log cannot afford. Progress events, which are not in that race, still go
+   * out as they happen.
+   */
+  stopDetail?: string;
   partial: boolean;
   iterations: number;
 }

@@ -36,9 +36,10 @@ import { compact, reduceToolResult, satisfied, type AgentState } from './state.j
 import type { Tool, ToolContext } from './tool.js';
 
 export const AGENT_BUDGET_EXHAUSTED = 'agent_budget_exhausted';
+export const AGENT_MODEL_FAILED = 'agent_model_failed';
 
 export interface AgentEvent {
-  kind: 'iteration' | 'tool_call' | 'llm_call' | 'finished' | 'budget_exhausted';
+  kind: 'iteration' | 'tool_call' | 'llm_call' | 'finished' | 'budget_exhausted' | 'model_failed';
   iteration: number;
   message: string;
   tool?: string;
@@ -64,7 +65,12 @@ export interface AgentDeps {
 
 export interface AgentOutcome {
   state: AgentState;
-  stoppedBecause: 'satisfied' | 'model_finished' | 'budget_exhausted' | 'no_tools_available';
+  stoppedBecause:
+    | 'satisfied'
+    | 'model_finished'
+    | 'budget_exhausted'
+    | 'model_failed'
+    | 'no_tools_available';
   /** Set when the run ended on a budget limit — the answer must be marked partial (§12). */
   partial: boolean;
   flags: string[];
@@ -154,15 +160,19 @@ export async function runAgent(
       // answer from the evidence collected, marked partial. Letting this escape would leave
       // the caller with no final_answer at all — an opaque failure, the one outcome §1 calls
       // unacceptable, and the hardest kind to notice because the run simply never finishes.
+      //
+      // Reported as agent_model_failed, not as budget exhaustion: one says the agent worked
+      // until it ran out of room and wants more budget, the other says the model never
+      // answered and more budget would change nothing.
       const err = e as { code?: string; message?: string };
       deps.emit({
-        kind: 'budget_exhausted',
+        kind: 'model_failed',
         iteration: state.iteration,
         message: `Agent stopped — the reasoning model failed (${err.code ?? 'error'}: ${err.message ?? String(e)}). Answering from the evidence collected so far.`,
-        flags: [AGENT_BUDGET_EXHAUSTED],
+        flags: [AGENT_MODEL_FAILED],
       });
-      flags.push(AGENT_BUDGET_EXHAUSTED);
-      return { state, stoppedBecause: 'budget_exhausted', partial: true, flags };
+      flags.push(AGENT_MODEL_FAILED);
+      return { state, stoppedBecause: 'model_failed', partial: true, flags };
     }
     budgetState = recordLlmCall(budgetState, res.usage.costUsd);
     state = { ...state, iteration: state.iteration + 1 };

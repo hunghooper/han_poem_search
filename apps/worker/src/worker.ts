@@ -13,6 +13,23 @@ import { NativeConnection, Worker } from '@temporalio/worker';
 import * as activities from './activities/index.js';
 
 /**
+ * Load the repo-root .env before anything reads process.env.
+ *
+ * A worker that inherits its configuration from whichever shell happened to start it is a
+ * worker that comes back from a restart subtly different from the one that died — which is
+ * exactly the case Phase 4 exists to survive. This was found the hard way: a restarted worker
+ * had no gateway key, every reasoning call failed, and the run reported "budget exhausted".
+ * Values already in the environment win, so deployments that set real variables are untouched.
+ */
+function loadRootEnv(): void {
+  const envFile = fileURLToPath(new URL('../../../.env', import.meta.url));
+  if (!existsSync(envFile)) return;
+  process.loadEnvFile(envFile);
+}
+
+loadRootEnv();
+
+/**
  * Resolve the workflow bundle entrypoint.
  *
  * Temporal's bundler stats this path on disk, and the whole project runs through tsx — so the

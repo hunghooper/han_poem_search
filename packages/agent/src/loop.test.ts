@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { runAgent, AGENT_BUDGET_EXHAUSTED, type AgentDeps, type AgentEvent } from './loop.js';
+import {
+  runAgent,
+  AGENT_BUDGET_EXHAUSTED,
+  AGENT_MODEL_FAILED,
+  type AgentDeps,
+  type AgentEvent,
+} from './loop.js';
 import { initialAgentState, compact, type AgentState } from './state.js';
 import { DEFAULT_BUDGET } from './budget.js';
 import { runTool, type Tool } from './tool.js';
@@ -254,9 +260,13 @@ describe('failures never leave the run unfinished', () => {
       complete: () => Promise.reject(Object.assign(new Error('gateway exploded'), { code: 'INTERNAL' })),
     };
     const out = await runAgent(state(), deps({ provider: exploding, emit: (e) => events.push(e) }), runTool);
-    expect(out.stoppedBecause).toBe('budget_exhausted');
+    expect(out.stoppedBecause).toBe('model_failed');
     expect(out.partial).toBe(true);
-    expect(out.flags).toContain(AGENT_BUDGET_EXHAUSTED);
+    // Specifically NOT the budget flag. This assertion used to read AGENT_BUDGET_EXHAUSTED,
+    // and the conflation it blessed later cost a Phase 4 durability run: a restarted worker
+    // with no gateway key reported itself as having run out of time.
+    expect(out.flags).toContain(AGENT_MODEL_FAILED);
+    expect(out.flags).not.toContain(AGENT_BUDGET_EXHAUSTED);
     expect(events.at(-1)?.message).toMatch(/reasoning model failed/);
   });
 

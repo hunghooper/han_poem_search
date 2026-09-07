@@ -19,9 +19,10 @@ import type { VectorStore } from '@han/retrieval/vector-store';
 import type { Evidence } from '@han/shared/evidence';
 import { StepStatus } from '@han/shared/status';
 import { AggregateFlag } from '@han/shared/flags';
-import { runAgent, type AgentEvent } from '@han/agent/loop';
-import { initialAgentState } from '@han/agent/state';
-import { runTool, type Tool } from '@han/agent/tool';
+import { runAgentWorkflow } from '@han/worker/client';
+import type { AgentRunOutput } from '@han/worker/shared';
+import type { AgentEventBridge } from './agent-bridge.js';
+import type { Tool } from '@han/agent/tool';
 import type { LlmProvider } from '@han/llm/provider';
 import type { RuntimeConfig } from '@han/shared/runtime-config';
 import type { RunStore } from './events.js';
@@ -51,6 +52,8 @@ export interface SearchDeps {
    * at startup has already captured the environment's model for the life of the process.
    */
   makeTools: (config: RuntimeConfig) => Array<Tool<never>>;
+  /** Relays the worker's workflow events into this instance's stream (§14.1). */
+  bridge: AgentEventBridge;
   debug: boolean;
   /** Committed defaults with this request's session overrides already applied. */
   config: RuntimeConfig;
@@ -62,6 +65,29 @@ const poemLines = (textDisplay: string): string[] =>
     .split(/[\n，。！？；]/u)
     .map((s) => toMatchForm(s))
     .filter((s) => s.length > 0);
+
+/**
+ * How the agent's own step ended (§5.1).
+ *
+ * The four outcomes below are deliberately not one. NO_RESULT means the agent looked and
+ * found nothing; ERROR means it could not reason at all; SKIPPED means it never had a tool to
+ * try; LOW_CONFIDENCE means it worked until the budget ran out. Reporting the last three as
+ * NO_RESULT is the collapse §5 calls the most damaging mistake available, because each asks
+ * for a different fix and only one of them is "the corpus does not have it".
+ */
+export function agentStatusOf(out: AgentRunOutput): StepStatus {
+  if (out.evidence.length > 0) return StepStatus.HAS_RESULT;
+  switch (out.stoppedBecause) {
+    case 'model_failed':
+      return StepStatus.ERROR;
+    case 'no_tools_available':
+      return StepStatus.SKIPPED;
+    case 'budget_exhausted':
+      return StepStatus.LOW_CONFIDENCE;
+    default:
+      return StepStatus.NO_RESULT;
+  }
+}
 
 export async function runSearch(
   deps: SearchDeps,
@@ -261,59 +287,66 @@ export async function runSearch(
       store.emit(runId, { step: 'agent', source: 'model', phase: 'started', message: 'Agent took over' });
 
       try {
-      const agentOut = await runAgent(
-        initialAgentState(
-          searchText,
-          allFlags,
-          Object.entries(result.reports).map(([source, r]) => ({
-            source,
-            status: r.status,
-            resultCount: r.count,
-            latencyMs: r.latencyMs,
-          })),
-        ),
-        {
-          provider: deps.provider,
-          model: deps.config.models.reasoning ?? deps.reasoningModel,
-          tools: deps.makeTools(deps.config),
-          budget: {
-            maxIterations: deps.config.agent.maxIterations,
-            maxToolCalls: deps.config.agent.maxToolCalls,
-            maxWallClockMs: deps.config.agent.maxWallClockMs,
-            maxCostUsd: deps.config.agent.maxCostUsd,
-          },
-          now: () => Date.now(),
-          debug: deps.debug,
-          signal: AbortSignal.timeout(deps.config.agent.maxWallClockMs),
-          emit: (e: AgentEvent) => emitAgentEvent(store, runId, e),
-        },
-        runTool,
-      );
+        // The loop now lives in Temporal (§9.1). Killing the worker mid-run loses nothing:
+        // history is durable and a restarted worker replays and continues. The trace arrives
+        // over Redis while the workflow runs, so the stream is unchanged from the caller's
+        // point of view.
+        const stopRelay = await deps.bridge.relay(runId);
+        if (!deps.bridge.available) {
+          store.emit(runId, {
+            step: 'agent',
+            source: 'model',
+            phase: 'started',
+            message: 'Agent running — live trace unavailable (no Redis), the answer will still arrive',
+          });
+        }
+
+        let agentOut;
+        try {
+          agentOut = await runAgentWorkflow({
+            runId,
+            query: searchText,
+            flags: allFlags,
+            sources: Object.entries(result.reports).map(([source, r]) => ({
+              source,
+              status: r.status,
+              resultCount: r.count,
+              latencyMs: r.latencyMs,
+            })),
+            config: deps.config,
+            debug: deps.debug,
+          });
+        } finally {
+          await stopRelay();
+        }
 
       agentPartial = agentOut.partial;
-      for (const f of [...agentOut.flags, ...agentOut.state.flags]) {
+      for (const f of [...agentOut.flags, ...(agentOut.evidence.length > 0 ? ['model_has_result'] : [])]) {
         if (!allFlags.includes(f)) allFlags.push(f);
       }
 
       // Agent evidence goes FIRST, not last. The agent only ran because the local results were
       // judged insufficient, so leaving them ranked above what the agent found means the
-      // answer reports the very candidate the confidence policy just rejected — which is what
-      // happened: a Vietnamese poem correctly identified by the agent was displayed as
-      // 憶潼關 via bm25, the low-confidence local hit.
-      const fresh = agentOut.state.evidence.filter((ev) => !result.evidence.some((x) => x.id === ev.id));
+      // answer reports the very candidate the confidence policy just rejected.
+      const fresh = agentOut.evidence.filter((ev) => !result.evidence.some((x) => x.id === ev.id));
       result.evidence = [...fresh, ...result.evidence];
 
+      // THE terminal agent event — exactly one, emitted here rather than inside the workflow.
+      // The workflow's own terminal emit used to race this code's stopRelay() and could be
+      // dropped in flight, so the reason an agent gave up was reported only sometimes.
+      const agentStatus = agentStatusOf(agentOut);
       store.emit(runId, {
         step: 'agent',
         source: 'model',
-        phase: 'completed',
-        status: agentOut.state.evidence.length > 0 ? StepStatus.HAS_RESULT : StepStatus.NO_RESULT,
+        phase: agentStatus === StepStatus.ERROR ? 'failed' : 'completed',
+        status: agentStatus,
         flags: agentOut.flags,
         message:
-          agentOut.state.evidence.length > 0
-            ? `Agent found ${agentOut.state.evidence.length} result${agentOut.state.evidence.length === 1 ? '' : 's'}`
-            : `Agent stopped — ${agentOut.stoppedBecause.replace(/_/gu, ' ')}`,
-        metadata: { resultCount: agentOut.state.evidence.length },
+          agentOut.evidence.length > 0
+            ? `Agent found ${agentOut.evidence.length} result${agentOut.evidence.length === 1 ? '' : 's'}`
+            : (agentOut.stopDetail ??
+              `Agent stopped — ${agentOut.stoppedBecause.replace(/_/gu, ' ')}`),
+        metadata: { resultCount: agentOut.evidence.length },
       });
       } catch (e) {
         // Belt and braces. runAgent already converts its own failures into a partial outcome,
@@ -378,29 +411,6 @@ export async function runSearch(
   });
 
   return outcome;
-}
-
-/**
- * Agent events onto the §5.2 event stream. The whole agent path must be visible — §16's Phase 3
- * criterion is not just that the fallback works but that the user can see it working.
- */
-function emitAgentEvent(store: RunStore, runId: string, e: AgentEvent): void {
-  const step = e.kind === 'tool_call' ? 'tool_call' : 'agent';
-  store.emit(runId, {
-    step,
-    source: e.tool ?? 'model',
-    phase: e.kind === 'budget_exhausted' ? 'failed' : 'completed',
-    ...(e.status ? { status: e.status } : {}),
-    flags: e.flags ?? [],
-    agentIteration: e.iteration,
-    message: e.message,
-    metadata: {
-      ...(e.latencyMs !== undefined ? { latencyMs: e.latencyMs } : {}),
-      ...(e.provider ? { provider: e.provider } : {}),
-      ...(e.model ? { model: e.model } : {}),
-      ...(e.costUsd !== undefined && e.costUsd !== null ? { costUsd: e.costUsd } : {}),
-    },
-  });
 }
 
 function answerMessage(

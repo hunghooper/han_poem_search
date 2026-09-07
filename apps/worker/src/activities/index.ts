@@ -7,6 +7,7 @@
  * log, which is keyed on (run_id, seq) and rejects duplicates.
  */
 
+import { ApplicationFailure, heartbeat } from '@temporalio/activity';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Redis } from 'ioredis';
@@ -98,6 +99,28 @@ async function init() {
   return deps;
 }
 
+/**
+ * Beat for as long as `work` runs.
+ *
+ * A single heartbeat at the start would be worse than none: it advertises a heartbeat timeout
+ * the activity then breaches while it is healthily waiting on a 110-second model call, and
+ * Temporal cancels it. The point of heartbeating is the opposite — to distinguish "still
+ * working" from "the worker is gone", which is the distinction a mid-run crash turns on.
+ */
+async function beatingWhile<T>(work: Promise<T>): Promise<T> {
+  const timer = setInterval(() => {
+    heartbeat();
+  }, HEARTBEAT_INTERVAL_MS);
+  try {
+    return await work;
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+/** Comfortably inside the workflow's heartbeatTimeout, so one missed beat is not a failure. */
+const HEARTBEAT_INTERVAL_MS = 5_000;
+
 const toolsFor = (d: NonNullable<typeof deps>, config: RuntimeConfig): Array<Tool<never>> =>
   createTools({
     db: d.db as never,
@@ -127,8 +150,19 @@ export async function reason(req: {
   const d = await init();
   const model = req.model ?? d.reasoningModel;
   if (!d.provider || !model) {
-    throw new Error('CONFIG_INVALID: no LLM gateway or reasoning model configured');
+    // ApplicationFailure with an explicit `type`, not a plain Error: the workflow's
+    // nonRetryableErrorTypes list matches on the failure TYPE, never on the message. Throwing
+    // `new Error('CONFIG_INVALID: ...')` reads as if it were covered and is retried anyway —
+    // three attempts against a gateway that is not configured, and then a report of
+    // "budget exhausted" for what is a misconfiguration.
+    throw ApplicationFailure.create({
+      type: 'CONFIG_INVALID',
+      message: 'no LLM gateway or reasoning model configured',
+      nonRetryable: true,
+    });
   }
+
+
 
   // The tool schemas arrive as plain JSON Schema; the adapter expects a Zod type carrying it,
   // so the shape is rebuilt here rather than shipping a Zod instance through workflow history.
@@ -138,15 +172,20 @@ export async function reason(req: {
     return { name: t.name, description: t.description, parameters: schema };
   });
 
-  const res = await d.provider.complete(
-    {
-      model,
-      messages: req.messages as LlmMessage[],
-      tools,
-      toolChoice: 'auto',
-      maxTokens: req.maxTokens,
-    },
-    AbortSignal.timeout(110_000),
+  // Heartbeat while the model thinks. Without it a crash mid-call is invisible to Temporal
+  // until startToCloseTimeout expires, so a restarted worker sits idle for the remainder of
+  // that window — long enough to spend the whole run budget doing nothing.
+  const res = await beatingWhile(
+    d.provider.complete(
+      {
+        model,
+        messages: req.messages as LlmMessage[],
+        tools,
+        toolChoice: 'auto',
+        maxTokens: req.maxTokens,
+      },
+      AbortSignal.timeout(110_000),
+    ),
   );
 
   return {
@@ -184,11 +223,13 @@ export async function callTool(req: {
     };
   }
 
-  const result = await runTool(tool, req.args, {
-    signal: AbortSignal.timeout(Math.min(tool.timeoutMs + 5_000, 115_000)),
-    debug: req.debug,
-    now: () => Date.now(),
-  });
+  const result = await beatingWhile(
+    runTool(tool, req.args, {
+      signal: AbortSignal.timeout(Math.min(tool.timeoutMs + 5_000, 115_000)),
+      debug: req.debug,
+      now: () => Date.now(),
+    }),
+  );
 
   // What the tool spent, if it called a model at all. undefined: no model call. null: unpriced.
   let costUsd: number | null | undefined;

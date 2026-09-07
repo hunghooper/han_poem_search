@@ -9,6 +9,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
+import { ApplicationFailure } from '@temporalio/activity';
 import { Worker } from '@temporalio/worker';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -155,8 +156,11 @@ describe('agentRun workflow', () => {
     expect(result.stoppedBecause).toBe('budget_exhausted');
     expect(result.partial).toBe(true);
     expect(result.flags).toContain('agent_budget_exhausted');
-    // Never fails silently: exhaustion is an emitted event, not only a return value.
-    expect(events.some((e) => e.message.includes('Agent stopped'))).toBe(true);
+    // Never fails silently. The reason is RETURNED rather than emitted: a terminal event
+    // emitted from in here races the caller's teardown of the event relay and can be lost,
+    // so the caller emits it once from this field instead.
+    expect(result.stopDetail).toMatch(/Agent stopped/);
+    expect(events.some((e) => e.message.includes('Agent stopped'))).toBe(false);
   });
 
   it('reports a tool timeout as a timeout, never as nothing found', async () => {
@@ -196,7 +200,33 @@ describe('agentRun workflow', () => {
       },
     });
     expect(result.partial).toBe(true);
-    expect(result.stoppedBecause).toBe('budget_exhausted');
+    // model_failed, not budget_exhausted. The two ask for opposite responses — one for more
+    // budget, one for a working gateway — and reporting a failure as exhaustion sent a real
+    // Phase 4 durability run to the wrong diagnosis.
+    expect(result.stoppedBecause).toBe('model_failed');
+    expect(result.flags).toContain('agent_model_failed');
+    expect(result.flags).not.toContain('agent_budget_exhausted');
+  });
+
+  it('does not retry a CONFIG_INVALID failure', async () => {
+    // nonRetryableErrorTypes matches an ApplicationFailure's `type`, never a plain Error's
+    // message. A misconfigured gateway used to be retried three times and then reported as
+    // budget exhaustion, which reads as a run that simply needed longer.
+    let attempts = 0;
+    const { result } = await run({
+      reason: () => {
+        attempts += 1;
+        return Promise.reject(
+          ApplicationFailure.create({
+            type: 'CONFIG_INVALID',
+            message: 'no LLM gateway or reasoning model configured',
+            nonRetryable: true,
+          }),
+        );
+      },
+    });
+    expect(attempts).toBe(1);
+    expect(result.stoppedBecause).toBe('model_failed');
   });
 
   it('is deterministic — the same scripted activities give the same result', async () => {

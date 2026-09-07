@@ -42,6 +42,10 @@ export const AggregateFlag = {
 
   // Budget and answer-quality observations (§12, §10.3)
   AGENT_BUDGET_EXHAUSTED: 'agent_budget_exhausted',
+  // Distinct from budget exhaustion on purpose: one means the agent worked until it ran out
+  // of room, the other means it never got to work at all. Collapsing them hides outages and
+  // misconfiguration behind a number the operator would go and raise (§5).
+  AGENT_MODEL_FAILED: 'agent_model_failed',
   FINAL_ANSWER_UNCITED: 'final_answer_uncited',
   LLM_FAILOVER: 'llm_failover',
   USAGE_UNAVAILABLE: 'usage_unavailable',

@@ -6,6 +6,7 @@
  *   WS   /api/runs/:runId/stream  client sends { lastSeq }, server replays then streams live
  */
 
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -22,11 +23,19 @@ import { createOpenAiCompatibleProvider } from '@han/llm/adapters/openai-compati
 import { withFailover } from '@han/llm/failover';
 import { loadPriceTable } from '@han/llm/pricing';
 import type { LlmProvider } from '@han/llm/provider';
+import { AgentEventBridge } from './agent-bridge.js';
 import { PostgresEventSink, loadRun } from './event-sink.js';
 import { loadRuntimeConfig } from '@han/config/runtime';
 import { applyOverrides, OverridesSchema, type RuntimeConfig } from '@han/shared/runtime-config';
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
+
+/**
+ * Same reasoning as the worker's loadRootEnv: the process must be able to start correctly on
+ * its own, not only from the one shell that has the variables exported. Existing values win.
+ */
+const envFile = fileURLToPath(new URL('../../../.env', import.meta.url));
+if (existsSync(envFile)) process.loadEnvFile(envFile);
 
 const PORT = Number(process.env.API_PORT ?? 3001);
 const HOST = process.env.API_HOST ?? '0.0.0.0';
@@ -161,6 +170,9 @@ const deps = {
       // A session override wins; otherwise the environment's model.
       answerModel: config.models.answer ?? llm.answerModel,
     }),
+  bridge: new AgentEventBridge(process.env.REDIS_URL, store, (err) =>
+    app.log.error({ err }, 'agent event relay failed'),
+  ),
   debug: process.env.DEBUG_MODE_ENABLED === 'true',
 };
 
@@ -206,6 +218,8 @@ app.get('/health', async () => {
     semantic: deps.vectors !== null,
     reranker: deps.model !== null,
     agent: deps.provider !== null && deps.reasoningModel !== null,
+    durableAgent: true,
+    liveTrace: deps.bridge.available,
     reasoningModel: deps.reasoningModel,
     tools: deps
       .makeTools(baseConfig)
