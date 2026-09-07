@@ -14,6 +14,7 @@
  * still finds the poem it came from — which is the dominant user story, and no more.
  */
 
+import './env.js';
 import { writeFile } from 'node:fs/promises';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';

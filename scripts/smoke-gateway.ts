@@ -8,6 +8,7 @@
  *   pnpm exec tsx scripts/smoke-gateway.ts model-a model-b ...
  */
 
+import './env.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { z } from 'zod';
 import { createOpenAiCompatibleProvider } from '@han/llm/adapters/openai-compatible';

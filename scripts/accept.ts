@@ -1,4 +1,5 @@
 /** the spec §16 Phase 1 acceptance criteria, run against the real index. */
+import './env.js';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { exactNgramSearch } from '@han/retrieval/sources/exact-ngram';

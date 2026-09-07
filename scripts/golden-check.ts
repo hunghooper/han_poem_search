@@ -6,6 +6,7 @@
  * no_local_result rather than an answer assembled from irrelevant top-k.
  */
 
+import './env.js';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
