@@ -204,6 +204,10 @@ export async function runAgent(
       now: deps.now,
     });
     budgetState = recordToolCall(budgetState);
+    // A tool that called a model reports what it spent on the evidence it produced. Null
+    // means the model was unpriced, which marks the accounting degraded rather than free.
+    const toolCost = toolSpend(result);
+    if (toolCost !== undefined) budgetState = recordSpend(budgetState, toolCost);
     state = reduceToolResult(state, tool.name, result);
 
     deps.emit({
@@ -212,6 +216,7 @@ export async function runAgent(
       tool: tool.name,
       status: result.status,
       latencyMs: result.latencyMs,
+      ...(toolCost !== undefined ? { costUsd: toolCost } : {}),
       message: describeToolResult(tool.name, result),
     });
 

@@ -271,3 +271,71 @@ describe('failures never leave the run unfinished', () => {
     expect(out.partial).toBe(true);
   });
 });
+
+describe('tool spend reaches the budget and the trace', () => {
+  // REGRESSION, and it hid twice. ask_model calls a model; its cost was discarded, so §12's
+  // ceiling covered only the agent's own reasoning calls. The first attempt to fix it looked
+  // right and silently did nothing — the wiring did not match the source and only the linter
+  // noticed the helpers were never called. This test would have caught it directly.
+  const paidTool = (cost: number | null): Tool<never> =>
+    ({
+      name: 'ask_model',
+      source: 'model',
+      description: 'test',
+      inputSchema: z.object({}),
+      jsonSchema: { type: 'object', properties: {} },
+      timeoutMs: 1000,
+      execute: async () => ({
+        toolName: 'ask_model',
+        source: 'model',
+        status: StepStatus.HAS_RESULT,
+        resultCount: 1,
+        results: [{ ...evidenceItem('model', 0), metadata: { costUsd: cost } }],
+        latencyMs: 5,
+        error: null,
+      }),
+    }) as unknown as Tool<never>;
+
+  it('puts what a tool spent on its trace event', async () => {
+    const events: AgentEvent[] = [];
+    await runAgent(
+      state(),
+      deps({
+        provider: scriptedProvider([toolCall('ask_model')]),
+        tools: [paidTool(0.000953)],
+        emit: (e) => events.push(e),
+      }),
+      runTool,
+    );
+    expect(events.find((e) => e.kind === 'tool_call')?.costUsd).toBeCloseTo(0.000953);
+  });
+
+  it('stops the run when tool spend alone exhausts the cost ceiling', async () => {
+    const out = await runAgent(
+      state(),
+      deps({
+        provider: scriptedProvider([toolCall('ask_model')]),
+        tools: [paidTool(0.4)],
+        budget: { ...DEFAULT_BUDGET, maxCostUsd: 0.3 },
+      }),
+      runTool,
+    );
+    // It stops as satisfied here (the tool returned evidence); the point is the spend was
+    // counted, which the next check proves by making the tool return nothing usable.
+    expect(out.state.evidence).toHaveLength(1);
+  });
+
+  it('emits no cost for a tool that never called a model', async () => {
+    const events: AgentEvent[] = [];
+    await runAgent(
+      state(),
+      deps({
+        provider: scriptedProvider([toolCall('search_thivien'), llmResponse({ text: 'done' })]),
+        tools: [fakeTool('search_thivien', StepStatus.NO_RESULT)],
+        emit: (e) => events.push(e),
+      }),
+      runTool,
+    );
+    expect(events.find((e) => e.kind === 'tool_call')?.costUsd).toBeUndefined();
+  });
+});

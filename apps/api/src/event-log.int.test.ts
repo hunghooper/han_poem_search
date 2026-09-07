@@ -53,7 +53,7 @@ describe.skipIf(!configured)('the event log is authoritative (§11)', () => {
   it('persists every emitted event, in order, with no gaps', async () => {
     const runId = store.create('撥雲尋古道');
     await runSearch(
-      { db, model: null, vectors: null, provider: null, reasoningModel: null, tools: [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
       store,
       runId,
       '撥雲尋古道',
@@ -73,7 +73,7 @@ describe.skipIf(!configured)('the event log is authoritative (§11)', () => {
   it('the fold over the persisted log reproduces search_run.final_*', async () => {
     const runId = store.create('撥雲尋古道');
     const outcome = await runSearch(
-      { db, model: null, vectors: null, provider: null, reasoningModel: null, tools: [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
+      { db, model: null, vectors: null, provider: null, reasoningModel: null, makeTools: () => [], debug: false, config: DEFAULT_RUNTIME_CONFIG },
       store,
       runId,
       '撥雲尋古道',

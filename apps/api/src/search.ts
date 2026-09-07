@@ -45,7 +45,12 @@ export interface SearchDeps {
   provider: LlmProvider | null;
   /** Must be a model that passed §4.5 checks 2-4. See docs/adr/002-llm-gateway.md. */
   reasoningModel: string | null;
-  tools: Array<Tool<never>>;
+  /**
+   * Built per request from the resolved config, not once at boot: a session override that
+   * names a different answer model has to reach the tool that uses it, and a tool constructed
+   * at startup has already captured the environment's model for the life of the process.
+   */
+  makeTools: (config: RuntimeConfig) => Array<Tool<never>>;
   debug: boolean;
   /** Committed defaults with this request's session overrides already applied. */
   config: RuntimeConfig;
@@ -270,7 +275,7 @@ export async function runSearch(
         {
           provider: deps.provider,
           model: deps.config.models.reasoning ?? deps.reasoningModel,
-          tools: deps.tools,
+          tools: deps.makeTools(deps.config),
           budget: {
             maxIterations: deps.config.agent.maxIterations,
             maxToolCalls: deps.config.agent.maxToolCalls,

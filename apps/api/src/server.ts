@@ -152,13 +152,15 @@ const deps = {
   ...semantic,
   provider: llm.provider,
   reasoningModel: llm.reasoningModel,
-  tools: createTools({
-    db,
-    model: semantic.model,
-    vectors: semantic.vectors,
-    provider: llm.provider,
-    answerModel: llm.answerModel,
-  }),
+  makeTools: (config: RuntimeConfig) =>
+    createTools({
+      db,
+      model: semantic.model,
+      vectors: semantic.vectors,
+      provider: llm.provider,
+      // A session override wins; otherwise the environment's model.
+      answerModel: config.models.answer ?? llm.answerModel,
+    }),
   debug: process.env.DEBUG_MODE_ENABLED === 'true',
 };
 
@@ -205,7 +207,10 @@ app.get('/health', async () => {
     reranker: deps.model !== null,
     agent: deps.provider !== null && deps.reasoningModel !== null,
     reasoningModel: deps.reasoningModel,
-    tools: deps.tools.filter((t) => !t.unavailableReason?.()).map((t) => t.name),
+    tools: deps
+      .makeTools(baseConfig)
+      .filter((t) => !t.unavailableReason?.())
+      .map((t) => t.name),
   };
 });
 
