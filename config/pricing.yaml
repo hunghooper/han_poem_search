@@ -28,6 +28,22 @@ models:
     outputPerMTok: 7.50
     cachedInputPerMTok: 1.50
 
+  qwen-3.8-max:
+    inputPerMTok: 4.00
+    outputPerMTok: 12.00
+    cachedInputPerMTok: 4.00
+
+  # MEASURED: this gateway answers a request for qwen-3.8-max with the id qwen3.8-flash,
+  # consistently. Cost is looked up by the id that SERVED the call, so without this entry
+  # pricing qwen-3.8-max has no effect at all. The rates here are the ones quoted for
+  # qwen-3.8-max, which is an ASSUMPTION: if the gateway is genuinely serving a cheaper model,
+  # this over-states the cost. Runs carrying this substitution are flagged
+  # llm_model_substituted so the assumption is visible rather than buried.
+  qwen3.8-flash:
+    inputPerMTok: 4.00
+    outputPerMTok: 12.00
+    cachedInputPerMTok: 4.00
+
 # Every other model on the gateway is UNPRICED and reports costUsd: null. That is the honest
 # state, not an oversight — see docs/TODO.md.
 #

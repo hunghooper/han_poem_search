@@ -12,6 +12,7 @@ import OpenAI from 'openai';
 import { AppError } from '@han/shared/errors';
 import {
   BAD_TOOL_ARGS,
+  MODEL_SUBSTITUTED,
   USAGE_UNAVAILABLE,
   type LlmMessage,
   type LlmProvider,
@@ -134,6 +135,25 @@ interface Parts {
  * behaviour §4.3 asks for — malformed tool JSON, absent usage, unpriced models — is applied
  * in exactly one place regardless of how the bytes arrived.
  */
+/**
+ * Did the gateway serve a different model than we asked for?
+ *
+ * MEASURED: requesting `qwen-3.8-max` returns `qwen3.8-flash`, three times out of three. That
+ * matters twice over. Cost is looked up by the id that SERVED the call, so pricing the
+ * requested id silently does nothing; and a model that passed the §4.5 smoke test is not
+ * necessarily the model answering, which undermines the whole point of that gate.
+ *
+ * Compared on a normalised prefix, because a version suffix is not a substitution:
+ * `gpt-4o` served as `gpt-4o-2024-11-20` is the same model, `qwen-3.8-max` served as
+ * `qwen3.8-flash` is not.
+ */
+export function isSubstituted(requested: string, served: string): boolean {
+  const norm = (m: string) => m.toLowerCase().replace(/[^a-z0-9]/gu, '');
+  const [a, b] = [norm(requested), norm(served)];
+  if (!a || !b) return false;
+  return !b.startsWith(a) && !a.startsWith(b);
+}
+
 function buildResponse(parts: Parts, cfg: AdapterConfig, req: LlmRequest): LlmResponse {
   const flags: string[] = [];
   const toolCalls: LlmResponse['toolCalls'] = [];
@@ -147,6 +167,9 @@ function buildResponse(parts: Parts, cfg: AdapterConfig, req: LlmRequest): LlmRe
       toolCalls.push({ id: c.id, name: c.name, args: { __parseError: parsed.error, __raw: c.args } });
     }
   }
+
+  const served = parts.model || req.model;
+  if (isSubstituted(req.model, served)) flags.push(MODEL_SUBSTITUTED);
 
   const hasUsage = parts.usage != null;
   if (!hasUsage) flags.push(USAGE_UNAVAILABLE);

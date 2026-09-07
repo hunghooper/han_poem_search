@@ -170,3 +170,31 @@ describe('streaming', () => {
     expect(r.usage.inputTokens).toBe(3);
   });
 });
+
+describe('model substitution', () => {
+  // MEASURED: this gateway answers a request for `qwen-3.8-max` with `qwen3.8-flash`. Cost is
+  // looked up by the id that served the call, so the substitution silently defeats pricing —
+  // and, worse, means the model that passed the §4.5 smoke test may not be the one answering.
+  it('flags a served model that is not the requested one', async () => {
+    const p = provider(sse([delta({ content: 'OK' }, 'stop')]).mockImplementation(async () =>
+      new Response(
+        `data: ${JSON.stringify({ model: 'qwen3.8-flash', choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      ),
+    ));
+    const r = await p.complete({ model: 'qwen-3.8-max', messages: [] }, sig());
+    expect(r.flags).toContain('llm_model_substituted');
+    expect(r.model).toBe('qwen3.8-flash');
+  });
+
+  it('does not flag a version suffix — that is the same model, not a substitution', async () => {
+    const p = provider(sse([]).mockImplementation(async () =>
+      new Response(
+        `data: ${JSON.stringify({ model: 'gpt-4o-2024-11-20', choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      ),
+    ));
+    const r = await p.complete({ model: 'gpt-4o', messages: [] }, sig());
+    expect(r.flags).not.toContain('llm_model_substituted');
+  });
+});

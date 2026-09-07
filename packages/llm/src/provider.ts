@@ -77,3 +77,5 @@ export interface LlmProvider {
 export const USAGE_UNAVAILABLE = 'usage_unavailable';
 /** Flag emitted when the model returned unparseable tool arguments. */
 export const BAD_TOOL_ARGS = 'llm_bad_tool_args';
+/** Flag emitted when the gateway served a different model than the one requested. */
+export const MODEL_SUBSTITUTED = 'llm_model_substituted';
