@@ -41,6 +41,43 @@ services:
       timeout: 3s
       retries: 20
 
+  # Temporal — the spec §2, Phase 4. Durable agent runs: a multi-minute run survives a
+  # worker restart because the loop is workflow code and every side effect is an activity.
+  #
+  # auto-setup creates and migrates its own schema inside the Postgres we already run, rather
+  # than adding a second database server for one more schema.
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PWD: postgres
+      POSTGRES_SEEDS: postgres
+      DEFAULT_NAMESPACE: default
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # Not required to run anything, but the fastest way to see whether a killed worker actually
+  # resumed a run rather than silently starting a new one.
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8233:8080"
+    depends_on:
+      - temporal
+
 volumes:
   pgdata:
   qdrantdata:

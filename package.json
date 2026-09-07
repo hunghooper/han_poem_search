@@ -24,7 +24,8 @@
     "golden": "tsx scripts/golden-check.ts",
     "eval": "tsx scripts/eval.ts",
     "smoke:gateway": "tsx scripts/smoke-gateway.ts",
-    "smoke": "vitest run --config vitest.smoke.config.ts"
+    "smoke": "vitest run --config vitest.smoke.config.ts",
+    "test:wf": "vitest run --config vitest.workflow.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

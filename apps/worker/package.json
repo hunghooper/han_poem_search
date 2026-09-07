@@ -1,0 +1,34 @@
+{
+  "name": "@han/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "start": "tsx src/worker.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@han/agent": "workspace:*",
+    "@han/db": "workspace:*",
+    "@han/llm": "workspace:*",
+    "@han/retrieval": "workspace:*",
+    "@han/shared": "workspace:*",
+    "@temporalio/activity": "^1.11.6",
+    "@temporalio/client": "^1.11.6",
+    "@temporalio/worker": "^1.11.6",
+    "@temporalio/workflow": "^1.11.6",
+    "drizzle-orm": "^0.36.4",
+    "ioredis": "^5.4.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@temporalio/testing": "^1.11.6",
+    "tsx": "^4.19.0"
+  },
+  "exports": {
+    "./client": "./src/client.ts",
+    "./shared": "./src/shared.ts"
+  }
+}
