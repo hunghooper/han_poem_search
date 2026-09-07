@@ -23,7 +23,14 @@ models:
     outputPerMTok: 2.00
     cachedInputPerMTok: 0.60
 
+  gemini-3.8-flash:
+    inputPerMTok: 1.50
+    outputPerMTok: 7.50
+    cachedInputPerMTok: 1.50
+
 # Every other model on the gateway is UNPRICED and reports costUsd: null. That is the honest
-# state, not an oversight — see docs/TODO.md. Note that the models currently configured in
-# .env (qwen-3.8-max for reasoning, gemini-3.8-flash for answers) are among them, so §12's
-# cost ceiling stays inert until either they are priced or the configured models change.
+# state, not an oversight — see docs/TODO.md.
+#
+# Still unpriced and in use: qwen-3.8-max, the reasoning model that drives the agent loop.
+# Until it is priced, any run that invokes the agent has costUnknown set and §12's ceiling
+# stops being enforced — the token counters keep working, but the dollar limit does not.

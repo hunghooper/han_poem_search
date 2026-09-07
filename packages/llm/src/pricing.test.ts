@@ -88,5 +88,6 @@ describe('the shipped table', () => {
     const t = loadPriceTable('config/pricing.yaml');
     expect(t['glm-5.3']).toEqual({ inputPerMTok: 2.8, outputPerMTok: 8.8, cachedInputPerMTok: 2.8 });
     expect(t['glm-5.3-flash']).toEqual({ inputPerMTok: 0.6, outputPerMTok: 2, cachedInputPerMTok: 0.6 });
+    expect(t['gemini-3.8-flash']).toEqual({ inputPerMTok: 1.5, outputPerMTok: 7.5, cachedInputPerMTok: 1.5 });
   });
 });
