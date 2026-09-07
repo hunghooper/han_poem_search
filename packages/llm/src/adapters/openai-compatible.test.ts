@@ -15,12 +15,18 @@ const fakeGateway = (body: unknown, init: { status?: number } = {}) =>
     }),
   );
 
+/**
+ * These exercise the NON-STREAMING path explicitly. Streaming is the adapter default (see the
+ * factory), so this file pins the JSON path and streaming.test.ts pins the SSE one; both must
+ * produce an identical LlmResponse, which is why buildResponse is shared between them.
+ */
 const provider = (fetchImpl: ReturnType<typeof fakeGateway>, priceTable?: Record<string, { inputPerMTok: number; outputPerMTok: number }>) =>
   createOpenAiCompatibleProvider({
     name: 'fake',
     apiKey: 'test-key',
     baseURL: 'https://gateway.invalid/v1',
     fetch: fetchImpl as never,
+    stream: false,
     ...(priceTable ? { priceTable } : {}),
   });
 

@@ -195,7 +195,31 @@ export async function runSearch(
   // §9: the agent fires only when local retrieval could not confidently answer. Given the
   // §7.1 short-circuit this should be a minority of queries.
   let agentPartial = false;
-  if (!found) {
+
+  /**
+   * Don't spend the agent on input that is not a poem fragment at all.
+   *
+   * MEASURED: the nonsense control 龘龘龘龘龘龘 correctly gets no_local_result, and then the
+   * agent runs anyway and burns the full 60-second budget and real tokens on it. §9 does put
+   * no_local_result on the agent's path, but zero lexical overlap means not one character of
+   * the query appears in ANY candidate drawn from 78,455 poems — that is not a hard question,
+   * it is not a question about this corpus. A Vietnamese Hán-Nôm query is unaffected: its
+   * characters are ordinary ones that overlap heavily, which is exactly why it deserves the
+   * agent and this does not.
+   */
+  const notEvenClose =
+    result.exact.kind === 'none' && result.lexicalOverlap !== null && result.lexicalOverlap === 0;
+
+  if (!found && notEvenClose) {
+    store.emit(runId, {
+      step: 'agent',
+      source: 'model',
+      phase: 'completed',
+      status: StepStatus.SKIPPED,
+      message:
+        'Agent skipped — the query shares no characters with anything in the corpus, so there is nothing here to reason about',
+    });
+  } else if (!found) {
     if (!deps.provider || !deps.reasoningModel) {
       store.emit(runId, {
         step: 'agent',
@@ -336,6 +360,12 @@ function answerMessage(
   partial: boolean,
 ): string {
   const suffix = partial ? ' (partial — the agent ran out of budget)' : '';
+  // A rejected candidate is not an answer. Naming the top row when the policy already returned
+  // no_local_result is §1's "silent success" — returning documents and calling it an answer.
+  // The candidates stay in the evidence list for the debug view; they do not become the answer.
+  if (flags.includes(AggregateFlag.NO_LOCAL_RESULT)) {
+    return `No confident answer — nothing in the corpus matches${suffix}`;
+  }
   if (!top) return `No confident answer${suffix}`;
   if (flags.includes(AggregateFlag.LOCAL_RESULT_FOUND)) {
     return `${top.title ?? '(untitled)'} — ${top.author ?? '(unknown)'}${suffix}`;

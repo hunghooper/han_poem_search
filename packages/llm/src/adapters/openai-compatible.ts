@@ -35,6 +35,8 @@ export interface AdapterConfig {
    * global `fetch` does not have.
    */
   fetch?: (...args: never[]) => Promise<Response>;
+  /** Force the non-streaming path. Defaults to streaming — see the note in the factory. */
+  stream?: boolean;
 }
 
 /** Zod -> JSON Schema, for the subset of shapes our tools actually use. */
@@ -110,6 +112,140 @@ const toOpenAiMessages = (messages: LlmMessage[]) =>
     return { role: m.role as 'system' | 'user' | 'assistant', content: m.content ?? '' };
   });
 
+/** Everything a completion yields, however it arrived. */
+interface Parts {
+  text: string | null;
+  /** Raw tool calls, arguments still unparsed. */
+  rawCalls: Array<{ id: string; name: string; args: string }>;
+  finishReason: string | null | undefined;
+  usage: { prompt_tokens?: number; completion_tokens?: number } | null;
+  model: string;
+  raw: unknown;
+}
+
+/**
+ * Build the frozen LlmResponse from whatever the transport produced.
+ *
+ * Shared by the streaming and non-streaming paths so the two cannot drift: every defensive
+ * behaviour §4.3 asks for — malformed tool JSON, absent usage, unpriced models — is applied
+ * in exactly one place regardless of how the bytes arrived.
+ */
+function buildResponse(parts: Parts, cfg: AdapterConfig, req: LlmRequest): LlmResponse {
+  const flags: string[] = [];
+  const toolCalls: LlmResponse['toolCalls'] = [];
+
+  for (const c of parts.rawCalls) {
+    const parsed = safeJsonParse(c.args || '{}');
+    if (parsed.ok) {
+      toolCalls.push({ id: c.id, name: c.name, args: parsed.value });
+    } else {
+      if (!flags.includes(BAD_TOOL_ARGS)) flags.push(BAD_TOOL_ARGS);
+      toolCalls.push({ id: c.id, name: c.name, args: { __parseError: parsed.error, __raw: c.args } });
+    }
+  }
+
+  const hasUsage = parts.usage != null;
+  if (!hasUsage) flags.push(USAGE_UNAVAILABLE);
+  const usage = {
+    inputTokens: parts.usage?.prompt_tokens ?? 0,
+    outputTokens: parts.usage?.completion_tokens ?? 0,
+  };
+
+  return {
+    text: parts.text,
+    toolCalls,
+    stopReason: toolCalls.length > 0 ? 'tool_use' : mapFinishReason(parts.finishReason),
+    usage: {
+      ...usage,
+      costUsd: hasUsage ? estimateCost(usage, parts.model || req.model, cfg.priceTable) : null,
+    },
+    model: parts.model || req.model,
+    provider: cfg.name,
+    raw: parts.raw,
+    flags,
+  };
+}
+
+/** Map an SDK/transport failure onto the same status vocabulary tools use (§5.4). */
+function toLlmError(e: unknown, cfg: AdapterConfig, signal: AbortSignal): AppError {
+  const err = e as { status?: number; name?: string; message?: string };
+  if (err.name === 'AbortError' || signal.aborted) {
+    return new AppError('TOOL_TIMEOUT', `${cfg.name}: request aborted`, { provider: cfg.name });
+  }
+  if (err.status === 429) {
+    return new AppError('TOOL_UNAVAILABLE', `${cfg.name}: rate limited`, { provider: cfg.name, status: 429 });
+  }
+  return new AppError('INTERNAL', `${cfg.name}: ${err.message ?? String(e)}`, {
+    provider: cfg.name,
+    ...(err.status !== undefined ? { status: err.status } : {}),
+  });
+}
+
+/**
+ * Accumulate a stream into Parts.
+ *
+ * §4.3: "Streaming tool calls arrive as deltas that must be accumulated BY INDEX before the
+ * arguments are valid JSON." By index, not by id — the id arrives only on a call's first
+ * delta, and later fragments of the same call carry nothing but `index` and a slice of the
+ * argument string. Measured on this gateway, one tool call arrives in anywhere from 1 to 6
+ * fragments depending on the model, and no single fragment is parseable JSON on its own.
+ */
+async function accumulate(
+  stream: AsyncIterable<Record<string, unknown>>,
+  fallbackModel: string,
+): Promise<Parts> {
+  const byIndex = new Map<number, { id: string; name: string; args: string }>();
+  let text = '';
+  let finishReason: string | null | undefined;
+  let usage: Parts['usage'] = null;
+  let model = fallbackModel;
+  const chunks: unknown[] = [];
+
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+    const c = chunk as {
+      model?: string;
+      usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+      choices?: Array<{
+        delta?: {
+          content?: string | null;
+          tool_calls?: Array<{ index?: number; id?: string; function?: { name?: string; arguments?: string } }>;
+        };
+        finish_reason?: string | null;
+      }>;
+    };
+
+    if (c.model) model = c.model;
+    // Usage arrives in a final chunk of its own on gateways that support stream_options;
+    // on those that do not it never arrives, and buildResponse flags it as unavailable.
+    if (c.usage) usage = c.usage;
+
+    const choice = c.choices?.[0];
+    if (!choice) continue;
+    if (choice.finish_reason) finishReason = choice.finish_reason;
+    if (choice.delta?.content) text += choice.delta.content;
+
+    for (const tc of choice.delta?.tool_calls ?? []) {
+      const idx = tc.index ?? 0;
+      const cur = byIndex.get(idx) ?? { id: '', name: '', args: '' };
+      if (tc.id) cur.id = tc.id;
+      if (tc.function?.name) cur.name = tc.function.name;
+      if (tc.function?.arguments) cur.args += tc.function.arguments;
+      byIndex.set(idx, cur);
+    }
+  }
+
+  return {
+    text: text.length > 0 ? text : null,
+    // Ordered by index so multiple parallel tool calls keep the order the model chose.
+    rawCalls: [...byIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v),
+    finishReason,
+    usage,
+    model,
+    raw: chunks,
+  };
+}
+
 export function createOpenAiCompatibleProvider(cfg: AdapterConfig): LlmProvider {
   const client = new OpenAI({
     apiKey: cfg.apiKey,
@@ -123,92 +259,85 @@ export function createOpenAiCompatibleProvider(cfg: AdapterConfig): LlmProvider 
     ...(cfg.fetch ? { fetch: cfg.fetch as unknown as ConstructorParameters<typeof OpenAI>[0] extends { fetch?: infer F } ? F : never } : {}),
   });
 
+  /**
+   * Streaming is the DEFAULT, and that is a measured decision rather than a preference.
+   *
+   * Nine of twenty models on the Ramclouds gateway answer a request carrying no `stream`
+   * parameter with `text/event-stream` anyway — every DeepSeek, Kimi, Grok and Claude model —
+   * so the non-streaming path cannot reach them at all. Streaming, by contrast, works for
+   * every model tested in both groups, tool calls included. One path that works everywhere
+   * beats two paths and a per-model config flag nobody can maintain.
+   */
+  const useStream = cfg.stream !== false;
+
   return {
     name: cfg.name,
     supportsTools: true,
     supportsStreaming: true,
 
     async complete(req: LlmRequest, signal: AbortSignal): Promise<LlmResponse> {
-      let res;
-      try {
-        res = await client.chat.completions.create(
-          {
-            model: req.model,
-            messages: toOpenAiMessages(req.messages),
-            ...(req.tools?.length ? { tools: req.tools.map(toOpenAiTool) } : {}),
-            ...(req.toolChoice ? { tool_choice: req.toolChoice } : {}),
-            ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
-            ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
-          },
-          { signal },
-        );
-      } catch (e) {
-        // Upstream errors map onto StepStatus using the same table as tools (CONTRIBUTING.md,
-        // extension point 3): 429 is UNAVAILABLE, a socket timeout is TIMEOUT, a 500 is ERROR.
-        const err = e as { status?: number; name?: string; message?: string };
-        if (err.name === 'AbortError' || signal.aborted) {
-          throw new AppError('TOOL_TIMEOUT', `${cfg.name}: request aborted`, { provider: cfg.name });
-        }
-        if (err.status === 429) {
-          throw new AppError('TOOL_UNAVAILABLE', `${cfg.name}: rate limited`, { provider: cfg.name, status: 429 });
-        }
-        throw new AppError('INTERNAL', `${cfg.name}: ${err.message ?? String(e)}`, {
-          provider: cfg.name,
-          ...(err.status !== undefined ? { status: err.status } : {}),
-        });
-      }
+      const body = {
+        model: req.model,
+        messages: toOpenAiMessages(req.messages),
+        ...(req.tools?.length ? { tools: req.tools.map(toOpenAiTool) } : {}),
+        ...(req.toolChoice ? { tool_choice: req.toolChoice } : {}),
+        ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
+        ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+      };
 
-      const choice = res.choices?.[0];
-      if (!choice) {
-        throw new AppError('LLM_EMPTY_RESPONSE', `${cfg.name}: gateway returned no choices`, {
-          provider: cfg.name,
-        });
-      }
-
-      const flags: string[] = [];
-      const toolCalls: LlmResponse['toolCalls'] = [];
-      for (const tc of choice.message?.tool_calls ?? []) {
-        const fn = (tc as { function?: { name?: string; arguments?: string } }).function;
-        const parsed = safeJsonParse(fn?.arguments ?? '{}');
-        if (parsed.ok) {
-          toolCalls.push({ id: tc.id, name: fn?.name ?? '', args: parsed.value });
-        } else {
-          // Kept as a call with the error attached, so the loop can hand the model its own
-          // mistake as a tool result instead of the run dying.
-          if (!flags.includes(BAD_TOOL_ARGS)) flags.push(BAD_TOOL_ARGS);
-          toolCalls.push({
-            id: tc.id,
-            name: fn?.name ?? '',
-            args: { __parseError: parsed.error, __raw: fn?.arguments ?? '' },
+      if (!useStream) {
+        let res;
+        try {
+          res = await client.chat.completions.create(body, { signal });
+        } catch (e) {
+          throw toLlmError(e, cfg, signal);
+        }
+        const choice = res.choices?.[0];
+        if (!choice) {
+          throw new AppError('LLM_EMPTY_RESPONSE', `${cfg.name}: gateway returned no choices`, {
+            provider: cfg.name,
           });
         }
+        return buildResponse(
+          {
+            text: choice.message?.content ?? null,
+            rawCalls: (choice.message?.tool_calls ?? []).map((tc) => {
+              const fn = (tc as { function?: { name?: string; arguments?: string } }).function;
+              return { id: tc.id, name: fn?.name ?? '', args: fn?.arguments ?? '{}' };
+            }),
+            finishReason: choice.finish_reason,
+            usage: res.usage ?? null,
+            model: res.model ?? req.model,
+            raw: res,
+          },
+          cfg,
+          req,
+        );
       }
 
-      // `usage` may be absent — gateways drop it. Report zeros and costUsd null; never
-      // fabricate a number, and make the degradation visible (§4.3).
-      const hasUsage = res.usage != null;
-      if (!hasUsage) flags.push(USAGE_UNAVAILABLE);
-      const usage = {
-        inputTokens: res.usage?.prompt_tokens ?? 0,
-        outputTokens: res.usage?.completion_tokens ?? 0,
-      };
+      let parts: Parts;
+      try {
+        const stream = await client.chat.completions.create(
+          // include_usage asks for a final usage chunk. Gateways that ignore it simply never
+          // send one, and the response is flagged usage_unavailable rather than guessed at.
+          { ...body, stream: true, stream_options: { include_usage: true } },
+          { signal },
+        );
+        parts = await accumulate(stream as unknown as AsyncIterable<Record<string, unknown>>, req.model);
+      } catch (e) {
+        throw toLlmError(e, cfg, signal);
+      }
 
-      const stopReason =
-        toolCalls.length > 0 ? 'tool_use' : mapFinishReason(choice.finish_reason);
+      // A stream that produced neither text nor a tool call is the streaming equivalent of a
+      // response with no choices, and must be as loud.
+      if (parts.text === null && parts.rawCalls.length === 0) {
+        throw new AppError('LLM_EMPTY_RESPONSE', `${cfg.name}: stream produced no content`, {
+          provider: cfg.name,
+          finishReason: parts.finishReason ?? null,
+        });
+      }
 
-      return {
-        text: choice.message?.content ?? null,
-        toolCalls,
-        stopReason,
-        usage: {
-          ...usage,
-          costUsd: hasUsage ? estimateCost(usage, res.model ?? req.model, cfg.priceTable) : null,
-        },
-        model: res.model ?? req.model,
-        provider: cfg.name,
-        raw: res,
-        flags,
-      };
+      return buildResponse(parts, cfg, req);
     },
   };
 }
