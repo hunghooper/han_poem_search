@@ -180,6 +180,22 @@ function initLlm(): { provider: LlmProvider | null; reasoningModel: string | nul
 
 const llm = initLlm();
 const semantic = await initSemanticLayer();
+/**
+ * Outside-source settings, defined ONCE and passed to every tool set.
+ *
+ * There are three places that build tools — the default set, the set rebuilt for a caller's
+ * own key, and the set a batch job uses. Configuring one of them is how a run acquires a
+ * different set of tools depending on how it was started, which is invisible until someone
+ * wonders why the agent never tried the web.
+ */
+const WEB_TOOLS = {
+  souyunEnabled: process.env.TOOL_SOUYUN_ENABLED === 'true',
+  userAgent: process.env.TOOL_HTTP_USER_AGENT ?? 'han-search/0.1',
+  timeoutMs: Number(process.env.TOOL_DEFAULT_TIMEOUT_MS ?? 15000),
+  delayMs: Number(process.env.TOOL_SCRAPE_DELAY_MS ?? 2000),
+  cacheTtlMs: Number(process.env.TOOL_CACHE_TTL_SECONDS ?? 3600) * 1000,
+} as const;
+
 const deps = {
   db,
   ...semantic,
@@ -194,6 +210,7 @@ const deps = {
       provider: llm.provider,
       // A session override wins; otherwise the environment's model.
       answerModel: config.models.answer ?? llm.answerModel,
+    web: WEB_TOOLS,
     }),
   bridge: new AgentEventBridge(process.env.REDIS_URL, store, (err) =>
     app.log.error({ err }, 'agent event relay failed'),
@@ -215,6 +232,7 @@ const makeToolsWith = (provider: LlmProvider) => (config: RuntimeConfig) =>
     vectors: semantic.vectors,
     provider,
     answerModel: config.models.answer ?? llm.answerModel,
+      web: WEB_TOOLS,
   });
 
 /** Committed defaults. Session overrides are applied per request and never written back. */
@@ -303,6 +321,7 @@ app.post('/api/search', async (req, reply) => {
             vectors: semantic.vectors,
             provider: sessionProvider,
             answerModel: c.models.answer ?? llm.answerModel,
+      web: WEB_TOOLS,
           }),
       }
     : { ...deps, config };

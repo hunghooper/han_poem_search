@@ -136,6 +136,13 @@ const toolsFor = (d: NonNullable<typeof deps>, config: RuntimeConfig): Array<Too
     vectors: d.vectors,
     provider: d.provider,
     answerModel: config.models.answer ?? d.answerModel,
+    web: {
+      souyunEnabled: process.env.TOOL_SOUYUN_ENABLED === 'true',
+      userAgent: process.env.TOOL_HTTP_USER_AGENT ?? 'han-search/0.1',
+      timeoutMs: Number(process.env.TOOL_DEFAULT_TIMEOUT_MS ?? 15000),
+      delayMs: Number(process.env.TOOL_SCRAPE_DELAY_MS ?? 2000),
+      cacheTtlMs: Number(process.env.TOOL_CACHE_TTL_SECONDS ?? 3600) * 1000,
+    },
   });
 
 /** Tool descriptions the model can choose between. Data only — no live objects cross back. */

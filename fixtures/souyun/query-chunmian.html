@@ -1,0 +1,707 @@
+
+
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><meta http-equiv="Cache-Control" content="no-transform" /><meta name="keywords" content="诗词大全,诗词查询,诗词注释,诗词鉴赏,诗词全集" /><meta name="description" content="多角度、全方位的诗词检索系统" /><meta http-equiv="X-UA-Compatible" content="IE=10;IE=11" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>
+	诗词检索
+</title><link rel="stylesheet" type="text/css" href="pa28.css" />
+    <script src="https://apps.bdimg.com/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+    <script type="text/javascript" src="/Scripts/lib.36.js"></script>
+    
+        <script type="text/javascript" src="/Scripts/echarts.min.js" ></script>
+    
+    <script type="text/javascript">
+        var isMobile = false;
+
+        $(document).ready(function () {
+            MyInit();
+
+            var mode = GetCookie("ContentLineMode");
+            if (mode && mode == 1) {
+                ShowContentInSingleLine();
+            }
+        });
+
+        function MyInit() {
+            if (isMobile) {
+                if ($('#DynastyOption option:selected').index() > 0
+                    || $('#PTypeOption option:selected').index() > 0
+                    || $('#RhymeCategory option:selected').index() > 0
+                    || $('#AuthorKeyword').val().length > 0) {
+                    // do nothing
+                }
+                else {
+                    $("#advanceFilter").hide();
+
+                }
+            }
+
+            var items = document.getElementsByTagName("div");
+            $("._poem").each(function (index, poem) {
+                poem.innerHTML = displayResult(poem.innerHTML);
+            });
+
+            InitPics();
+        }
+
+        function displayResult(poems) {
+            var key = document.getElementById("_TitleKeys").value;
+            if (key == '') {
+                key = document.getElementById("_ContentKeys").value;
+            }
+            if (key != '' && poems != '') {
+                poems = Highlight(poems, key, '<div id="poem_title', "</div>");
+            }
+
+            if (document.getElementById("_ContentKeys").value != '' && poems != '') {
+                poems = Highlight(poems, key, '<div class="poemSentence"', "</div>");
+            }
+
+            return poems;
+        }
+
+        function Highlight(poems, keys, startTag, endTag) {
+            var keysArray = keys.split(' ');
+
+            var start = poems.indexOf(startTag);
+            var end = 0;
+            var piece;
+
+            while (start >= 0) {
+                end = poems.indexOf(endTag, start);
+                piece = HighlightPiece(poems.substr(start, end - start), keysArray);
+                poems = poems.substr(0, start) + piece + poems.substr(end);
+                start = poems.indexOf(startTag, start + piece.length);
+            }
+            return poems;
+        }
+
+        function HighlightPiece(piece, keys) {
+            var pos;
+
+            for (var i = 0; i < keys.length; i++) {
+                pos = piece.lastIndexOf(keys[i]);
+                if (pos >= 0) {
+                    var lastGreater = piece.lastIndexOf('>', pos);
+                    var lastQuote = piece.lastIndexOf('=', pos);
+                    if (lastQuote < 0 || lastQuote < lastGreater) {
+                        piece = piece.substr(0, pos) + '<span class="highlighted">' + keys[i] + '</span>' + piece.substr(pos + keys[i].length);
+                    }
+                }
+            }
+
+            return piece;
+        }
+
+        function ToggleShowContentMode() {
+            var mode = GetCookie("ContentLineMode");
+            if (mode && mode == 1) {
+                mode = 0;
+            }
+            else {
+                mode = 1;
+            }
+
+            SetLongLifeCookie("ContentLineMode", mode);
+
+            if (mode == 0) {
+                $(".poemContent div").css("display", "block");
+            }
+            else {
+                ShowContentInSingleLine();
+            }
+        }
+
+        function ShowContentInSingleLine() {
+            $(".poemContent div").css("display", "inline-block");
+            document.getElementById('ContentLineMode').checked = true;
+        }
+    </script>
+</head>
+<body class="grey">
+    
+
+
+
+<div class="bar" style="min-height: 6.2em; padding-top: 0.5em;">
+	
+    <div id="Menu1_Bar" class="wrapper" style="position: relative; line-height: 1.9em;">
+		
+        <a href="/index.aspx">
+            <img src='/images/publish.png' class="sLogoImg" style="border: 0px; float: left; padding: 1.2rem 1rem 1rem 0;" /></a>
+        <span class='mLabel navLink'>阅读</span>
+        <a id="Menu1_HyperLink3" class="navLink" href="/PoemIndex.aspx">综合</a>
+        <a id="Menu1_PoemComment" class="navLink" href="/PoemComment.aspx">诗话</a>
+        <a id="Menu1_CiComment" class="navLink" href="/CiComment.aspx">词话</a>
+        <a id="Menu1_eBookLink" class="navLink" href="https://cnkgraph.com/Book" target="_blank">古籍检索</a>
+        <a id="Menu1_YjlhLink" class="navLink" href="https://cnkgraph.com/Category" target="_blank">类书集成</a>
+        <span class='mLabel navLink' style="margin-left: 1.5rem;">查询</span>
+        <a id="Menu1_PoemLink" class="curNavLink navLink" href="/QueryPoem.aspx">诗词</a>
+        <a id="Menu1_AllusionLink" class="navLink" href="/AllusionsIndex.aspx?sort=People">典故词汇</a>
+        <a id="Menu1_HyperLink1" class="navLink" href="/QueryCoupletWord.aspx">对仗词汇</a>
+        <a id="Menu1_CiTuneLink" class="navLink" href="/QueryCiTune.aspx">词谱</a>
+        <a id="Menu1_QuTuneLink" class="navLink" href="/QueryQuTune.aspx">曲谱</a>
+        <a id="Menu1_PoemGeoLink" class="navLink" href="/PoemGeo.aspx">诗词地图</a>
+        <a id="Menu1_LoginLink" class="navLink" href="/login.aspx" style="color:DarkRed;">登录</a>
+        
+        <br />
+        <span class='mLabel navLink'>韵典</span>
+        <a id="Menu1_RhymeDictLink" class="navLink" href="/QR.aspx">平水韵</a>
+        <a id="Menu1_CiRhymeLink" class="navLink" href="/QR.aspx?ci=*">词林正韵</a>
+        <a id="Menu1_ZYQRLink" class="navLink" href="/zyqr.aspx">中原音韵</a>
+        <a id="Menu1_TongYunLink" class="navLink" href="/mqr.aspx">中华通韵</a>
+        <span class='mLabel navLink' style="margin-left: 1rem;">校注</span>
+        <a id="Menu1_PoemValidationLink" class="navLink" href="/AnalyzePoem.aspx">律诗校验</a>
+        <a id="Menu1_CiValidationLink" class="navLink" href="/AnalyzeCi.aspx">词格校验</a>
+        <a id="Menu1_QuValidationLink" class="navLink" href="/AnalyzeQu.aspx">曲格校验</a>
+        <a id="Menu1_CoupletValidationLink" class="navLink" href="AnalyzeCouplet.aspx">对联校验</a>
+        <a id="Menu1_LabelingLink" class="navLink" href="/Labeling.aspx">自动笺注</a>
+        <br />
+        <span class='mLabel navLink'>课堂</span>
+        <a id="Menu1_LuCourse" class="navLink" href="/CourseIndex.aspx?type=律绝">律绝创作</a>
+        <a id="Menu1_CiCourse" class="navLink" href="/CourseIndex.aspx?type=填词">填词入门</a>
+        <a id="Menu1_FocuseCourse" class="navLink" href="/CourseIndex.aspx?type=公开课">公开课</a>
+        <a id="Menu1_HyperLink2" class="navLink" href="/CourseIndex.aspx?type=近体诗">学习指南</a>
+        <span class='mLabel navLink' style="margin-left: 1rem;">其它</span>
+        <a id="Menu1_STConvertLink" class="navLink" href="/STConvert.aspx">简繁转换</a>
+        <a id="Menu1_PoetGroupLink4" class="navLink" href="/PoetGroup.aspx">诗社</a>
+        <a id="Menu1_BookStoreLink" class="navLink" href="https://weidian.com/?userid=332208122" target="_blank">诗词书店</a>
+        
+        
+        
+    
+	</div>
+
+</div>
+
+<script>
+    function Logout() {
+        document.cookie = "jt=;Max-age=-99999";
+        localStorage.removeItem('works');
+        location.href = '/';
+    }
+</script>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-THLRK7E3FF"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'G-THLRK7E3FF');
+</script>
+
+    <div class='' id="headPanel">
+        <div class='wrapper' style="padding: 1.2em 4px 0.8em 4px;">
+            <div style="display:flex;justify-content:space-between;">
+            <div style='float: left;  line-height: 2em; width: 340px;'>
+            <form name="QueryForm" method="post" action="QueryPoem.aspx" id="QueryForm">
+<div>
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwULLTE0OTAyMTIyMDhkGAEFHl9fQ29udHJvbHNSZXF1aXJlUG9zdEJhY2tLZXlfXxYCBQ5Jc1ByZWNpc2VNYXRjaAUVU2hvd01hdGNoZWRDbGF1c2VPbmx5KE3GHwaEyitX/ThGUBI8wpAsHBQzcg8Fwicv6WptIc4=" />
+</div>
+
+<div>
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="0C7ECFE8" />
+</div>
+                <input type="hidden" name="_TitleKeys" id="_TitleKeys" />
+                <input type="hidden" name="_ContentKeys" id="_ContentKeys" value="春眠 不觉 晓" />
+                <div class="normal inline" style="width: 58px; color: gray;">关键词</div><input name="KeywordTextBox" type="text" value="春眠不觉晓" maxlength="30" id="KeywordTextBox" style="width:150px;margin-right: 0.5em;" />
+                <input type="submit" name="QueryButton" value="检索" id="QueryButton" style="width:80px;border-color: lightblue; background-color: #F0F0F0; border-radius: 12px; padding: 4px;" />
+                
+                <br />
+                <div class="normal inline" style="width: 50px; color: gray;">选项</div>
+                <span class="inlineComment2" style="margin-right: 1rem;"><input id="IsPreciseMatch" type="checkbox" name="IsPreciseMatch" /><label for="IsPreciseMatch">精确匹配</label></span><span class="inlineComment2"><input id="ShowMatchedClauseOnly" type="checkbox" name="ShowMatchedClauseOnly" /><label for="ShowMatchedClauseOnly">只显示相关诗句</label></span><br />
+                <div class="normal inline" style="width: 58px; color: gray;">位置</div><div class='inline inlineComment2'>
+                <select size="1" name="SearchScope" id="SearchScope" class="normal" style="background-color:White;margin-right: 0.8rem;">
+	<option value="poem">任意</option>
+	<option value="-1">诗题</option>
+	<option value="clause">诗句</option>
+	<option value="sentence">上下句</option>
+	<option value="couplet">律中联句</option>
+	<option value="odd">奇数句</option>
+	<option value="even">偶数句</option>
+	<option value="0">第1句</option>
+	<option value="1">第2句</option>
+	<option value="2">第3句</option>
+	<option value="3">第4句</option>
+	<option value="4">第5句</option>
+	<option value="5">第6句</option>
+	<option value="6">第7句</option>
+	<option value="7">第8句</option>
+
+</select>
+                 第
+                <select size="1" name="StartInClause" id="StartInClause" class="normal" style="background-color:White;">
+	<option value="0">任意</option>
+	<option value="1">1</option>
+	<option value="2">2</option>
+	<option value="3">3</option>
+	<option value="4">4</option>
+	<option value="5">5</option>
+	<option value="6">6</option>
+	<option value="7">7</option>
+
+</select>
+                字 <a href='/CharInClause.aspx' style="margin-left: 0.8rem; border-bottom: 1px solid lightgray; padding-bottom: 3px; font-style: italic;">更多分类</a></div><br />
+                
+                <div class="normal inline" style="width: 58px; color: gray;">作者</div><input name="AuthorKeyword" type="text" maxlength="12" id="AuthorKeyword" style="width:94px;margin-right: 1em;" />
+                <div class="inline"><span class="normal" style="margin-right: 0.5em; color: gray;">朝代</span>
+                <select size="1" name="DynastyOption" id="DynastyOption" style="width: 91px; background-color: white;">
+	<option value="0">任何朝代</option>
+	<option value="1">先秦</option>
+	<option value="2">秦</option>
+	<option value="3">汉</option>
+	<option value="4">魏晋</option>
+	<option value="5">南北朝</option>
+	<option value="6">隋</option>
+	<option value="7">唐</option>
+	<option value="8">宋</option>
+	<option value="11">辽、金、元</option>
+	<option value="12">明</option>
+	<option value="13">清</option>
+	<option value="14">近现代</option>
+	<option value="15">当代</option>
+
+</select></div><br />
+                <div class="normal inline" style="width: 54px; color: gray;">体裁</div>
+                <select size="1" name="PTypeOption" id="PTypeOption" style="background-color: white; margin-right: 1em;">
+	<option value="All">所有</option>
+	<option value="Jue">绝句</option>
+	<option value="Lv">律诗</option>
+	<option value="Pai">排律</option>
+	<option value="WuJue">五绝</option>
+	<option value="QiJue">七绝</option>
+	<option value="WuLv">五律</option>
+	<option value="QiLv">七律</option>
+	<option value="WuPai">五排</option>
+	<option value="QiPai">七排</option>
+	<option value="WuYanLvJie">五言律绝</option>
+	<option value="QiYanLvJie">七言律绝</option>
+	<option value="Poem">诗</option>
+	<option value="Ci">词</option>
+	<option value="Qu">散曲</option>
+	<option value="GuFeng">古风</option>
+	<option value="WuGu">五言古风</option>
+	<option value="QiGu">七言古风</option>
+	<option value="YueFu">乐府</option>
+	<option value="GuYue">古风、乐府</option>
+	<option value="Sao">骚</option>
+	<option value="SiYan">四言</option>
+	<option value="WuYan">五言</option>
+	<option value="LiuYan">六言</option>
+	<option value="QiYan">七言</option>
+	<option value="Jie">偈、颂</option>
+	<option value="Lian">联</option>
+	<option value="Others">其他</option>
+
+</select>
+                <div class="inline"><div class="normal inline" style="margin-right: 0.5em; color: gray;">韵部 </div>
+                <select size="1" name="RhymeCategory" id="RhymeCategory" style="width: 91px; background-color: white; margin-right: 0.5em;">
+	<option value="">所有</option>
+	<option value="东">一东</option>
+	<option value="冬">二冬</option>
+	<option value="江">三江</option>
+	<option value="支">四支</option>
+	<option value="微">五微</option>
+	<option value="鱼">六鱼</option>
+	<option value="虞">七虞</option>
+	<option value="齐">八齐</option>
+	<option value="佳">九佳</option>
+	<option value="灰">十灰</option>
+	<option value="真">十一真</option>
+	<option value="文">十二文</option>
+	<option value="元">十三元</option>
+	<option value="寒">十四寒</option>
+	<option value="删">十五删</option>
+	<option value="先">一先</option>
+	<option value="萧">二萧</option>
+	<option value="肴">三肴</option>
+	<option value="豪">四豪</option>
+	<option value="歌">五歌</option>
+	<option value="麻">六麻</option>
+	<option value="阳">七阳</option>
+	<option value="庚">八庚</option>
+	<option value="青">九青</option>
+	<option value="蒸">十蒸</option>
+	<option value="尤">十一尤</option>
+	<option value="侵">十二侵</option>
+	<option value="覃">十三覃</option>
+	<option value="盐">十四盐</option>
+	<option value="咸">十五咸</option>
+	<option value="董">一董</option>
+	<option value="肿">二肿</option>
+	<option value="讲">三讲</option>
+	<option value="纸">四纸</option>
+	<option value="尾">五尾</option>
+	<option value="语">六语</option>
+	<option value="麌">七麌</option>
+	<option value="荠">八荠</option>
+	<option value="蟹">九蟹</option>
+	<option value="贿">十贿</option>
+	<option value="轸">十一轸</option>
+	<option value="吻">十二吻</option>
+	<option value="阮">十三阮</option>
+	<option value="旱">十四旱</option>
+	<option value="潸">十五潸</option>
+	<option value="铣">十六铣</option>
+	<option value="筱">十七筱</option>
+	<option value="巧">十八巧</option>
+	<option value="皓">十九皓</option>
+	<option value="哿">二十哿</option>
+	<option value="马">二十一马</option>
+	<option value="养">二十二养</option>
+	<option value="梗">二十三梗</option>
+	<option value="迥">二十四迥</option>
+	<option value="有">二十五有</option>
+	<option value="寝">二十六寝</option>
+	<option value="感">二十七感</option>
+	<option value="俭">二十八俭</option>
+	<option value="豏">二十九豏</option>
+	<option value="送">一送</option>
+	<option value="宋">二宋</option>
+	<option value="绛">三绛</option>
+	<option value="寘">四寘</option>
+	<option value="未">五未</option>
+	<option value="御">六御</option>
+	<option value="遇">七遇</option>
+	<option value="霁">八霁</option>
+	<option value="泰">九泰</option>
+	<option value="卦">十卦</option>
+	<option value="队">十一队</option>
+	<option value="震">十二震</option>
+	<option value="问">十三问</option>
+	<option value="愿">十四愿</option>
+	<option value="翰">十五翰</option>
+	<option value="谏">十六谏</option>
+	<option value="霰">十七霰</option>
+	<option value="啸">十八啸</option>
+	<option value="效">十九效</option>
+	<option value="号">二十号</option>
+	<option value="个">二十一个</option>
+	<option value="祃">二十二祃</option>
+	<option value="漾">二十三漾</option>
+	<option value="敬">二十四敬</option>
+	<option value="径">二十五径</option>
+	<option value="宥">二十六宥</option>
+	<option value="沁">二十七沁</option>
+	<option value="勘">二十八勘</option>
+	<option value="艳">二十九艳</option>
+	<option value="陷">三十陷</option>
+	<option value="屋">一屋</option>
+	<option value="沃">二沃</option>
+	<option value="觉">三觉</option>
+	<option value="质">四质</option>
+	<option value="物">五物</option>
+	<option value="月">六月</option>
+	<option value="曷">七曷</option>
+	<option value="黠">八黠</option>
+	<option value="屑">九屑</option>
+	<option value="药">十药</option>
+	<option value="陌">十一陌</option>
+	<option value="锡">十二锡</option>
+	<option value="职">十三职</option>
+	<option value="缉">十四缉</option>
+	<option value="合">十五合</option>
+	<option value="叶">十六叶</option>
+	<option value="洽">十七洽</option>
+	<option value="0">东冬</option>
+	<option value="1">董肿送宋</option>
+	<option value="2">江阳</option>
+	<option value="3">讲养绛漾</option>
+	<option value="4">支微齐灰(半)</option>
+	<option value="5">纸尾荠贿(半)寘未霁泰(半)队(半)</option>
+	<option value="6">鱼虞</option>
+	<option value="7">语麌御遇</option>
+	<option value="8">佳(半)灰(半)</option>
+	<option value="9">蟹贿(半)泰(半)卦(半)队(半)</option>
+	<option value="10">真文元(半)</option>
+	<option value="11">轸吻阮(半)震问愿(半)</option>
+	<option value="12">元(半)寒删先</option>
+	<option value="13">阮(半)旱潸铣愿(半)翰谏霰</option>
+	<option value="14">萧肴豪</option>
+	<option value="15">筱巧皓啸效号</option>
+	<option value="17">哿个</option>
+	<option value="18">佳(半)麻</option>
+	<option value="19">马卦(半)祃</option>
+	<option value="20">庚青蒸</option>
+	<option value="21">梗迥敬径</option>
+	<option value="23">有宥</option>
+	<option value="25">寝沁</option>
+	<option value="26">覃盐咸</option>
+	<option value="27">感俭豏勘艳陷</option>
+	<option value="28">屋沃</option>
+	<option value="29">觉药</option>
+	<option value="30">质陌锡职缉</option>
+	<option value="31">物月曷黠屑叶</option>
+	<option value="32">合洽</option>
+
+</select></div>
+                
+            </form>
+            </div>
+                <div>
+	
+                    <div>
+		
+    
+    <div>
+			
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- 诗词检索广告位_电脑 -->
+<ins class="adsbygoogle"
+     style="display:inline-block;width:700px;height:150px"
+     data-ad-client="ca-pub-0414285907866387"
+     data-ad-slot="3579323219"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+    
+		</div>
+
+	</div>
+
+                
+</div>
+            </div>
+            
+            
+        </div>
+    </div>
+    <div>
+	
+        <div class='wrapper'>
+            <div class="title lightBottomLine arrow" style="text-indent: 1em;"><a href="QueryPoem.aspx">诗词库</a>
+                <a class="expand" href="QueryPoem.aspx">分类诗词</a>
+                <input type="checkbox" id="ContentLineMode" onclick="ToggleShowContentMode()" style="margin-right: 0.5rem;" /><span class='comment'>作品不分行</span>
+            </div>
+            
+    
+
+        
+        <div id="content">
+            <div id="ResultArea" class="poem">
+		<div id='item_16433'><div id='poem_36322' class='_poem'><div id='poem_title_36322' class='poemTitle showDetail'><a href='/Query.aspx?type=poem1&id=36322' class='poemCommentLink' target='_blank'>春晓</a><span class='poemAuthor'><span class='inlineComment1'> 盛唐 · </span><a href='javascript: ShowPoemAuthorProfile(13993, "盛唐", "孟浩然", "poem_title_36322")'>孟浩然</a></span><br /><div class='titleIndent'>五言绝句</div></div><div id='poem_title_36322_comment'></div><div class='poemContent' id='poem_content_36322'><div class='poemSentence' id='poem_sentence_0_36322'><span class='link' onclick='ShowWordNote(16524, "poem_sentence_0_36322")'>春眠</span>不觉晓，处处闻啼鸟。<div id='poem_sentence_0_36322_comment'></div></div><div class='poemSentence' id='poem_sentence_1_36322'><span class='link' onclick='ShowWordNote(438, "poem_sentence_1_36322")'>夜来</span>风雨声，花落知多少<span class='inlineComment2'>（一作欲知昨夜风，花落无多少）</span>。<div id='poem_sentence_1_36322_comment'></div></div><div class='poemSentence' id='poem_sentence_2_36322'></div><div id='poem_sentence_2_36322_comment'></div></div><div class='poemComment' id='poem_comment_36322'><a href='javascript: ShowPoemComment(36322)'>评注</a><span class='inlineComment4'>（点击查看或隐藏评注）</span></div></div><br /></div><div id='item_669942'><div id='poem_949205' class='_poem'><div id='poem_title_949205' class='poemTitle showDetail'><a href='/Query.aspx?type=poem1&id=949205' class='poemCommentLink' target='_blank'>临江仙</a><span class='poemAuthor'><span class='inlineComment1'> 明 · </span><a href='javascript: ShowPoemAuthorProfile(0, "明", "佚名", "poem_title_949205")'>佚名</a></span><br /><div class='titleIndent'></div></div><div id='poem_title_949205_comment'></div><div class='poemContent' id='poem_content_949205'><div class='poemSentence' id='poem_sentence_0_949205'><span class='inlineComment4'>小旦上：</span>春眠不觉东方晓。画眉人来返天朝。<div id='poem_sentence_0_949205_comment'></div></div><div class='poemSentence' id='poem_sentence_1_949205'></div><div id='poem_sentence_1_949205_comment'></div></div></div><br /></div><div id='item_934200'><div id='poem_1523691' class='_poem'><div id='poem_title_1523691' class='poemTitle showDetail'><a href='/Query.aspx?type=poem1&id=1523691' class='poemCommentLink' target='_blank'>晓吟。用唐贤春眠不觉晓韵</a><span class='poemAuthor'><span class='inlineComment1'> 明末清初 · </span><a href='javascript: ShowPoemAuthorProfile(41956, "明末清初", "姜柏年", "poem_title_1523691")'>姜柏年</a></span><br /><div class='titleIndent'>五言绝句</div></div><div id='poem_title_1523691_comment'></div><div class='poemContent' id='poem_content_1523691'><div class='poemSentence' id='poem_sentence_0_1523691'>闲吟坐清晓，谩兴愁花鸟。<div id='poem_sentence_0_1523691_comment'></div></div><div class='poemSentence' id='poem_sentence_1_1523691'>万事总悠悠，此怀知者少。<div id='poem_sentence_1_1523691_comment'></div></div><div class='poemSentence' id='poem_sentence_2_1523691'></div><div id='poem_sentence_2_1523691_comment'></div></div></div><br /></div><div id='item_995940'><div id='poem_300027' class='_poem'><div id='poem_title_300027' class='poemTitle showDetail'><a href='/Query.aspx?type=poem1&id=300027' class='poemCommentLink' target='_blank'>东坡引 晓起</a><span class='poemAuthor'><span class='inlineComment1'> 明末清初 · </span><a href='javascript: ShowPoemAuthorProfile(56260, "明末清初", "彭孙贻", "poem_title_300027")'>彭孙贻</a></span><br /><div class='titleIndent'></div></div><div id='poem_title_300027_comment'></div><div class='poemContent' id='poem_content_300027'><div class='poemSentence' id='poem_sentence_0_300027'>绮窗红日皦，余睡残灯小。<div id='poem_sentence_0_300027_comment'></div></div><div class='poemSentence' id='poem_sentence_1_300027'>水沉宿火烟犹袅，卖花声恁早。<div id='poem_sentence_1_300027_comment'></div></div><div class='poemSentence' id='poem_sentence_2_300027'>小鬟呼未应，熏炉闲抱，暖玉手、调歌鸟。<div id='poem_sentence_2_300027_comment'></div></div><div class='poemSentence' id='poem_sentence_3_300027'>鹦歌念熟休忘了，春眠不觉晓，春眠不觉晓。</div><div id='poem_sentence_3_300027_comment'></div></div></div><br /></div>
+	</div>
+        </div>
+        
+        <br />
+        
+    </div>
+    
+</div>
+    
+    
+<script>
+    isMobile = false;
+
+    function HideWord() {
+        if (isMobile) {
+            $('.fsComment').hide();
+        }
+        else {
+            $('.fixComment').hide();
+        }
+    }
+
+    function DisplayWord(index) {
+        var url = apiHome + "Word?id=" + index;
+        GetJSON(url, function (data) {
+            if (data && data.Words) {
+                var wc = $("#wordContent").html(data.Words[0].Html);
+
+                if (isMobile) {
+                    $('.fsComment').fadeIn(200);
+                }
+                else {
+                    var top = GetWordTop();
+                    $(".fixComment").css("top", top + "px");
+                    $('.fixComment').fadeIn(200);
+                }
+            }
+        });
+    }
+
+    function GetWordTop() {
+        var top = $(document).scrollTop() + 20;
+        if (typeof content != "undefined" && top < content.offsetTop) {
+            top = content.offsetTop;
+        }
+        return top;
+    }
+
+</script>
+<div class="fixComment" style="display: none;">
+	
+    <div style="float: right; margin: 4px;">
+        <a href="javascript: HideWord();">
+            <img src="/images/close.jpg" style="border: 1px solid grey;" /></a>
+    </div>
+    <div id="wordContent"></div>
+
+</div>
+
+
+    <div>
+	
+    <script>
+        var isPc = true;
+        var isInWechatBrowser = false;
+        var popupad = {
+            lastPopupTimestamp: GetCookie("lpt") || 0,
+            currentAd: null,
+            displayedAds: [],
+            AppendImage: function (ad) {
+                if (ad) {
+                    var image = new Image();
+                    image.src = ad.ImageUrl;
+                    image.style.maxWidth = '95vw';
+                    image.style.maxHeight = '80vh';
+                    image.style.borderRadius = '12px';
+                    setTimeout(function () {
+                        $('#popupImg').append(image);
+                        $('#adsPanel').slideDown(500);
+                        document.body.style.overflow = 'hidden'
+
+                        SetLongLifeCookie('lpt', Date.now())
+                    }, 1000);
+                }
+            },
+            ClickAd: function () {
+                this.HideAds()
+                var link = isInWechatBrowser && this.currentAd.LinkUrlInWechat ? this.currentAd.LinkUrlInWechat : this.currentAd.LinkUrl
+                window.location = link;
+            },
+            HideAds: function () {
+                if (this.currentAd) {
+                    this.displayedAds = this.displayedAds.filter(x => x.split('.')[0] != this.currentAd.Id).concat(this.currentAd.Id + '.' + Date.now())
+                    SetLongLifeCookie('displayedPAIDs', this.displayedAds);
+                    $('#adsPanel').slideToggle();
+                    document.body.style.overflow = 'auto'
+                }
+            },
+            fetchAds: function () {
+                var url = apiHome + 'popupAds';
+                GetJSON(url, data => {
+                    //console.log(data)
+                    if (data) {
+                        var ads = []
+                        for (var ad of data) {
+                            if (isPc && !ad.IsPCEnabled) {
+                                continue;
+                            }
+
+                            if (this.lastPopupTimestamp > 0 && ad.IntervalDays && ad.IntervalDays * 24 * 3600 * 1000 + this.lastPopupTimestamp < Date.now()) {
+                                continue;
+                            }
+
+                            var item = this.displayedAds.find(x => x.split('.')[0] == ad.Id)
+
+                            if (item && ad.IntervalDays > 0) {
+                                var lpt = item.split('.')[1]
+                                if (Date.now() - lpt < ad.IntervalDays * 24 * 3600 * 1000)
+                                    continue;
+                            }
+                            if (ad.EnablePaths && ad.EnablePaths.length > 0) {
+                                for (var i = 0; i < ad.EnablePaths.length; i++) {
+                                    var regex = new RegExp(ad.EnablePaths[i], "i")
+                                    if (regex.test(location.pathname)) {
+                                        ads.push(ad)
+                                        break;
+                                    }
+                                }
+                            } else {
+                                ads.push(ad);
+                            }
+                        }
+
+                        if (ads.length > 0) {
+                            this.currentAd = ads[Math.floor(Math.random() * ads.length)];
+                            this.AppendImage(this.currentAd);
+                        }
+                    }
+                })
+            },
+            init: function () {
+                // 一天内最多弹一次
+                if (Date.now() - this.lastPopupTimestamp < 3600 * 24 * 1000) return;
+
+                var displayedPAIDsCookie = GetCookie("displayedPAIDs");
+                if (displayedPAIDsCookie) {
+                    this.displayedAds = displayedPAIDsCookie.split(',');
+                }
+
+                this.fetchAds()
+            }
+        }
+
+        $().ready(function () {
+            popupad.init()
+        })
+
+    </script>
+    <div id="adsPanel" class="lrFS fsComment" style="z-index: 10; display: none;">
+        <div class="shade"></div>
+        <div style="display: flex; flex: 1; justify-content: center; align-items: center; height: 100vh; padding: 20px;">
+            <div id="advImgPanel" style="z-index: 1; display: flex; flex-direction: column; align-items: center;">
+                <a href="javascript: popupad.HideAds()">
+                    <div class="popupad-close"></div>
+                </a>
+                <div style="height: 5vh; border: 3px solid #dfddbf8c; z-index: -1"></div>
+                <a href="javascript: popupad.ClickAd()" id="popupImg"></a>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .popupad-close {
+            background: #dfddbf8c;
+            color: white;
+            border-radius: 50%;
+            line-height: 30px;
+            text-align: center;
+            height: 30px;
+            width: 30px;
+            font-size: 24px;
+        }
+
+            .popupad-close::before {
+                content: "\2716";
+            }
+    </style>
+
+</div>
+
+<div style='line-height: 1.3em; padding-top: 6px; border-top: 1px solid #e5e5e5;' id="pageFooter">
+<div class='wrapper' style="text-align: left; vertical-align: top;">
+
+<p style='font-size: small;'><a href="https://beian.mps.gov.cn/#/query/webSearch?code=44010402003275" rel="noreferrer" target="_blank" class="expand">粤公网安备44010402003275</a><a href="https://beian.miit.gov.cn" target="_blank" class="expand"><span class="inlineComment2">粤ICP备17077571号</span></a><a href="about.aspx" class="expand">关于本站</a><a href="mailto:cozychen@hotmail.com" class="expand">联系我们</a><span class="inlineComment2">客服：+86 136 0901 3320</span></p>
+
+<div style="max-height:120px;">
+	<div>
+		
+    
+    <div>
+			
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0414285907866387"
+     crossorigin="anonymous"></script>
+<!-- 底部广告位（电脑） -->
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-0414285907866387"
+     data-ad-slot="2884741531"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+    
+		</div>
+
+	</div>
+
+</div>
+</div>
+</div>
+</body>
+</html>
