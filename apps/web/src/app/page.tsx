@@ -16,6 +16,8 @@ import {
 } from '@/components/settings';
 import { t } from '@/components/i18n';
 import { BatchPanel } from '@/components/batch';
+import { CorpusPanel } from '@/components/corpus';
+import { Tabs, type TabId } from '@/components/tabs';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const WS = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:3001';
@@ -66,7 +68,7 @@ export default function Home() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [server, setServer] = useState<ServerConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [batchOpen, setBatchOpen] = useState(false);
+  const [tab, setTab] = useState<TabId>('search');
   // Deliberately NOT part of `settings`: that blob is persisted and is the thing a user
   // exports to share their configuration. A key does not belong in it.
   const [apiKey, setApiKey] = useState('');
@@ -157,16 +159,13 @@ export default function Home() {
     <main>
       <div className="topbar">
         <h1>漢詩檢索</h1>
-        <button type="button" className="ghost" onClick={() => setBatchOpen(true)}>
-          {t(lang, 'batch.open')}
-        </button>
         <button type="button" className="ghost" onClick={() => setSettingsOpen(true)}>
           {t(lang, 'settings.title')}
         </button>
       </div>
       <p className="sub">{t(lang, 'app.tagline', { n: '78,455' })}</p>
 
-      {batchOpen && <BatchPanel lang={lang} apiKey={apiKey} onClose={() => setBatchOpen(false)} />}
+      <Tabs lang={lang} active={tab} onChange={setTab} />
 
       <SettingsPanel
         open={settingsOpen}
@@ -181,6 +180,12 @@ export default function Home() {
         }}
       />
 
+      <div
+        id="panel-search"
+        role="tabpanel"
+        aria-labelledby="tab-search"
+        hidden={tab !== 'search'}
+      >
       <form onSubmit={search}>
         <textarea
           value={query}
@@ -316,6 +321,17 @@ export default function Home() {
           {t(lang, whatLookedKey(events))}
         </div>
       )}
+      </div>
+
+      <div id="panel-batch" role="tabpanel" aria-labelledby="tab-batch" hidden={tab !== 'batch'}>
+        {/* Mounted only while open. A batch panel polls its job every second; keeping three
+            panels mounted would keep that timer running behind the other two. */}
+        {tab === 'batch' && <BatchPanel lang={lang} apiKey={apiKey} />}
+      </div>
+
+      <div id="panel-corpus" role="tabpanel" aria-labelledby="tab-corpus" hidden={tab !== 'corpus'}>
+        {tab === 'corpus' && <CorpusPanel lang={lang} />}
+      </div>
     </main>
   );
 }

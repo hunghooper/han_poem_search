@@ -101,12 +101,10 @@ const STATUS_COLOR: Record<string, string> = {
 export function BatchPanel({
   lang,
   apiKey,
-  onClose,
 }: {
   lang: UiLanguage;
   /** Sent only when starting a run — a batch bills whoever pressed the button. */
   apiKey: string;
-  onClose: () => void;
 }) {
   const [scan, setScan] = useState<Scan | null>(null);
   const [column, setColumn] = useState<string>('');
@@ -312,28 +310,24 @@ export function BatchPanel({
   const canStart = Boolean(scan && column) && !busy && !progress?.running;
 
   return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={S.panel} onClick={(e) => e.stopPropagation()}>
-        <header style={S.header}>
-          <h2 style={S.h2}>{t(lang, 'batch.title')}</h2>
-          <div style={S.headerButtons}>
-            {scan && !progress?.running && (
-              <button
-                onClick={() => {
-                  setScan(null);
-                  setProgress(null);
-                  void loadJobs();
-                }}
-                style={S.ghost}
-              >
-                {t(lang, 'batch.back')}
-              </button>
-            )}
-            <button onClick={onClose} style={S.ghost}>
-              {t(lang, 'batch.close')}
+    <div className="panel">
+      <div>
+        {/* No overlay and no close button: this is a tab now, not a dialog. The only
+            navigation it still owns is back from one job to the list of them. */}
+        {scan && !progress?.running && (
+          <header style={S.header}>
+            <button
+              onClick={() => {
+                setScan(null);
+                setProgress(null);
+                void loadJobs();
+              }}
+              style={S.ghost}
+            >
+              {t(lang, 'batch.back')}
             </button>
-          </div>
-        </header>
+          </header>
+        )}
 
         {error && <p style={S.error}>{error}</p>}
 
@@ -689,25 +683,6 @@ function humanTime(seconds: number, lang: UiLanguage): string {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.35)',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    padding: '3vh 1rem',
-    zIndex: 50,
-    overflowY: 'auto',
-  },
-  panel: {
-    background: '#fff',
-    borderRadius: 8,
-    maxWidth: 760,
-    width: '100%',
-    padding: '1.25rem 1.5rem 2rem',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-  },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   h2: { margin: 0, fontSize: '1.15rem' },
   h3: { margin: '0 0 .5rem', fontSize: '.95rem' },

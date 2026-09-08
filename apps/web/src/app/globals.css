@@ -3,27 +3,40 @@
  * chosen by the OS, which renders 全唐詩 in something closer to a UI font than a book face.
  */
 :root {
-  --bg: #fbfaf7;
-  --fg: #1c1a17;
-  --muted: #6b6560;
-  --line: #e3ded5;
-  --accent: #7a3b2e;
-  --ok: #2f6b45;
-  --warn: #8a6d1f;
-  --err: #9b2c2c;
+  /* Darkened deliberately. The previous set sat between #fbfaf7 and #e3ded5 — a paper white
+     against a barely-there rule — and on a normal screen the structure of the page simply did
+     not read: panels had no edges, the trace had no columns, and status colours at that
+     lightness were decorative rather than legible. These carry the same ink-on-paper idea with
+     enough contrast to hold shape. */
+  --bg: #f3efe6;
+  --surface: #fffdf8;
+  --sunk: #e8e2d5;
+  --fg: #14120f;
+  --muted: #58524a;
+  --line: #c8c0b0;
+  --line-strong: #a89e8a;
+  --accent: #6d2f22;
+  --accent-soft: #f0e0da;
+  --ok: #1f5c37;
+  --warn: #7a5c10;
+  --err: #8f2020;
   --serif-cjk: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'SimSun', serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16150f;
-    --fg: #ece7dd;
-    --muted: #9a938a;
-    --line: #322e27;
-    --accent: #d99b86;
-    --ok: #7fbf95;
-    --warn: #d9bd6a;
-    --err: #e08585;
+    --bg: #14130e;
+    --surface: #1e1c16;
+    --sunk: #26231b;
+    --fg: #f2ede2;
+    --muted: #a79f93;
+    --line: #3b362c;
+    --line-strong: #574f41;
+    --accent: #e9a892;
+    --accent-soft: #33241f;
+    --ok: #8ccfa4;
+    --warn: #e5c977;
+    --err: #ef9494;
   }
 }
 
@@ -224,3 +237,129 @@ ul.tied li {
 ul.tied h3 { font-family: var(--serif-cjk); font-size: 18px; margin: 0; font-weight: 600; }
 ul.tied .byline { color: var(--muted); font-size: 12.5px; }
 ul.tied .poem { font-size: 16px; line-height: 1.9; margin-top: 4px; }
+
+/* ---------------------------------------------------------------------------
+   Tabs, and the panels they open.
+
+   The three things this app does used to be a page plus two modals, which read
+   as "one feature and two settings screens". A batch runs for hours and a corpus
+   addition changes what every later search can find; they are peers.
+   --------------------------------------------------------------------------- */
+
+.tabstrip {
+  display: flex;
+  gap: 2px;
+  border-bottom: 2px solid var(--line-strong);
+  margin: 1.25rem 0 0;
+}
+
+.tab {
+  appearance: none;
+  background: var(--sunk);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: .92rem;
+  padding: .5rem 1.1rem;
+  border-radius: 5px 5px 0 0;
+  cursor: pointer;
+  margin-bottom: -2px;
+}
+
+.tab:hover { color: var(--fg); }
+
+/* The selected tab joins the panel below it: same ground, and the strip's rule
+   broken where they meet, so the two read as one surface rather than two. */
+.tab.on {
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 600;
+  border-color: var(--line-strong);
+  border-bottom: 2px solid var(--surface);
+}
+
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.tabhint {
+  color: var(--muted);
+  font-size: .8rem;
+  margin: .55rem 0 1.1rem;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 1.1rem 1.25rem 1.5rem;
+}
+
+.panel .group { border-top: 1px solid var(--line); padding: 1rem 0 .25rem; }
+.panel .group:first-of-type { border-top: none; padding-top: .25rem; }
+.panel h3 { font-size: .98rem; margin: 0 0 .4rem; }
+.panel .note { color: var(--muted); font-size: .8rem; margin: .35rem 0 0; line-height: 1.55; }
+
+.notice {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding: .65rem .85rem;
+  font-size: .85rem;
+  margin: 0 0 1rem;
+}
+
+.err-box {
+  background: var(--surface);
+  border: 1px solid var(--err);
+  color: var(--err);
+  padding: .5rem .7rem;
+  font-size: .84rem;
+  margin: .6rem 0 0;
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: .45rem 1rem;
+  font: inherit;
+  font-size: .9rem;
+  cursor: pointer;
+}
+button.primary:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Status colour is semantic and separate from the accent: it says what happened,
+   not where to click. */
+.ok-chip { color: var(--ok); font-weight: 600; font-size: .82rem; }
+.err-chip { color: var(--err); font-weight: 600; font-size: .82rem; }
+.muted { color: var(--muted); }
+
+.tally { display: flex; gap: 1.1rem; margin: .5rem 0 .8rem; }
+
+.rules { border-collapse: collapse; font-size: .85rem; }
+.rules th {
+  text-align: left;
+  vertical-align: top;
+  color: var(--muted);
+  font-weight: 600;
+  padding: .3rem 1rem .3rem 0;
+  white-space: nowrap;
+}
+.rules td { padding: .3rem 0; }
+.rules code { margin-right: .4rem; }
+
+.rows { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.rows th {
+  text-align: left;
+  font-size: .72rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-strong);
+  padding: .3rem .6rem .3rem 0;
+}
+.rows td { padding: .35rem .6rem .35rem 0; border-bottom: 1px solid var(--line); }
+.rows td.num, .rows th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.scroller { overflow-x: auto; }
