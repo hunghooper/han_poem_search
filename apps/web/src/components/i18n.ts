@@ -124,6 +124,7 @@ const vi: Dict = {
   'settings.apiKey': 'Khoá API của bạn',
   'settings.keyPlaceholder': 'Dán khoá vào đây',
   'settings.keyNote': 'Khoá chỉ nằm trong trình duyệt này và mất khi bạn đóng tab. Nó đi kèm từng yêu cầu để tính vào tài khoản của bạn, không bao giờ được ghi vào cấu hình dự án. Bỏ trống thì các tính năng cần mô hình sẽ báo là không dùng được — tìm kiếm trong kho vẫn chạy bình thường.',
+  'batch.agentUnavailable': 'Agent đang bật nhưng KHÔNG chạy được: chưa có khoá API. Vào Cài đặt → Cổng mô hình để nhập khoá, hoặc tắt agent. Bấm chạy lúc này sẽ tốn hàng giờ mà cột agent vẫn trống.',
 };
 
 const en: Dict = {
@@ -233,6 +234,7 @@ const en: Dict = {
   'settings.apiKey': 'Your API key',
   'settings.keyPlaceholder': 'Paste your key',
   'settings.keyNote': 'The key stays in this browser and is gone when you close the tab. It travels with each request so calls bill your account, and is never written to the project configuration. Leave it empty and model features report themselves unavailable — corpus search still works.',
+  'batch.agentUnavailable': 'The agent is switched on but CANNOT run: no API key. Add one under Settings → Model gateway, or switch the agent off. Starting now costs hours and returns an empty agent column.',
 };
 
 const zh: Dict = {
@@ -342,6 +344,7 @@ const zh: Dict = {
   'settings.apiKey': '你的 API 金鑰',
   'settings.keyPlaceholder': '貼上金鑰',
   'settings.keyNote': '金鑰只留在這個瀏覽器，關閉分頁即消失。它隨每次請求送出，因此費用計入你的帳號，且絕不寫入專案設定。留空則需要模型的功能會回報為不可用，語料檢索仍正常運作。',
+  'batch.agentUnavailable': '代理已開啟但無法執行：沒有 API 金鑰。請至設定→模型閘道填入金鑰，或關閉代理。此時開始只會耗費數小時而代理欄位仍為空白。',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };

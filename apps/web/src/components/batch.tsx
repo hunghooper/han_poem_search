@@ -37,6 +37,8 @@ interface Scan {
 interface Estimate {
   rows: number;
   pendingRows?: number;
+  agentAvailable?: boolean;
+  agentRequestedButUnavailable?: boolean;
   agentRows: number;
   seconds: number;
   costUsd: number;
@@ -219,7 +221,9 @@ export function BatchPanel({
     const cap = capUsd.trim() === '' ? null : Number(capUsd);
     void fetch(`${API}/api/batch/${scan.jobId}/estimate`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      // The key goes with the estimate too, or the estimate cannot know whether the agent
+      // is able to run and will quote for work that will not happen.
+      headers: { 'content-type': 'application/json', ...authHeaders(apiKey) },
       body: JSON.stringify({
         agent: { enabled: agentEnabled, capUsd: cap },
         // The estimate has to be for the rows this run would actually search. Quoting the
@@ -231,7 +235,7 @@ export function BatchPanel({
       .then(setEstimate)
       .catch(() => undefined);
     setConfirmText('');
-  }, [scan, agentEnabled, capUsd, finished, rerun]);
+  }, [scan, agentEnabled, capUsd, finished, rerun, apiKey]);
 
   // Poll while the job runs. A batch is long enough that a page left open must keep telling
   // the truth about it.
@@ -280,7 +284,12 @@ export function BatchPanel({
 
   const needsTypedConfirm = estimate?.severity === 'serious' && agentEnabled;
   const confirmed = !needsTypedConfirm || confirmText.trim() === String(estimate?.costUsd ?? '');
-  const canStart = Boolean(scan && column) && !busy && !progress?.running && confirmed;
+  // Not merely warned about — blocked. Pressing start here costs hours and delivers a file
+  // with an empty agent column; the user has to either supply a key or switch the agent off,
+  // and both are one click away.
+  const agentBlocked = estimate?.agentRequestedButUnavailable === true;
+  const canStart =
+    Boolean(scan && column) && !busy && !progress?.running && confirmed && !agentBlocked;
 
   return (
     <div style={S.overlay} onClick={onClose}>
@@ -478,6 +487,13 @@ export function BatchPanel({
                   <strong>{estimate.agentRows.toLocaleString()}</strong>
                 </div>
                 <p style={S.hint}>{t(lang, 'batch.estimateNote')}</p>
+
+                {/* The warning goes HERE, beside the number, not in a trace read afterwards.
+                    A run once quoted agent rows and a cost against a gateway that was not
+                    configured, ran for two hours and never called the model once. */}
+                {estimate.agentRequestedButUnavailable && (
+                  <p style={S.warn}>{t(lang, 'batch.agentUnavailable')}</p>
+                )}
 
                 {/* Typing the number is the friction. A run of this size should not start on a
                     click that could have been a mis-aim. */}

@@ -167,7 +167,22 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
     // second pass on the 1,200 rows that came back empty is a different number from a first
     // pass on 50,000, and quoting the larger one would make the confirmation meaningless.
     const rows = await countPending(deps.db, id, job.totalRows, body.data.rerun ?? null);
-    return { ...estimate({ rows, agent: body.data.agent }), pendingRows: rows };
+
+    // Can the agent run AT ALL? FOUND ON REAL DATA: a 14,519-row batch was started with the
+    // agent enabled and a $100 cap against a server holding no key and with none supplied.
+    // The estimate promised agent rows and a cost, the run took two hours, the agent was
+    // never invoked once, and the only place that said so was 12,237 traces nobody opens.
+    // An estimate that quotes work the system cannot do is worse than no estimate.
+    const agentAvailable = sessionKeyOf(request) !== null || deps.provider !== null;
+    const agent = agentAvailable ? body.data.agent : { enabled: false, capUsd: null };
+
+    return {
+      ...estimate({ rows, agent }),
+      pendingRows: rows,
+      agentAvailable,
+      /** True when the caller asked for the agent and it cannot run — the UI must say so. */
+      agentRequestedButUnavailable: body.data.agent.enabled && !agentAvailable,
+    };
   });
 
   app.post('/api/batch/:id/start', async (request, reply) => {
