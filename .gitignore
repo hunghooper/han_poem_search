@@ -13,6 +13,11 @@ coverage/
 data/
 !data/.gitkeep
 
+# Uploaded batch files and their exports. The pattern above says `data/`, which does NOT match
+# a leading dot — so a user's uploaded spreadsheet was committed into the repository, 17MB of
+# it, before anyone noticed.
+.data/
+
 __pycache__/
 *.py[cod]
 .venv/

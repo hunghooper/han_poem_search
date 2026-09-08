@@ -124,6 +124,8 @@ const vi: Dict = {
   'batch.agentUnavailable': 'Agent đang bật nhưng KHÔNG chạy được: chưa có khoá API. Vào Cài đặt → Cổng mô hình để nhập khoá, hoặc tắt agent. Bấm chạy lúc này sẽ tốn hàng giờ mà cột agent vẫn trống.',
   'batch.lastRun': 'Lần chạy gần nhất: đã xử lý {n} dòng lúc {at}',
   'batch.passProgress': 'đang chạy {done}/{total} dòng',
+  'batch.runWithoutAgent': 'Tắt agent và chạy ngay',
+  'batch.jobGone': 'Job này không còn trên máy chủ (đã bị xoá). Đã quay lại danh sách.',
 };
 
 const en: Dict = {
@@ -233,6 +235,8 @@ const en: Dict = {
   'batch.agentUnavailable': 'The agent is switched on but CANNOT run: no API key. Add one under Settings → Model gateway, or switch the agent off. Starting now costs hours and returns an empty agent column.',
   'batch.lastRun': 'Last pass: {n} rows processed at {at}',
   'batch.passProgress': '{done}/{total} rows this pass',
+  'batch.runWithoutAgent': 'Switch the agent off and run',
+  'batch.jobGone': 'That job is no longer on the server — it was deleted. Back to the list.',
 };
 
 const zh: Dict = {
@@ -342,6 +346,8 @@ const zh: Dict = {
   'batch.agentUnavailable': '代理已開啟但無法執行：沒有 API 金鑰。請至設定→模型閘道填入金鑰，或關閉代理。此時開始只會耗費數小時而代理欄位仍為空白。',
   'batch.lastRun': '最近一次執行：{at} 處理了 {n} 列',
   'batch.passProgress': '本次執行 {done}/{total} 列',
+  'batch.runWithoutAgent': '關閉代理並執行',
+  'batch.jobGone': '該工作已不在伺服器上（已被刪除），已返回列表。',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };

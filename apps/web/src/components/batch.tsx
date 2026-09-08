@@ -250,7 +250,18 @@ export function BatchPanel({
     let alive = true;
     const tick = async () => {
       const res = await fetch(`${API}/api/batch/${scan.jobId}`);
-      if (!alive || !res.ok) return;
+      if (!alive) return;
+      // The job is gone — deleted here or elsewhere, or the server lost it. Returning silently
+      // leaves a panel showing a job that no longer exists, where every button fails against a
+      // 404 and nothing explains why. Hit this while testing: a deleted job kept its panel.
+      if (res.status === 404) {
+        setScan(null);
+        setProgress(null);
+        setError(t(lang, 'batch.jobGone'));
+        void loadJobs();
+        return;
+      }
+      if (!res.ok) return;
       setProgress((await res.json()) as Progress);
     };
     void tick();
@@ -259,10 +270,11 @@ export function BatchPanel({
       alive = false;
       clearInterval(timer);
     };
-  }, [scan]);
+  }, [scan, lang, loadJobs]);
 
-  const start = async () => {
+  const start = async (agentOverride?: boolean) => {
     if (!scan || !column) return;
+    const useAgent = agentOverride ?? agentEnabled;
     setBusy(true);
     setError(null);
     try {
@@ -272,7 +284,7 @@ export function BatchPanel({
         headers: { 'content-type': 'application/json', ...authHeaders(apiKey) },
         body: JSON.stringify({
           column,
-          agent: { enabled: agentEnabled, capUsd: cap },
+          agent: { enabled: useAgent, capUsd: cap },
           rerun: finished ? rerun : undefined,
         }),
       });
@@ -295,12 +307,11 @@ export function BatchPanel({
     return `${API}/api/batch/${scan?.jobId}/export?format=${format}&columns=${encodeURIComponent(cols)}`;
   };
 
-  // Not merely warned about — blocked. Pressing start here costs hours and delivers a file
-  // with an empty agent column; the user has to either supply a key or switch the agent off,
-  // and both are one click away.
-  const agentBlocked = estimate?.agentRequestedButUnavailable === true;
-  const canStart =
-    Boolean(scan && column) && !busy && !progress?.running && !agentBlocked;
+  // The agent being unavailable no longer disables this. It used to, and the result was a
+  // dead button whose reason sat in a paragraph the reader had not scrolled to — while the
+  // local search, which needs no key whatsoever, was perfectly able to run. The warning above
+  // now carries a button that does the right thing in one tap.
+  const canStart = Boolean(scan && column) && !busy && !progress?.running;
 
   return (
     <div style={S.overlay} onClick={onClose}>
@@ -500,8 +511,23 @@ export function BatchPanel({
                 {/* Not about money — about whether the agent can run at all. A run once
                     quoted agent rows against a gateway that was not configured, ran for two
                     hours and never called the model once. */}
+                {/* The warning carries the ACTION. A disabled button with its explanation
+                    somewhere else leaves the reader stuck: the local search needs no key at
+                    all, so refusing to run it because the agent cannot is refusing work the
+                    user may well want. One tap does the right thing instead. */}
                 {estimate.agentRequestedButUnavailable && (
-                  <p style={S.warn}>{t(lang, 'batch.agentUnavailable')}</p>
+                  <div style={S.warn}>
+                    <p style={{ margin: '0 0 .6rem' }}>{t(lang, 'batch.agentUnavailable')}</p>
+                    <button
+                      style={S.warnAction}
+                      onClick={() => {
+                        setAgentEnabled(false);
+                        void start(false);
+                      }}
+                    >
+                      {t(lang, 'batch.runWithoutAgent')}
+                    </button>
+                  </div>
                 )}
               </section>
             )}
@@ -794,6 +820,15 @@ const S: Record<string, React.CSSProperties> = {
   code: { fontFamily: 'ui-monospace, monospace', fontSize: '.78rem' },
   exportRow: { display: 'flex', gap: '.6rem' },
   rerunRow: { margin: '0 0 .75rem' },
+  warnAction: {
+    background: '#8a6516',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 4,
+    padding: '.35rem .8rem',
+    fontSize: '.82rem',
+    cursor: 'pointer',
+  },
   lastRun: {
     fontFamily: 'inherit',
     fontSize: '.8rem',
