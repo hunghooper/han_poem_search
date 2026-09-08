@@ -42,6 +42,14 @@ describe('estimate', () => {
     expect(e.costUsd).toBeGreaterThan(0);
   });
 
+  // The spread between the cheapest and dearest measured agent run is sevenfold. Quoting one
+  // number from the middle of that hides the only thing the reader needs: how bad it could be.
+  it('quotes a range, and the headline figure is the top of it', () => {
+    const e = estimate({ rows: 10_000, agent: { enabled: true, capUsd: null } });
+    expect(e.costUsdLow).toBeLessThan(e.costUsd);
+    expect(e.costUsd / e.costUsdLow).toBeGreaterThan(5);
+  });
+
   it('reports a small local-only run as trivial', () => {
     expect(estimate({ rows: 100, agent: noAgent }).severity).toBe('trivial');
   });

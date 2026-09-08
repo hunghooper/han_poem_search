@@ -29,7 +29,10 @@ export interface Estimate {
   /** Rows expected to call the model. */
   agentRows: number;
   seconds: number;
+  /** The top of the measured range — what the confirmation is taken against. */
   costUsd: number;
+  /** The bottom of it. Shown beside `costUsd` so a 7x spread is visible, not hidden. */
+  costUsdLow: number;
   /** True when the cap will stop the run before every row is searched. */
   capBinds: boolean;
   /** Rows expected to finish as NOT_EXECUTED because the cap was reached first. */
@@ -44,8 +47,21 @@ const LOCAL_SECONDS = 0.75;
 /** Measured across live Phase 3/4 runs: 27.8s, 45s, 48.5s end to end. */
 const AGENT_SECONDS = 45;
 
-/** Measured: $0.009394 and $0.012448 on live runs with glm-5.3-flash answering. */
-const AGENT_COST_USD = 0.012;
+/**
+ * MEASURED across every live agent run on record (n=6):
+ *
+ *   $0.0083  $0.0086  $0.0098  $0.0124  $0.0149  $0.0608
+ *
+ * A SEVENFOLD spread, and the estimate used to quote the median. Over 12,360 rows that is the
+ * difference between $154 and $751 — so a single number here does not merely lose precision,
+ * it loses the decision. A cost estimate must err high: the figure the confirmation is taken
+ * against is the top of the measured range, and the low end is reported beside it so the
+ * spread is visible rather than implied.
+ *
+ * n=6 is a small sample and these will move. They are labelled as measurements, not promises.
+ */
+const AGENT_COST_USD_LOW = 0.008;
+const AGENT_COST_USD = 0.061;
 
 /** Observed share of golden-set queries that fall through to the agent. */
 const DEFAULT_AGENT_RATE = 0.3;
@@ -78,6 +94,7 @@ export function estimate(input: EstimateInput): Estimate {
     agentRows: affordable,
     seconds: Math.round(localSeconds + agentSeconds),
     costUsd: Math.round(costUsd * 100) / 100,
+    costUsdLow: Math.round(affordable * AGENT_COST_USD_LOW * 100) / 100,
     capBinds,
     // Capped rows still get a local answer, so nothing is left unexecuted by the cap alone.
     rowsNotExecuted: 0,

@@ -42,6 +42,7 @@ interface Estimate {
   agentRows: number;
   seconds: number;
   costUsd: number;
+  costUsdLow: number;
   capBinds: boolean;
   severity: 'trivial' | 'notable' | 'serious';
 }
@@ -480,7 +481,13 @@ export function BatchPanel({
                 <h3 style={S.h3}>{t(lang, 'batch.estimate')}</h3>
                 <div style={S.estGrid}>
                   <span>{t(lang, 'batch.estCost')}</span>
-                  <strong>${estimate.costUsd.toFixed(2)}</strong>
+                  {/* A range, because the measured spread is sevenfold. One number here would
+                      imply a precision the measurements do not support. */}
+                  <strong>
+                    {estimate.costUsd > 0
+                      ? `$${estimate.costUsdLow.toFixed(2)} – $${estimate.costUsd.toFixed(2)}`
+                      : '$0.00'}
+                  </strong>
                   <span>{t(lang, 'batch.estTime')}</span>
                   <strong>{humanTime(estimate.seconds, lang)}</strong>
                   <span>{t(lang, 'batch.estAgentRows')}</span>
