@@ -411,15 +411,15 @@ app.get('/api/runs/:runId/stream', { websocket: true }, (socket, req) => {
 });
 
 const BATCH_DIR = process.env.BATCH_DIR ?? fileURLToPath(new URL('../../../.data/batch', import.meta.url));
-registerBatchRoutes(app, { ...deps, store, config: baseConfig, makeToolsWith }, BATCH_DIR);
+registerBatchRoutes(app, { ...deps, store, config: baseConfig, makeToolsWith, keyStore }, BATCH_DIR);
 
 await app.listen({ port: PORT, host: HOST });
 
 // A batch interrupted by a restart resumes from the highest row already written. Without
 // this it would sit at `running` forever, showing a progress bar nobody is advancing.
-const resumed = await resumeInterrupted({ ...deps, store, config: baseConfig, makeToolsWith });
+const resumed = await resumeInterrupted({ ...deps, store, config: baseConfig, makeToolsWith, keyStore });
 if (resumed.length > 0) app.log.info({ jobs: resumed }, 'resumed interrupted batch jobs');
 
 // After the resume, so a job about to be picked up still owns its file when the sweep runs.
-const swept = await sweepOrphanFiles({ ...deps, store, config: baseConfig, makeToolsWith }, BATCH_DIR);
+const swept = await sweepOrphanFiles({ ...deps, store, config: baseConfig, makeToolsWith, keyStore }, BATCH_DIR);
 if (swept.files > 0) app.log.info(swept, 'swept orphaned batch files');

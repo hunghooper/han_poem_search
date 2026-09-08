@@ -40,7 +40,7 @@ import {
   isRunning,
   passProgress,
   runBatch,
-  setJobProvider,
+  setJobCredentials,
   type BatchDeps,
   type JobRow,
   type RerunMode,
@@ -229,9 +229,11 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
     // A key supplied with THIS request bills the person who pressed start, for every row.
     const sessionKey = sessionKeyOf(request);
     const baseURL = process.env.RAMCLOUDS_BASE_URL;
-    setJobProvider(
+    setJobCredentials(
       id,
-      sessionKey && baseURL ? providerForKey(sessionKey, baseURL, undefined) : null,
+      sessionKey && baseURL
+        ? { provider: providerForKey(sessionKey, baseURL, undefined), key: sessionKey }
+        : null,
     );
 
     const updated = await loadJob(deps, id);

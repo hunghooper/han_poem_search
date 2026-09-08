@@ -28,12 +28,16 @@ import { buildRow, cellText } from '@han/batch/row';
 import { EXPORT_COLUMNS } from '@han/batch/export-schema';
 import { readJsonl } from '@han/batch/jsonl';
 import type { RuntimeConfig } from '@han/shared/runtime-config';
+import type { Redis } from 'ioredis';
 import type { LlmProvider } from '@han/llm/provider';
+import { dropSessionKey, stashSessionKey } from './session-key.js';
 import { runSearch, type SearchDeps } from './search.js';
 import type { RunStore } from './events.js';
 
 export interface BatchDeps extends SearchDeps {
   store: RunStore;
+  /** Where a caller-supplied key is handed to the worker. Null means no live trace or agent key. */
+  keyStore: Redis | null;
   /** Rebuilds the tool set against a different provider, for a job running on a visitor's key. */
   makeToolsWith: (provider: LlmProvider) => SearchDeps['makeTools'];
 }
@@ -79,10 +83,22 @@ export function passProgress(jobId: string): { done: number; total: number } | n
  * restart therefore has no key and runs without the agent — which is the honest degradation,
  * because the person who could authorise the spend is no longer there to be asked.
  */
-const jobKeys = new Map<string, LlmProvider>();
+const jobKeys = new Map<string, { provider: LlmProvider; key: string }>();
 
-export function setJobProvider(jobId: string, provider: LlmProvider | null): void {
-  if (provider) jobKeys.set(jobId, provider);
+/**
+ * The provider AND the raw key, because two different processes need it.
+ *
+ * The API builds tools from the provider for answer generation. The AGENT runs in the worker,
+ * which reads the key out of Redis under the run id — so holding only a provider here left
+ * the worker with nothing and every agent call in a batch died with CONFIG_INVALID while the
+ * API reported the job started normally. A batch supplied with a key ran for its full length
+ * and never reached the model once.
+ */
+export function setJobCredentials(
+  jobId: string,
+  creds: { provider: LlmProvider; key: string } | null,
+): void {
+  if (creds) jobKeys.set(jobId, creds);
   else jobKeys.delete(jobId);
 }
 
@@ -246,11 +262,21 @@ async function searchOne(
       agent: { ...deps.config.agent, enabled: agentAllowed },
     };
     // A job started with someone's own key bills that key for every row of it.
-    const jobProvider = jobKeys.get(job.id) ?? null;
-    const rowDeps = jobProvider
-      ? { ...deps, config, provider: jobProvider, makeTools: deps.makeToolsWith(jobProvider) }
+    const creds = jobKeys.get(job.id) ?? null;
+    const rowDeps = creds
+      ? {
+          ...deps,
+          config,
+          provider: creds.provider,
+          makeTools: deps.makeToolsWith(creds.provider),
+        }
       : { ...deps, config };
-    const outcome = await runSearch(rowDeps, deps.store, runId, query);
+
+    // Hand the key to the worker for THIS row, the same way a single search does. Without
+    // this the agent activity looks up `runkey:<runId>`, finds nothing, and fails.
+    if (creds) await stashSessionKey(deps.keyStore, runId, creds.key);
+    try {
+      const outcome = await runSearch(rowDeps, deps.store, runId, query);
     const costUsd = costOf(deps.store, runId);
 
     const result = buildRow(
@@ -263,8 +289,12 @@ async function searchOne(
       },
       columns,
     );
-    await write(outcome.status, result, runId, costUsd);
-    return { costUsd };
+      await write(outcome.status, result, runId, costUsd);
+      return { costUsd };
+    } finally {
+      // Gone as soon as the row is done, rather than sitting out the hour-long expiry.
+      await dropSessionKey(deps.keyStore, runId);
+    }
   } catch (e) {
     const result = buildRow({ status: StepStatus.ERROR, outcome: null, top: null }, columns);
     await write(StepStatus.ERROR, result, runId, 0);
