@@ -38,6 +38,7 @@ import {
   cancel,
   countPending,
   isRunning,
+  passProgress,
   runBatch,
   setJobProvider,
   type BatchDeps,
@@ -262,6 +263,10 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
       totalRows: job.totalRows,
       rowsDone: Object.values(counts).reduce((a, b) => a + b, 0),
       byStatus: counts,
+      // The pass currently executing, which is what a progress bar must show. `rowsDone`
+      // above counts rows that have ANY result and so sits at the total for the whole of a
+      // re-run — true, and useless as progress.
+      pass: passProgress(id),
       costUsd: job.costUsd,
       agentEnabled: job.agentEnabled,
       agentCapUsd: job.agentCapUsd,

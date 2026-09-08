@@ -47,6 +47,8 @@ interface Progress {
   status: string;
   rowsDone: number;
   totalRows: number;
+  /** The pass currently executing. Null when nothing is running. */
+  pass: { done: number; total: number } | null;
   byStatus: Record<string, number>;
   costUsd: number;
   error: string | null;
@@ -555,9 +557,12 @@ export function BatchPanel({
                   <div style={S.progressRow}>
                     <strong>{t(lang, `batch.${progress.status}`)}</strong>
                     <span>
-                      {t(lang, 'batch.progress')
-                        .replace('{done}', String(progress.rowsDone))
-                        .replace('{total}', String(progress.totalRows))}
+                      {/* While a pass runs, count THAT pass. `rowsDone` counts every row that
+                          has any result, which during a re-run is all of them from the first
+                          second — true, and not progress. */}
+                      {t(lang, progress.pass ? 'batch.passProgress' : 'batch.progress')
+                        .replace('{done}', String(progress.pass?.done ?? progress.rowsDone))
+                        .replace('{total}', String(progress.pass?.total ?? progress.totalRows))}
                     </span>
                     <span style={S.muted}>
                       {t(lang, 'batch.spent')} ${progress.costUsd.toFixed(4)}
@@ -567,7 +572,10 @@ export function BatchPanel({
                     <div
                       style={{
                         ...S.barFill,
-                        width: `${pct(progress.rowsDone, progress.totalRows)}%`,
+                        width: `${pct(
+                          progress.pass?.done ?? progress.rowsDone,
+                          progress.pass?.total ?? progress.totalRows,
+                        )}%`,
                       }}
                     />
                   </div>

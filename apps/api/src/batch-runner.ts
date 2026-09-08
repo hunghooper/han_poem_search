@@ -54,8 +54,22 @@ const CONCURRENCY = 4;
 
 const ALL_COLUMNS: string[] = EXPORT_COLUMNS.map((c) => c.key);
 
-/** Live jobs, so progress can be read and a cancel can be honoured mid-run. */
-const running = new Map<string, { cancelled: boolean }>();
+/**
+ * Live jobs, so progress can be read and a cancel can be honoured mid-run.
+ *
+ * `done`/`total` describe THIS PASS, not the job's lifetime, and the difference is the whole
+ * point. Progress was counted as "rows that have any result", which is right for a first pass
+ * and meaningless for a re-run: every row already has one, so re-running 12,360 rows of a
+ * 14,519-row job displayed 14,519/14,519 from the first second and never moved. A progress
+ * bar has to measure the work being done now.
+ */
+const running = new Map<string, { cancelled: boolean; done: number; total: number }>();
+
+/** How far the pass currently executing has got. Null when nothing is running. */
+export function passProgress(jobId: string): { done: number; total: number } | null {
+  const h = running.get(jobId);
+  return h ? { done: h.done, total: h.total } : null;
+}
 
 /**
  * A gateway key supplied by whoever started this job.
@@ -94,7 +108,7 @@ export async function runBatch(
   mode: RerunMode | null = null,
 ): Promise<void> {
   if (running.has(job.id)) return;
-  const handle = { cancelled: false };
+  const handle = { cancelled: false, done: 0, total: 0 };
   running.set(job.id, handle);
 
   // EVERY column is computed and stored, not the ones the user has currently ticked.
@@ -115,6 +129,7 @@ export async function runBatch(
   let spent = job.costUsd;
   const skip = await indexesToSkip(deps.db, job.id, mode);
   let done = skip.size;
+  handle.total = Math.max(0, job.totalRows - skip.size);
 
   try {
     let inFlight: Array<Promise<void>> = [];
@@ -136,6 +151,7 @@ export async function runBatch(
       const work = searchOne(row, column, selected, agentAllowed, job, deps).then((outcome) => {
         spent += outcome.costUsd;
         done += 1;
+        handle.done += 1;
       });
 
       inFlight.push(work);
