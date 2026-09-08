@@ -304,6 +304,53 @@ export const batchRow = pgTable(
   }),
 );
 
+/**
+ * A poem somebody added, and the trail behind it.
+ *
+ * The `poem` row itself carries the text and is what search reads. This table carries what
+ * search must never have to guess at: who put it there, on what evidence, and whether a person
+ * has agreed to it.
+ *
+ * The split matters most for the AGENT path. The verifier (§10.2) can see when a run found a
+ * poem the corpus lacks and is well placed to propose keeping it — but it may not write one
+ * in. This session's own history is the argument: a model answered "I do not recognise this,
+ * it is probably OCR damage" and the pipeline recorded it as a finding, because nothing was
+ * reading the text. Giving that class of component write access to the corpus repeats the
+ * mistake permanently, since an `insufficient` that slips through becomes a row every later
+ * search can return. So an agent proposal lands `pending` and is not indexed until accepted.
+ */
+export const corpusAddition = pgTable(
+  'corpus_addition',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Null while a proposal is pending — no poem row exists until somebody accepts it. */
+    poemId: uuid('poem_id').references(() => poem.id, { onDelete: 'set null' }),
+
+    /** 'user' or 'agent'. Never blank: a row that cannot say how it arrived is the thing this table exists to prevent. */
+    origin: varchar('origin', { length: 16 }).notNull(),
+    status: varchar('status', { length: 16 }).notNull().default('pending'),
+
+    /** The submitted poem, exactly as it arrived, before normalisation touched it. */
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+
+    /** For an agent proposal: the run that produced the evidence, so a reviewer can read it. */
+    runId: uuid('run_id'),
+    /** Recorded, not verified. There is no auth beyond a stub user (§17), so this is a claim. */
+    submittedBy: text('submitted_by'),
+    sourceUrl: text('source_url'),
+    note: text('note'),
+
+    /** Why a reviewer refused, when they did. Empty on acceptance. */
+    reviewNote: text('review_note'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedBy: text('reviewed_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byStatus: index('corpus_addition_status_idx').on(t.status, t.createdAt),
+  }),
+);
+
 /** Aggregate export for the Drizzle client. */
 export const schema = {
   work,
@@ -317,4 +364,5 @@ export const schema = {
   ingestRun,
   batchJob,
   batchRow,
+  corpusAddition,
 };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { StepStatus } from '@han/shared/status';
 import type { Evidence } from '@han/shared/evidence';
 import { buildRow } from './row.js';
-import { resolveColumns } from './export-schema.js';
+import { DEFAULT_COLUMNS, resolveColumns } from './export-schema.js';
 import type { ExportRowInput, OutcomeView } from './types.js';
 
 const evidence = (over: Partial<Evidence> = {}): Evidence =>
@@ -245,5 +245,32 @@ describe('the verifier verdict', () => {
   // Null means the check did not happen, which is not the same as it having passed.
   it('is null when the verifier did not run, never "sufficient"', () => {
     expect(buildRow(found(), ['llm_verdict']).llm_verdict).toBeNull();
+  });
+});
+
+/**
+ * The only optional column that defaults ON. Everything else in the export is information;
+ * this is a warning. An added poem has no dataset, file or commit behind it and is returned
+ * exactly as confidently as the 78,455 that do — a reader scanning titles cannot tell them
+ * apart unless the cell says so.
+ */
+describe('han_added', () => {
+  const withDataset = (dataset: string) =>
+    found({ top: evidence({ provenance: { dataset, file: 'f', commitSha: 'abc' } }) });
+
+  it('says which way a poem entered the corpus', () => {
+    expect(buildRow(withDataset('user-added'), ['added']).added).toBe('user');
+    expect(buildRow(withDataset('agent-proposed'), ['added']).added).toBe('agent');
+  });
+
+  // Not null, and not blank: a blank cell in a provenance column reads as "unknown", and the
+  // point of the column is that the answer is known.
+  it('says "no" for a poem that came with the corpus', () => {
+    expect(buildRow(withDataset('chinese-poetry'), ['added']).added).toBe('no');
+  });
+
+  it('is on by default while every other optional column is off', () => {
+    expect(DEFAULT_COLUMNS).toContain('added');
+    expect(DEFAULT_COLUMNS).not.toContain('added_source');
   });
 });

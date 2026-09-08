@@ -3,11 +3,9 @@
 /**
  * Adding poems to the local corpus — THE INTERFACE ONLY.
  *
- * Nothing here calls the server. That is deliberate and was asked for: the shape of what a
- * person must supply, and what the system will refuse, is worth settling on screen before any
- * of it is written. Every control below is live enough to show the rules — the file is read in
- * the browser, the columns are checked, the refusals are real — and the "add" button is
- * disabled with a note saying so.
+ * The file is read in the BROWSER first, so a person sees every refusal before anything leaves
+ * their machine and before the server does any work. The server then checks the same rows with
+ * the same function: a browser check is a convenience, never a guard.
  *
  * WHY THE RULES ARE STRICT. Everything else in this system reports where an answer came from:
  * a local result carries a dataset, a file and a commit; an outside result carries a URL. A
@@ -15,65 +13,35 @@
  * do. If it arrives without a title and an author it is not a record, it is a fragment — and
  * once it is in the index it will be returned as confidently as anything else.
  *
- * So: title and author are required, the text is required, and the source is required — not to
- * be tidy, but because a search result that cannot say where it came from is the one thing this
- * project exists to avoid.
+ * So: title and author are required, and the text must be Han verse — not to be tidy, but
+ * because a search result that cannot say where it came from is the one thing this project
+ * exists to avoid.
+ *
+ * THE RULES THEMSELVES LIVE IN `@han/shared/corpus-addition`, not here. The server applies the
+ * same function: a browser check is a convenience, not a guard, and two copies would drift into
+ * a row the screen accepts and the server refuses.
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { UiLanguage } from '@han/shared/runtime-config';
 import { t } from './i18n';
 
-/** What a row must carry before it may enter the corpus. */
-export const REQUIRED_FIELDS = ['title', 'author', 'text'] as const;
-/** Useful, not required. Absence is recorded rather than guessed at. */
-export const OPTIONAL_FIELDS = ['dynasty', 'form', 'note', 'source_url'] as const;
+import { checkRow, OPTIONAL_FIELDS, REQUIRED_FIELDS } from '@han/shared/corpus-addition';
 
-export type RequiredField = (typeof REQUIRED_FIELDS)[number];
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-/** A verdict per row, so the screen can show what would be accepted before anything is. */
-export interface RowCheck {
+interface AddResult {
   index: number;
-  ok: boolean;
-  missing: string[];
-  title: string;
-  author: string;
-  chars: number;
-}
-
-const HAN = /\p{Script=Han}/u;
-const hanCount = (s: string): number => [...String(s ?? '')].filter((c) => HAN.test(c)).length;
-
-/**
- * Check one row against the rules.
- *
- * Exported and pure so the rules can be tested without a browser, and so the eventual server
- * side can apply the SAME function rather than a second copy that drifts from it.
- */
-export function checkRow(row: Record<string, unknown>, index: number): RowCheck {
-  const get = (k: string): string => String(row[k] ?? '').trim();
-  const missing: string[] = REQUIRED_FIELDS.filter((f) => get(f).length === 0);
-
-  const text = get('text');
-  const chars = hanCount(text);
-  // A "poem" with no Han characters is not a poem this corpus can hold, whatever the columns
-  // say. Reported as a missing text rather than silently accepted.
-  if (!missing.includes('text') && chars < 4) missing.push('text_han');
-
-  return {
-    index,
-    ok: missing.length === 0,
-    missing,
-    title: get('title'),
-    author: get('author'),
-    chars,
-  };
+  result: 'added' | 'duplicate' | 'refused' | 'error';
+  message?: string;
 }
 
 export function CorpusPanel({ lang }: { lang: UiLanguage }) {
   const [rows, setRows] = useState<Array<Record<string, unknown>> | null>(null);
   const [filename, setFilename] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [outcome, setOutcome] = useState<{ tally: Record<string, number>; results: AddResult[] } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const checks = useMemo(() => (rows ? rows.map(checkRow) : []), [rows]);
@@ -96,15 +64,41 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
         return;
       }
       setRows(parsed);
+      setOutcome(null);
     } catch {
       setError(t(lang, 'corpus.errParse'));
       setRows(null);
     }
   }, [lang]);
 
+  const submit = useCallback(async () => {
+    if (!rows) return;
+    setSending(true);
+    setError(null);
+    try {
+      // Only the rows the rules accept are sent. Posting the refused ones so the server can
+      // refuse them again would spend a round trip to learn what is already on screen.
+      const payload = checks.filter((c) => c.ok).map((c) => rows[c.index]);
+      const res = await fetch(`${API}/api/corpus/additions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ poems: payload }),
+      });
+      const body = (await res.json()) as { error?: string; tally?: Record<string, number>; results?: AddResult[] };
+      if (!res.ok) {
+        setError(body.error ?? 'add failed');
+        return;
+      }
+      setOutcome({ tally: body.tally ?? {}, results: body.results ?? [] });
+    } catch {
+      setError(t(lang, 'corpus.errNetwork'));
+    } finally {
+      setSending(false);
+    }
+  }, [rows, checks, lang]);
+
   return (
     <div className="panel">
-      <p className="notice">{t(lang, 'corpus.notWired')}</p>
 
       <section className="group">
         <h3>{t(lang, 'corpus.rulesTitle')}</h3>
@@ -210,10 +204,32 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
       )}
 
       <section className="group">
-        <button type="button" className="primary" disabled title={t(lang, 'corpus.notWired')}>
-          {t(lang, 'corpus.add').replace('{n}', String(accepted))}
+        <button
+          type="button"
+          className="primary"
+          disabled={accepted === 0 || sending}
+          onClick={() => void submit()}
+        >
+          {sending
+            ? t(lang, 'corpus.adding')
+            : t(lang, 'corpus.add').replace('{n}', String(accepted))}
         </button>
         <p className="note">{t(lang, 'corpus.addNote')}</p>
+
+        {outcome && (
+          <div className="tally">
+            {/* Four outcomes, named separately. "added" and "duplicate" are both successes
+                and mean different things to whoever assembled the file; "refused" is the
+                rules and "error" is us. */}
+            {(['added', 'duplicate', 'refused', 'error'] as const).map((k) =>
+              outcome.tally[k] ? (
+                <span key={k} className={k === 'added' ? 'ok-chip' : k === 'error' ? 'err-chip' : 'muted'}>
+                  {t(lang, `corpus.out.${k}`).replace('{n}', String(outcome.tally[k]))}
+                </span>
+              ) : null,
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

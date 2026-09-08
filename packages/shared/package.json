@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./status": "./src/status.ts",
+    "./corpus-addition": "./src/corpus-addition.ts",
     "./flags": "./src/flags.ts",
     "./errors": "./src/errors.ts",
     "./evidence": "./src/evidence.ts",

@@ -38,6 +38,7 @@ import { applyOverrides, OverridesSchema, type RuntimeConfig } from '@han/shared
 import { RunStore } from './events.js';
 import { runSearch } from './search.js';
 import { registerBatchRoutes, sweepOrphanFiles } from './batch.js';
+import { registerCorpusRoutes } from './corpus.js';
 import { resumeInterrupted } from './batch-runner.js';
 
 /**
@@ -432,6 +433,7 @@ app.get('/api/runs/:runId/stream', { websocket: true }, (socket, req) => {
 
 const BATCH_DIR = process.env.BATCH_DIR ?? fileURLToPath(new URL('../../../.data/batch', import.meta.url));
 registerBatchRoutes(app, { ...deps, store, config: baseConfig, makeToolsWith, keyStore }, BATCH_DIR);
+registerCorpusRoutes(app, db);
 
 await app.listen({ port: PORT, host: HOST });
 

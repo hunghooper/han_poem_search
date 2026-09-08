@@ -137,7 +137,7 @@ const vi: Dict = {
   'tab.searchHint': 'Dán một đoạn thơ chữ Hán — kể cả khi sai thứ tự, thiếu chữ hoặc chép từ thư pháp.',
   'tab.batchHint': 'Nộp file .jsonl hoặc .xlsx, chọn cột chứa câu thơ, rồi tải kết quả về kèm cột xuất xứ.',
   'tab.corpusHint': 'Thêm bài thơ vào kho nội bộ. Mọi bài thêm vào đều phải nói rõ tên bài, tác giả và nguồn.',
-  'corpus.notWired': 'Màn hình này CHƯA nối với máy chủ. File được đọc ngay trong trình duyệt để bạn thấy trước luật kiểm tra; chưa có gì được gửi đi và chưa có gì được ghi vào kho.',
+  'corpus.notWired': 'File được đọc ngay trong trình duyệt: bạn thấy mọi dòng bị từ chối trước khi có gì rời khỏi máy mình.',
   'corpus.rulesTitle': 'Yêu cầu tối thiểu',
   'corpus.rulesWhy': 'Mọi kết quả trong hệ thống này đều nói được nó từ đâu ra: bài trong kho mang theo bộ dữ liệu, tên file và mã commit; kết quả ngoài mang theo URL. Bài bạn thêm vào không có sẵn thứ đó, mà nó sẽ nằm chung chỉ mục với 78.455 bài có. Thiếu tên bài và tác giả thì đó không phải một bản ghi, chỉ là một mẩu văn — và một khi đã vào chỉ mục, nó được trả về tự tin y như mọi bài khác.',
   'corpus.required': 'Bắt buộc',
@@ -161,9 +161,15 @@ const vi: Dict = {
   'corpus.field.text_han': 'nội dung chữ Hán (dưới 4 chữ)',
   'corpus.more': 'còn {n} dòng nữa không hiển thị.',
   'corpus.add': 'Thêm {n} bài vào kho',
-  'corpus.addNote': 'Nút này bị tắt cho tới khi phần ghi vào kho được xây. Xem docs/plans/corpus-enrichment.md.',
+  'corpus.addNote': 'Chỉ những dòng hợp lệ được gửi đi. Máy chủ kiểm tra lại bằng đúng luật này — kiểm tra ở trình duyệt là tiện lợi, không phải hàng rào.',
   'corpus.errParse': 'Không đọc được file. Cần JSONL: mỗi dòng một object JSON, không có dấu ngoặc bao ngoài.',
   'corpus.errEmpty': 'File không có dòng nào.',
+  'corpus.adding': 'Đang thêm…',
+  'corpus.out.added': '{n} bài đã thêm',
+  'corpus.out.duplicate': '{n} bài đã có sẵn',
+  'corpus.out.refused': '{n} bài bị từ chối',
+  'corpus.out.error': '{n} bài lỗi',
+  'corpus.errNetwork': 'Không gọi được máy chủ.',
 };
 
 const en: Dict = {
@@ -286,7 +292,7 @@ const en: Dict = {
   'tab.searchHint': 'Paste a fragment of Han-character verse — reordered, damaged or copied from calligraphy.',
   'tab.batchHint': 'Submit a .jsonl or .xlsx file, choose the column holding the verse, then download the results with provenance columns.',
   'tab.corpusHint': 'Add poems to the local corpus. Everything added must name its title, author and source.',
-  'corpus.notWired': 'This screen is NOT connected to the server. The file is read in your browser so you can see the rules first; nothing is uploaded and nothing is written to the corpus.',
+  'corpus.notWired': 'The file is read in your browser: you see every refusal before anything leaves your machine.',
   'corpus.rulesTitle': 'Minimum requirements',
   'corpus.rulesWhy': 'Every result in this system can say where it came from: a corpus result carries a dataset, a file and a commit; an outside result carries a URL. A poem you add has none of that, and it will sit in the same index as 78,455 poems that do. Without a title and an author it is not a record, it is a fragment — and once it is in the index it is returned as confidently as anything else.',
   'corpus.required': 'Required',
@@ -310,9 +316,15 @@ const en: Dict = {
   'corpus.field.text_han': 'Han text (under 4 characters)',
   'corpus.more': '{n} further rows not shown.',
   'corpus.add': 'Add {n} poems to the corpus',
-  'corpus.addNote': 'Disabled until the write path is built. See docs/plans/corpus-enrichment.md.',
+  'corpus.addNote': 'Only accepted rows are sent. The server checks them again with the same rules — a browser check is a convenience, not a guard.',
   'corpus.errParse': 'Could not read the file. JSONL is expected: one JSON object per line, with no enclosing brackets.',
   'corpus.errEmpty': 'The file has no rows.',
+  'corpus.adding': 'Adding…',
+  'corpus.out.added': '{n} added',
+  'corpus.out.duplicate': '{n} already there',
+  'corpus.out.refused': '{n} refused',
+  'corpus.out.error': '{n} failed',
+  'corpus.errNetwork': 'Could not reach the server.',
 };
 
 const zh: Dict = {
@@ -435,7 +447,7 @@ const zh: Dict = {
   'tab.searchHint': '貼上一段漢字詩句——次序錯亂、缺字或自書法謄錄皆可。',
   'tab.batchHint': '上傳 .jsonl 或 .xlsx，選擇含詩句的欄位，再下載附出處欄位的結果。',
   'tab.corpusHint': '將詩作加入本地語料。凡新增者，均須註明篇名、作者與來源。',
-  'corpus.notWired': '本畫面尚未連接伺服器。檔案僅在瀏覽器內讀取以便先行檢視規則；未上傳任何資料，也未寫入語料庫。',
+  'corpus.notWired': '檔案在瀏覽器內讀取：任何資料離開本機之前，您已看見每一條遭拒的紀錄。',
   'corpus.rulesTitle': '最低要求',
   'corpus.rulesWhy': '本系統每一項結果都能說明來源：語料結果附帶資料集、檔名與 commit；外部結果附帶網址。您新增的詩作並無這些憑據，卻要與 78,455 首有憑據的詩同處一索引。缺篇名與作者者，並非一筆記錄，只是一段殘文——一旦入索引，便會與其他詩作同樣被自信地回傳。',
   'corpus.required': '必填',
@@ -459,9 +471,15 @@ const zh: Dict = {
   'corpus.field.text_han': '漢字內文（不足四字）',
   'corpus.more': '尚有 {n} 列未顯示。',
   'corpus.add': '將 {n} 首加入語料',
-  'corpus.addNote': '寫入功能建成前此鈕停用。參見 docs/plans/corpus-enrichment.md。',
+  'corpus.addNote': '僅送出合格列。伺服器會以相同規則再次檢查——瀏覽器端檢查僅為便利，並非防線。',
   'corpus.errParse': '無法讀取檔案。需為 JSONL：每行一個 JSON 物件，且無外層括號。',
   'corpus.errEmpty': '檔案沒有任何列。',
+  'corpus.adding': '新增中…',
+  'corpus.out.added': '新增 {n} 首',
+  'corpus.out.duplicate': '{n} 首已存在',
+  'corpus.out.refused': '{n} 首遭拒',
+  'corpus.out.error': '{n} 首失敗',
+  'corpus.errNetwork': '無法連線至伺服器。',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };

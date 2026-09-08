@@ -78,6 +78,17 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = [
   // Where it came from. `commit_sha` is what makes a result reproducible months later, when
   // the corpus has moved on.
   { key: 'source', group: 'provenance', byDefault: true },
+  /**
+   * Where this poem entered the corpus: `no`, `user` or `agent`.
+   *
+   * DEFAULT ON, and it is the only optional column that is. Every other column here is
+   * information; this one is a warning. A poem somebody added has no dataset, file or commit
+   * behind it, and it is returned exactly as confidently as the 78,455 that do — so a reader
+   * scanning a column of titles has no way to tell them apart unless this cell says so. Same
+   * reasoning as `han_status`, one level down.
+   */
+  { key: 'added', group: 'provenance', byDefault: true },
+  { key: 'added_source', group: 'provenance', byDefault: false },
   { key: 'retrieval_method', group: 'provenance', byDefault: false },
   { key: 'dataset', group: 'provenance', byDefault: false },
   { key: 'commit_sha', group: 'provenance', byDefault: false },

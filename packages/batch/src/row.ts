@@ -114,6 +114,14 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
       return top?.retrievalMethod ?? null;
     case 'dataset':
       return top?.provenance?.dataset ?? null;
+    // Read off the dataset the poem was written with, not stored separately: one fact, one
+    // place. `user-added` and `agent-proposed` are set by the add path and by nothing else.
+    case 'added':
+      return additionOrigin(top?.provenance?.dataset ?? null);
+    case 'added_source':
+      return top?.provenance?.dataset && top.provenance.dataset !== 'chinese-poetry'
+        ? (top.url ?? top.provenance.file ?? null)
+        : null;
     case 'commit_sha':
       return top?.provenance?.commitSha ?? null;
     case 'url':
@@ -156,6 +164,18 @@ function matchKindOf(input: ExportRowInput): ExportValue {
   if (flags.includes('exact_full_match')) return 'full';
   if (flags.includes('exact_partial_match')) return 'partial';
   return input.top ? 'partial' : 'none';
+}
+
+/**
+ * `no`, `user` or `agent`.
+ *
+ * Not null for a corpus poem: a blank cell in a column about provenance reads as "unknown",
+ * and the whole point of the column is that the answer is known.
+ */
+function additionOrigin(dataset: string | null): ExportValue {
+  if (dataset === 'user-added') return 'user';
+  if (dataset === 'agent-proposed') return 'agent';
+  return 'no';
 }
 
 /**
