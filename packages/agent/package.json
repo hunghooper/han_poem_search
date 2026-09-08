@@ -8,7 +8,8 @@
     "./tools": "./src/tools/index.ts",
     "./budget": "./src/budget.ts",
     "./state": "./src/state.ts",
-    "./loop": "./src/loop.ts"
+    "./loop": "./src/loop.ts",
+    "./verify-llm": "./src/verify-llm.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

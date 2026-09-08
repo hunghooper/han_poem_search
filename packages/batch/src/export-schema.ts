@@ -42,6 +42,11 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = [
   { key: 'match_kind', group: 'verdict', byDefault: true },
   { key: 'confidence', group: 'verdict', byDefault: true },
   { key: 'flags', group: 'verdict', byDefault: true },
+  // §10.2's second model: did the evidence actually settle it? Default on, because it is the
+  // only column that tells a finding from a polite refusal — the researcher can answer
+  // "I do not recognise this" and everything else on the row still looks like a result.
+  { key: 'llm_verdict', group: 'verdict', byDefault: true },
+  { key: 'llm_notes', group: 'verdict', byDefault: false },
 
   // The answer.
   { key: 'title', group: 'identity', byDefault: true },

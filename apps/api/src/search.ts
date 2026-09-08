@@ -19,6 +19,7 @@ import type { VectorStore } from '@han/retrieval/vector-store';
 import type { Evidence } from '@han/shared/evidence';
 import { StepStatus } from '@han/shared/status';
 import { AggregateFlag, flag } from '@han/shared/flags';
+import { verifyWithLlm, type Verdict } from '@han/agent/verify-llm';
 import { runAgentWorkflow } from '@han/worker/client';
 import type { AgentRunOutput } from '@han/worker/shared';
 import type { AgentEventBridge } from './agent-bridge.js';
@@ -36,6 +37,8 @@ export interface SearchOutcome {
   evidence: Evidence[];
   colophon: { lines: string[]; cyclicalDate: string | null } | null;
   verification: ReturnType<typeof verifyCandidate> | null;
+  /** §10.2's judgement, or null when it did not run. Null is not "passed". */
+  llmVerdict: { verdict: string; confidence: number; notes: string } | null;
 }
 
 export interface SearchDeps {
@@ -46,6 +49,8 @@ export interface SearchDeps {
   provider: LlmProvider | null;
   /** Must be a model that passed §4.5 checks 2-4. See docs/adr/002-llm-gateway.md. */
   reasoningModel: string | null;
+  /** §10.2's judge. A session override wins; otherwise the environment's. */
+  verifyModel: string | null;
   /**
    * Built per request from the resolved config, not once at boot: a session override that
    * names a different answer model has to reach the tool that uses it, and a tool constructed
@@ -384,6 +389,67 @@ export async function runSearch(
   }
 
   /**
+   * §10.2 — the second model. It does not search; it reads what the run collected and says
+   * whether that evidence settles the query.
+   *
+   * This is what tells a FINDING from a REFUSAL. `ask_model` counts any non-empty reply as a
+   * result, so a researcher answering "I do not recognise this, it looks like OCR damage" —
+   * honest and correct — was recorded as `model_has_result` and turned a correct `no_result`
+   * into a `low_confidence` guess. Distinguishing the two means reading the text, which is a
+   * job for a model, not for a flag.
+   */
+  let llmVerdict: Verdict | null = null;
+  const judgeModel = deps.config.models.verify ?? deps.verifyModel;
+  const worthJudging = allFlags.includes(AggregateFlag.MODEL_HAS_RESULT);
+
+  if (worthJudging && deps.provider && judgeModel) {
+    store.emit(runId, {
+      step: 'llm_verification',
+      source: 'llm_verify',
+      phase: 'started',
+      message: 'Checking whether the evidence actually settles it',
+    });
+
+    const judged = await verifyWithLlm(
+      { query: searchText, evidence: result.evidence, flags: allFlags },
+      {
+        provider: deps.provider,
+        model: judgeModel,
+        signal: AbortSignal.timeout(60_000),
+      },
+    );
+
+    if (!judged) {
+      // The check did not happen. Saying so is not the same as saying it passed.
+      store.emit(runId, {
+        step: 'llm_verification',
+        source: 'llm_verify',
+        phase: 'completed',
+        status: StepStatus.UNAVAILABLE,
+        message: 'The verifier could not be reached — the evidence is unchecked',
+      });
+    } else {
+      llmVerdict = judged.verdict;
+      store.emit(runId, {
+        step: 'llm_verification',
+        source: 'llm_verify',
+        phase: 'completed',
+        status:
+          llmVerdict.verdict === 'sufficient'
+            ? StepStatus.HAS_RESULT
+            : StepStatus.LOW_CONFIDENCE,
+        message: `${llmVerdict.verdict} — ${llmVerdict.notes || 'no note'}`,
+        metadata: {
+          confidence: llmVerdict.confidence,
+          model: judged.model,
+          provider: judged.provider,
+          ...(judged.costUsd !== null ? { costUsd: judged.costUsd } : {}),
+        },
+      });
+    }
+  }
+
+  /**
    * The run's status, which is NOT the local layer's verdict.
    *
    * `verdict` is computed before the agent runs, so a run where the corpus found nothing and
@@ -397,8 +463,13 @@ export async function runSearch(
    * against the corpus, and this system does not promote an unverified claim to a confident
    * one. LOW_CONFIDENCE is exactly "here is a candidate, look at it".
    */
+  // A judged-insufficient answer is NOT a finding, whatever the flags say. This is the whole
+  // point of the second model: the researcher's refusal used to arrive here as evidence.
+  const judgedInsufficient = llmVerdict !== null && llmVerdict.verdict === 'insufficient';
   const foundByAgent =
-    allFlags.includes(AggregateFlag.MODEL_HAS_RESULT) && result.evidence.length > 0;
+    allFlags.includes(AggregateFlag.MODEL_HAS_RESULT) &&
+    result.evidence.length > 0 &&
+    !judgedInsufficient;
   const finalStatus =
     verdict.status === StepStatus.NO_RESULT && foundByAgent
       ? StepStatus.LOW_CONFIDENCE
@@ -411,6 +482,13 @@ export async function runSearch(
     reason: verdict.reason,
     flags: allFlags,
     evidence: result.evidence,
+    llmVerdict: llmVerdict
+      ? {
+          verdict: llmVerdict.verdict,
+          confidence: llmVerdict.confidence,
+          notes: llmVerdict.notes,
+        }
+      : null,
     colophon:
       colophon.colophonLines.length > 0
         ? { lines: colophon.colophonLines, cyclicalDate: colophon.cyclicalDate }

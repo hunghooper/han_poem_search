@@ -27,6 +27,8 @@ export interface OutcomeView {
   evidence: Evidence[];
   colophon: { lines: string[]; cyclicalDate: string | null } | null;
   verification: VerificationView | null;
+  /** §10.2's judgement, or null when it did not run. Null is not "passed". */
+  llmVerdict: { verdict: string; confidence: number; notes: string } | null;
 }
 
 export interface ExportRowInput {

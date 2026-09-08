@@ -68,6 +68,12 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
       return outcome ? round(outcome.confidence) : null;
     case 'flags':
       return outcome && outcome.flags.length > 0 ? outcome.flags.join(';') : null;
+    // NOT gated on ANSWERING. A judgement of `insufficient` is exactly what a row with no
+    // answer needs to carry — blanking it would hide the reason there is no answer.
+    case 'llm_verdict':
+      return outcome?.llmVerdict?.verdict ?? null;
+    case 'llm_notes':
+      return outcome?.llmVerdict?.notes || null;
 
     case 'title':
       return top?.title ?? null;

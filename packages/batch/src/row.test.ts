@@ -33,6 +33,7 @@ const outcome = (over: Partial<OutcomeView> = {}): OutcomeView => ({
   evidence: [evidence()],
   colophon: null,
   verification: null,
+  llmVerdict: null,
   ...over,
 });
 
@@ -219,5 +220,30 @@ describe('buildRow', () => {
     const row = buildRow(input, ['form', 'verify_form']);
     expect(row.form).toBeNull();
     expect(row.verify_form).toBeNull();
+  });
+});
+/**
+ * §10.2's judgement is the one column that tells a finding from a refusal. The researcher can
+ * answer "I do not recognise this" and every other cell on the row still looks like a result,
+ * so this column is NOT gated on the row having an answer — a verdict of `insufficient` is
+ * exactly what an empty row needs to carry.
+ */
+describe('the verifier verdict', () => {
+  it('is carried even on a row with no answer', () => {
+    const input = found({
+      status: StepStatus.NO_RESULT,
+      outcome: outcome({
+        llmVerdict: { verdict: 'insufficient', confidence: 0.2, notes: 'the model refused' },
+      }),
+    });
+    const row = buildRow(input, ['status', 'title', 'llm_verdict', 'llm_notes']);
+    expect(row.title).toBeNull();
+    expect(row.llm_verdict).toBe('insufficient');
+    expect(row.llm_notes).toBe('the model refused');
+  });
+
+  // Null means the check did not happen, which is not the same as it having passed.
+  it('is null when the verifier did not run, never "sufficient"', () => {
+    expect(buildRow(found(), ['llm_verdict']).llm_verdict).toBeNull();
   });
 });

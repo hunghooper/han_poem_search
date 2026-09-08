@@ -185,6 +185,7 @@ const deps = {
   ...semantic,
   provider: llm.provider,
   reasoningModel: llm.reasoningModel,
+  verifyModel: process.env.LLM_MODEL_VERIFY ?? llm.answerModel,
   makeTools: (config: RuntimeConfig) =>
     createTools({
       db,
