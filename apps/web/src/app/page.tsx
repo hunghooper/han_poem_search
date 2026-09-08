@@ -305,15 +305,33 @@ export default function Home() {
 
       {terminal && !found && (
         <div className="empty">
-          <strong>No confident answer from the local corpus.</strong>
+          <strong>{t(lang, 'empty.title')}</strong>
           {terminal.message}
           <br />
-          Semantic search (Phase 2) and the agent fallback (Phase 3) are not built yet, so this
-          means &ldquo;exact matching found nothing&rdquo;, not &ldquo;the poem does not exist&rdquo;.
+          {/* Read off THIS run's own steps, not asserted. The sentence here used to say that
+              semantic search and the agent "are not built yet" — true when it was written,
+              false for months afterwards, and the screen went on telling users the system had
+              not looked when it had. A claim about what the system can do belongs nowhere near
+              a hardcoded string; what it actually did is in the events. */}
+          {t(lang, whatLookedKey(events))}
         </div>
       )}
     </main>
   );
+}
+
+/**
+ * Which layers actually looked, for the empty-result message.
+ *
+ * The three answers are genuinely different and the user acts on them differently: the corpus
+ * alone looked and the model was never asked; the model was asked and could not run; or
+ * everything available looked and found nothing.
+ */
+function whatLookedKey(events: Ev[]): string {
+  const agent = [...events].reverse().find((e) => e.step === 'agent');
+  if (!agent) return 'empty.localOnly';
+  if (agent.status === 'unavailable' || agent.status === 'skipped') return 'empty.agentIdle';
+  return 'empty.everythingLooked';
 }
 
 /** Highlight the lines that actually matched, so the user sees which characters hit (§14.2). */

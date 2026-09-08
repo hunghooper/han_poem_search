@@ -125,6 +125,10 @@ const vi: Dict = {
   'batch.passProgress': 'đang chạy {done}/{total} dòng',
   'batch.runWithoutAgent': 'Tắt agent và chạy ngay',
   'batch.jobGone': 'Job này không còn trên máy chủ (đã bị xoá). Đã quay lại danh sách.',
+  'empty.title': 'Không có câu trả lời đủ tin cậy.',
+  'empty.localOnly': 'Chỉ có kho nội bộ được tra; agent chưa được gọi. Nghĩa là kho này không có, chứ không phải bài thơ không tồn tại.',
+  'empty.agentIdle': 'Kho nội bộ đã tra và không thấy. Agent KHÔNG chạy được (thiếu khoá hoặc bị tắt), nên chưa có gì tra ngoài kho.',
+  'empty.everythingLooked': 'Cả kho nội bộ lẫn agent đều đã tra và không thấy. Kho này chỉ có thơ Đường và từ Tống.',
 };
 
 const en: Dict = {
@@ -235,6 +239,10 @@ const en: Dict = {
   'batch.passProgress': '{done}/{total} rows this pass',
   'batch.runWithoutAgent': 'Switch the agent off and run',
   'batch.jobGone': 'That job is no longer on the server — it was deleted. Back to the list.',
+  'empty.title': 'No confident answer.',
+  'empty.localOnly': 'Only the local corpus was searched; the agent was not called. This means the corpus does not have it, not that the poem does not exist.',
+  'empty.agentIdle': 'The corpus was searched and found nothing. The agent COULD NOT run (no key, or switched off), so nothing looked outside the corpus.',
+  'empty.everythingLooked': 'The corpus and the agent both searched and found nothing. This corpus holds Tang poetry and Song ci only.',
 };
 
 const zh: Dict = {
@@ -345,6 +353,10 @@ const zh: Dict = {
   'batch.passProgress': '本次執行 {done}/{total} 列',
   'batch.runWithoutAgent': '關閉代理並執行',
   'batch.jobGone': '該工作已不在伺服器上（已被刪除），已返回列表。',
+  'empty.title': '沒有足夠可信的答案。',
+  'empty.localOnly': '僅檢索了本地語料，未呼叫代理。這表示本語料庫沒有，而非該詩不存在。',
+  'empty.agentIdle': '本地語料已檢索且無結果。代理無法執行（缺金鑰或已關閉），因此未在語料庫外查找。',
+  'empty.everythingLooked': '本地語料與代理均已檢索且無結果。本語料庫僅收錄唐詩與宋詞。',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };
