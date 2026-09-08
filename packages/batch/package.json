@@ -8,6 +8,7 @@
     "./columns": "./src/columns.ts",
     "./export-schema": "./src/export-schema.ts",
     "./row": "./src/row.ts",
+    "./form-label": "./src/form-label.ts",
     "./jsonl": "./src/jsonl.ts",
     "./xlsx": "./src/xlsx.ts",
     "./estimate": "./src/estimate.ts"

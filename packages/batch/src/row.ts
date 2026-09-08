@@ -12,6 +12,7 @@ import { StepStatus } from '@han/shared/status';
 import type { Evidence } from '@han/shared/evidence';
 import type { ExportRowInput, ExportValue } from './types.js';
 import { cellText } from './columns.js';
+import { formLabelVi } from './form-label.js';
 
 export type { ExportRowInput, ExportValue };
 
@@ -92,6 +93,8 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
 
     case 'form':
       return verification?.candidateForm.form ?? null;
+    case 'form_label':
+      return formLabelVi(verification?.candidateForm.form);
     case 'verify_form':
       return check('form');
     case 'verify_rhyme':

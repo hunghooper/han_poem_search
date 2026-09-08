@@ -61,7 +61,11 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = [
 
   // §10.1's rule checks. Three-valued — pass, fail, ABSTAIN — and the abstention is the
   // point: a rhyme check that could not run is not a rhyme check that passed.
-  { key: 'form', group: 'verification', byDefault: true },
+  // Two columns for one fact, on purpose: the code is stable and joinable, the label is
+  // readable. The label is the default because a person opens the sheet; a script that wants
+  // to group by form ticks the code.
+  { key: 'form', group: 'verification', byDefault: false },
+  { key: 'form_label', group: 'verification', byDefault: true },
   { key: 'verify_form', group: 'verification', byDefault: false },
   { key: 'verify_rhyme', group: 'verification', byDefault: false },
   { key: 'verify_tone', group: 'verification', byDefault: false },

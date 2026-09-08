@@ -5,6 +5,8 @@ import type { AgentRunOutput } from '@han/worker/shared';
 import { agentStatusOf } from './search.js';
 import { isSettled } from './batch-runner.js';
 import { buildRow } from '@han/batch/row';
+import { FORM_LABEL_VI, formLabelVi } from '@han/batch/form-label';
+import { FORM_LABEL } from '@han/retrieval/verify/form';
 
 const out = (over: Partial<AgentRunOutput>): AgentRunOutput => ({
   evidence: [],
@@ -125,5 +127,25 @@ describe('agent evidence reaches the run status', () => {
       ['title'],
     );
     expect(row.title).toBeNull();
+  });
+});
+
+/**
+ * The Vietnamese form names live in packages/batch, which cannot import the verifier that
+ * produces the codes — so nothing but this test stops the two drifting. apps/api is the one
+ * package that sees both.
+ */
+describe('every poem form has a Vietnamese name', () => {
+  it('covers the whole vocabulary the verifier can emit', () => {
+    for (const form of Object.keys(FORM_LABEL)) {
+      expect(FORM_LABEL_VI[form], `no Vietnamese name for "${form}"`).toBeDefined();
+    }
+  });
+
+  // A code this table has not been taught prints as the code, not as a blank: a gap in the
+  // table should look like a gap, where an empty cell reads as "this poem has no form".
+  it('falls back to the code rather than to nothing', () => {
+    expect(formLabelVi('a_form_nobody_added')).toBe('a_form_nobody_added');
+    expect(formLabelVi(null)).toBeNull();
   });
 });

@@ -33,6 +33,7 @@ import { xlsxToJsonl, XlsxWriter } from '@han/batch/xlsx';
 import { JsonlWriter, countJsonlRows, readJsonl } from '@han/batch/jsonl';
 import { EXPORT_COLUMNS, headerFor, resolveColumns } from '@han/batch/export-schema';
 import { buildRow } from '@han/batch/row';
+import { formLabelVi } from '@han/batch/form-label';
 import { estimate } from '@han/batch/estimate';
 import {
   cancel,
@@ -487,6 +488,14 @@ function rowFor(
   // same finished job be exported twice with different picks and no re-run.
   const picked: Record<string, unknown> = {};
   for (const key of columns) picked[key] = stored[key] ?? null;
+
+  // Derived at DOWNLOAD time, not stored at run time, so a column added after a job ran still
+  // fills for every row of it. The Vietnamese form name is a pure function of the form code
+  // that is already there; making the user re-run 14,519 rows to populate a rename would be
+  // absurd. Anything genuinely new — needing a fresh search — still needs the re-run.
+  if (columns.includes('form_label') && picked.form_label === null) {
+    picked.form_label = formLabelVi(stored.form as string | null | undefined);
+  }
   return picked;
 }
 
