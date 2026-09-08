@@ -65,7 +65,6 @@ const vi: Dict = {
   'batch.open': 'Tra hàng loạt',
   'batch.close': 'Đóng',
   'batch.upload': 'Chọn file',
-  'batch.dropHint': 'Kéo thả file .jsonl hoặc .xlsx vào đây',
   'batch.formats': 'Hỗ trợ JSONL (mỗi dòng một object JSON) và .xlsx',
   'batch.detecting': 'Đang đọc file…',
   'batch.rows': '{n} dòng',
@@ -123,6 +122,7 @@ const vi: Dict = {
   'settings.keyPlaceholder': 'Dán khoá vào đây',
   'settings.keyNote': 'Khoá chỉ nằm trong trình duyệt này và mất khi bạn đóng tab. Nó đi kèm từng yêu cầu để tính vào tài khoản của bạn, không bao giờ được ghi vào cấu hình dự án. Bỏ trống thì các tính năng cần mô hình sẽ báo là không dùng được — tìm kiếm trong kho vẫn chạy bình thường.',
   'batch.agentUnavailable': 'Agent đang bật nhưng KHÔNG chạy được: chưa có khoá API. Vào Cài đặt → Cổng mô hình để nhập khoá, hoặc tắt agent. Bấm chạy lúc này sẽ tốn hàng giờ mà cột agent vẫn trống.',
+  'batch.lastRun': 'Lần chạy gần nhất: đã xử lý {n} dòng lúc {at}',
 };
 
 const en: Dict = {
@@ -173,7 +173,6 @@ const en: Dict = {
   'batch.open': 'Batch search',
   'batch.close': 'Close',
   'batch.upload': 'Choose file',
-  'batch.dropHint': 'Drop a .jsonl or .xlsx file here',
   'batch.formats': 'JSONL (one JSON object per line) and .xlsx are supported',
   'batch.detecting': 'Reading the file…',
   'batch.rows': '{n} rows',
@@ -231,6 +230,7 @@ const en: Dict = {
   'settings.keyPlaceholder': 'Paste your key',
   'settings.keyNote': 'The key stays in this browser and is gone when you close the tab. It travels with each request so calls bill your account, and is never written to the project configuration. Leave it empty and model features report themselves unavailable — corpus search still works.',
   'batch.agentUnavailable': 'The agent is switched on but CANNOT run: no API key. Add one under Settings → Model gateway, or switch the agent off. Starting now costs hours and returns an empty agent column.',
+  'batch.lastRun': 'Last pass: {n} rows processed at {at}',
 };
 
 const zh: Dict = {
@@ -281,7 +281,6 @@ const zh: Dict = {
   'batch.open': '批量檢索',
   'batch.close': '關閉',
   'batch.upload': '選擇檔案',
-  'batch.dropHint': '將 .jsonl 或 .xlsx 檔案拖曳至此',
   'batch.formats': '支援 JSONL（每行一個 JSON 物件）與 .xlsx',
   'batch.detecting': '正在讀取檔案…',
   'batch.rows': '{n} 列',
@@ -339,6 +338,7 @@ const zh: Dict = {
   'settings.keyPlaceholder': '貼上金鑰',
   'settings.keyNote': '金鑰只留在這個瀏覽器，關閉分頁即消失。它隨每次請求送出，因此費用計入你的帳號，且絕不寫入專案設定。留空則需要模型的功能會回報為不可用，語料檢索仍正常運作。',
   'batch.agentUnavailable': '代理已開啟但無法執行：沒有 API 金鑰。請至設定→模型閘道填入金鑰，或關閉代理。此時開始只會耗費數小時而代理欄位仍為空白。',
+  'batch.lastRun': '最近一次執行：{at} 處理了 {n} 列',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };

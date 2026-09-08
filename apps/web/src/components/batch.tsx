@@ -118,6 +118,15 @@ export function BatchPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rerun, setRerun] = useState<'unresolved' | 'all'>('unresolved');
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  /**
+   * What the last press of the button actually did.
+   *
+   * Without this a re-run is invisible. It works, but a pass over one row finishes between
+   * two one-second polls, the status returns to `done`, and the counts are unchanged when the
+   * results are unchanged — so the screen after the click is identical to the screen before
+   * it, and the only honest reading is that nothing happened.
+   */
+  const [lastRun, setLastRun] = useState<{ rows: number; at: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -265,7 +274,15 @@ export function BatchPanel({
           rerun: finished ? rerun : undefined,
         }),
       });
-      if (!res.ok) setError(((await res.json()) as { error?: string }).error ?? 'start failed');
+      const body = (await res.json()) as { error?: string; pendingRows?: number };
+      if (!res.ok) {
+        setError(body.error ?? 'start failed');
+        return;
+      }
+      setLastRun({
+        rows: body.pendingRows ?? 0,
+        at: new Date().toLocaleTimeString(),
+      });
     } finally {
       setBusy(false);
     }
@@ -563,6 +580,14 @@ export function BatchPanel({
                       </span>
                     ))}
                   </div>
+                  {/* Says what the last press did, and survives the run finishing. */}
+                  {lastRun && (
+                    <p style={S.lastRun}>
+                      {t(lang, 'batch.lastRun')
+                        .replace('{n}', String(lastRun.rows))
+                        .replace('{at}', lastRun.at)}
+                    </p>
+                  )}
                   {progress.error && <p style={S.error}>{progress.error}</p>}
                 </div>
               )}
@@ -721,7 +746,6 @@ const S: Record<string, React.CSSProperties> = {
     fontSize: '.88rem',
     maxWidth: 320,
   },
-  confirm: { marginTop: '.75rem' },
   primary: {
     background: '#0969da',
     color: '#fff',
@@ -762,6 +786,12 @@ const S: Record<string, React.CSSProperties> = {
   code: { fontFamily: 'ui-monospace, monospace', fontSize: '.78rem' },
   exportRow: { display: 'flex', gap: '.6rem' },
   rerunRow: { margin: '0 0 .75rem' },
+  lastRun: {
+    fontFamily: 'inherit',
+    fontSize: '.8rem',
+    color: '#1a7f37',
+    margin: '.5rem 0 0',
+  },
   history: { marginTop: '1.25rem' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '.8rem' },
   tr: { borderTop: '1px solid #eee' },
