@@ -50,7 +50,6 @@ interface Progress {
   /** The pass currently executing. Null when nothing is running. */
   pass: { done: number; total: number } | null;
   byStatus: Record<string, number>;
-  costUsd: number;
   error: string | null;
   running: boolean;
 }
@@ -62,7 +61,6 @@ interface JobSummary {
   status: string;
   totalRows: number;
   queryColumn: string | null;
-  costUsd: number;
   createdAt: string;
   byStatus: Record<string, number>;
   running: boolean;
@@ -590,9 +588,7 @@ export function BatchPanel({
                         .replace('{done}', String(progress.pass?.done ?? progress.rowsDone))
                         .replace('{total}', String(progress.pass?.total ?? progress.totalRows))}
                     </span>
-                    <span style={S.muted}>
-                      {t(lang, 'batch.spent')} ${progress.costUsd.toFixed(4)}
-                    </span>
+
                   </div>
                   <div style={S.bar}>
                     <div
