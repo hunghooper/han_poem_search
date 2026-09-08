@@ -173,7 +173,20 @@ export async function hybridSearch(
     reports.bm25 = { status: StepStatus.SKIPPED, count: 0, latencyMs: 0 };
     reports.vector = { status: StepStatus.SKIPPED, count: 0, latencyMs: 0 };
     reports.reranker = { status: StepStatus.SKIPPED, count: 0, latencyMs: 0 };
-    return { exact, evidence, rerankScores: [], lexicalOverlap: null, shortCircuited: true, reports };
+    // COMPUTED HERE TOO, and this line is the fix. It used to return null, which is why the
+    // `minLexicalOverlap` gate never applied to an exact match: the gate reads this value, and
+    // on this path the value did not exist. Not a threshold that was set wrong — a guard whose
+    // input was never produced. A five-character run resolving to one work short-circuits at
+    // confidence 1.0 however little of the query it accounts for, and on real calligraphy that
+    // returned poems sharing a sixth of the pasted characters, at maximum confidence.
+    return {
+      exact,
+      evidence,
+      rerankScores: [],
+      lexicalOverlap: evidence[0] ? lexicalOverlap(query, evidence[0].content) : null,
+      shortCircuited: true,
+      reports,
+    };
   }
 
   // ---- lexical and dense, in parallel ---------------------------------------

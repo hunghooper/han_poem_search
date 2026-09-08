@@ -88,14 +88,53 @@ describe('evaluateLocal', () => {
     expect(r.status).toBe(StepStatus.LOW_CONFIDENCE);
   });
 
-  it('the lexical gate does not override an exact match', () => {
-    // An exact contiguous match is decided before any score is read.
+  /**
+   * THIS TEST USED TO ASSERT THE OPPOSITE, on the reasoning that "an exact contiguous match is
+   * decided before any score is read". The principle is right and was applied to the wrong
+   * thing: lexical overlap is not a score. It is a deterministic check on whether the
+   * candidate is about the same characters at all, which is why ADR 008 introduced it — a
+   * cross-encoder had scored a nonsense control at 0.99.
+   *
+   * A five-character run resolving to one work short-circuits at confidence 1.0 however little
+   * of the query it accounts for. Measured on a real 14,519-row batch: 10.8% of exact matches
+   * returned a poem sharing under 40% of the query's characters, the worst 15%, all at maximum
+   * confidence. The floor here is the same 0.15 the reranker path uses, not a second number.
+   */
+  it('rejects an exact match whose work shares almost none of the query', () => {
     const r = evaluateLocal({
       ...base,
       exactMatch: { kind: 'full', workIds: ['w1'], windowsMatched: 5 },
       candidateCount: 8,
       rerankScores: [0.99],
       lexicalOverlap: 0,
+    });
+    expect(r.status).toBe(StepStatus.NO_RESULT);
+    expect(r.confidence).toBe(0);
+  });
+
+  // The original principle, still true: a weak SCORE must not demote a real exact match. Only
+  // the deterministic character check can, and only when the candidate is unrelated.
+  it('still answers on an exact match whose work does share the query characters', () => {
+    const r = evaluateLocal({
+      ...base,
+      exactMatch: { kind: 'full', workIds: ['w1'], windowsMatched: 5 },
+      candidateCount: 8,
+      rerankScores: [0.01],
+      lexicalOverlap: 0.9,
+    });
+    expect(r.status).toBe(StepStatus.HAS_RESULT);
+    expect(r.confidence).toBe(1);
+  });
+
+  // Null is "could not compute", and must not be read as failing the gate either — an exact
+  // match with no overlap figure still answers, exactly as it did before this change.
+  it('does not reject an exact match when the overlap could not be computed', () => {
+    const r = evaluateLocal({
+      ...base,
+      exactMatch: { kind: 'full', workIds: ['w1'], windowsMatched: 5 },
+      candidateCount: 8,
+      rerankScores: [],
+      lexicalOverlap: null,
     });
     expect(r.status).toBe(StepStatus.HAS_RESULT);
   });

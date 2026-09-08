@@ -79,6 +79,34 @@ export function evaluateLocal(
   const { exactMatch: em } = input;
   const top1 = input.rerankScores[0] ?? null;
 
+  /**
+   * The overlap gate, applied BEFORE the exact short-circuit rather than only after it.
+   *
+   * §7.1 lets five contiguous characters resolving to one work answer at confidence 1.0. That
+   * is right when five characters is most of what the user pasted and wrong when it is a
+   * ninth of it — measured on a real batch, 10.8% of exact matches returned a poem sharing
+   * under 40% of the query's characters, and the worst shared 15%.
+   *
+   * The floor is the SAME 0.15 the reranker path already uses (ADR 008), not a new number:
+   * the question both paths ask is identical — "is this candidate even about the same words"
+   * — and a second threshold for one question is a second thing nobody calibrated. On the
+   * measured distribution it rejects 0.9% of exact matches, all of them from the far tail.
+   */
+  const overlapNow = input.lexicalOverlap;
+  const belowFloor =
+    overlapNow !== null &&
+    overlapNow !== undefined &&
+    overlapNow < thresholds.minLexicalOverlap;
+
+  if (em.kind !== 'none' && belowFloor) {
+    return {
+      status: StepStatus.NO_RESULT,
+      flags: [AggregateFlag.NO_LOCAL_RESULT],
+      confidence: 0,
+      reason: `an exact run matched, but the work it resolves to shares only ${(overlapNow * 100).toFixed(0)}% of the query's characters — below the ${(thresholds.minLexicalOverlap * 100).toFixed(0)}% floor, so the run is a coincidence rather than the poem`,
+    };
+  }
+
   if (em.kind === 'full' && em.workIds.length === 1) {
     return {
       status: StepStatus.HAS_RESULT,
