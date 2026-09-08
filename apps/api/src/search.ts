@@ -383,9 +383,30 @@ export async function runSearch(
     }
   }
 
+  /**
+   * The run's status, which is NOT the local layer's verdict.
+   *
+   * `verdict` is computed before the agent runs, so a run where the corpus found nothing and
+   * the AGENT then found something reported `no_result` while carrying `model_has_result` and
+   * the agent's evidence. Reported by a user from a real batch: the flag said the model had
+   * found the poem and the title, author and form columns were empty, because the export
+   * blanks identity for a row that says it found nothing — correctly, given the status it was
+   * handed.
+   *
+   * Raised to LOW_CONFIDENCE, never to HAS_RESULT: a model-sourced answer has not been matched
+   * against the corpus, and this system does not promote an unverified claim to a confident
+   * one. LOW_CONFIDENCE is exactly "here is a candidate, look at it".
+   */
+  const foundByAgent =
+    allFlags.includes(AggregateFlag.MODEL_HAS_RESULT) && result.evidence.length > 0;
+  const finalStatus =
+    verdict.status === StepStatus.NO_RESULT && foundByAgent
+      ? StepStatus.LOW_CONFIDENCE
+      : verdict.status;
+
   const outcome: SearchOutcome = {
     runId,
-    status: verdict.status,
+    status: finalStatus,
     confidence: verdict.confidence,
     reason: verdict.reason,
     flags: allFlags,
@@ -407,7 +428,7 @@ export async function runSearch(
     runId,
     query: rawQuery,
     normalizedQuery: norm.textMatch,
-    finalStatus: verdict.status,
+    finalStatus,
     finalConfidence: verdict.confidence,
     finalFlags: allFlags,
     finalAnswer: answerMessage(result.evidence[0], allFlags, agentPartial),
@@ -420,7 +441,7 @@ export async function runSearch(
     step: 'final_answer',
     source: 'local',
     phase: 'completed',
-    status: verdict.status,
+    status: finalStatus,
     flags: allFlags,
     message: answerMessage(result.evidence[0], allFlags, agentPartial),
     metadata: { confidence: verdict.confidence, resultCount: result.evidence.length },

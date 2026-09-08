@@ -4,6 +4,7 @@ import { flag } from '@han/shared/flags';
 import type { AgentRunOutput } from '@han/worker/shared';
 import { agentStatusOf } from './search.js';
 import { isSettled } from './batch-runner.js';
+import { buildRow } from '@han/batch/row';
 
 const out = (over: Partial<AgentRunOutput>): AgentRunOutput => ({
   evidence: [],
@@ -90,5 +91,39 @@ describe('the agent reports its non-participation into the outcome', () => {
   // must not look the same in a spreadsheet column someone filters on.
   it('does not let "switched off" and "could not run" collapse', () => {
     expect(flag('model', StepStatus.SKIPPED)).not.toBe(flag('model', StepStatus.UNAVAILABLE));
+  });
+});
+
+/**
+ * REPORTED FROM A REAL BATCH. "The model sets the has_result flag, but I don't see the form,
+ * title and author columns filled."
+ *
+ * The run's status was the LOCAL layer's verdict, computed before the agent ran and never
+ * updated. So a row where the corpus found nothing and the agent then found the poem carried
+ * `model_has_result` with the agent's evidence attached — and a status of `no_result`. The
+ * export blanks identity for a row that says it found nothing, correctly, given what it was
+ * handed. Four rows in the first hundred looked like this.
+ */
+describe('agent evidence reaches the run status', () => {
+  // Not HAS_RESULT. A model-sourced answer has not been matched against the corpus, and this
+  // system does not promote an unverified claim to a confident one. LOW_CONFIDENCE is exactly
+  // "here is a candidate, look at it" — and it is answer-carrying, so the columns fill.
+  it('is answer-carrying, so identity columns are not blanked', () => {
+    expect(agentStatusOf(out({ evidence: [{ id: 'x' }] as never }))).toBe(StepStatus.HAS_RESULT);
+    const row = buildRow(
+      { status: StepStatus.LOW_CONFIDENCE, outcome: null, top: { title: 'T', author: 'A' } as never },
+      ['title', 'author'],
+    );
+    expect(row.title).toBe('T');
+    expect(row.author).toBe('A');
+  });
+
+  // The other half: a run that genuinely found nothing still blanks them.
+  it('still blanks identity when nothing was found at all', () => {
+    const row = buildRow(
+      { status: StepStatus.NO_RESULT, outcome: null, top: { title: 'T' } as never },
+      ['title'],
+    );
+    expect(row.title).toBeNull();
   });
 });
