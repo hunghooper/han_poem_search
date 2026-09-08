@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { StepStatus } from '@han/shared/status';
+import { flag } from '@han/shared/flags';
 import type { AgentRunOutput } from '@han/worker/shared';
 import { agentStatusOf } from './search.js';
 import { isSettled } from './batch-runner.js';
@@ -69,5 +70,25 @@ describe('isSettled — what a re-run leaves alone', () => {
     ]) {
       expect(isSettled(s)).toBe(false);
     }
+  });
+});
+
+/**
+ * FOUND ON REAL DATA. A 14,519-row batch ran with the agent switched on and a $100 cap. The
+ * gateway was not configured, so every one of those runs emitted an `agent / unavailable`
+ * event saying so — and the exported spreadsheet carried no sign of it, because the branch
+ * emitted an event without adding a flag to the outcome. Nobody opens 14,519 traces; the file
+ * is the only thing that gets read, and `flags` is the only channel into it.
+ */
+describe('the agent reports its non-participation into the outcome', () => {
+  it('has a distinct derived flag for each reason', () => {
+    expect(flag('model', StepStatus.UNAVAILABLE)).toBe('model_unavailable');
+    expect(flag('model', StepStatus.SKIPPED)).toBe('model_skipped');
+  });
+
+  // Switched off is a choice the user made; unavailable is a promise the system broke. They
+  // must not look the same in a spreadsheet column someone filters on.
+  it('does not let "switched off" and "could not run" collapse', () => {
+    expect(flag('model', StepStatus.SKIPPED)).not.toBe(flag('model', StepStatus.UNAVAILABLE));
   });
 });

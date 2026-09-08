@@ -18,7 +18,7 @@ import type { ModelClient } from '@han/retrieval/model-client';
 import type { VectorStore } from '@han/retrieval/vector-store';
 import type { Evidence } from '@han/shared/evidence';
 import { StepStatus } from '@han/shared/status';
-import { AggregateFlag } from '@han/shared/flags';
+import { AggregateFlag, flag } from '@han/shared/flags';
 import { runAgentWorkflow } from '@han/worker/client';
 import type { AgentRunOutput } from '@han/worker/shared';
 import type { AgentEventBridge } from './agent-bridge.js';
@@ -272,19 +272,30 @@ export async function runSearch(
     });
   } else if (!found) {
     if (!deps.config.agent.enabled) {
+      // Flagged, not just emitted. FOUND ON REAL DATA: a 14,519-row batch ran with the agent
+      // switched on and a $100 cap, the gateway was not configured, every run said so in its
+      // trace — and the exported spreadsheet said nothing at all, because these branches
+      // emitted an event without adding a flag to the outcome. Nobody opens 14,519 traces.
+      // The file has to carry it, and `flags` is how anything reaches the file.
+      allFlags.push(flag('model', StepStatus.SKIPPED));
       store.emit(runId, {
         step: 'agent',
         source: 'model',
         phase: 'completed',
         status: StepStatus.SKIPPED,
+        flags: [flag('model', StepStatus.SKIPPED)],
         message: 'Agent is switched off in settings',
       });
     } else if (!deps.provider || !deps.reasoningModel) {
+      // The one that matters most: the user ASKED for the agent and did not get it. Switched
+      // off is a choice; unavailable is a broken expectation, and they must not look alike.
+      allFlags.push(flag('model', StepStatus.UNAVAILABLE));
       store.emit(runId, {
         step: 'agent',
         source: 'model',
         phase: 'completed',
         status: StepStatus.UNAVAILABLE,
+        flags: [flag('model', StepStatus.UNAVAILABLE)],
         message: 'No LLM gateway is configured — the agent could not run',
         metadata: { errorCode: 'TOOL_UNAVAILABLE' },
       });
