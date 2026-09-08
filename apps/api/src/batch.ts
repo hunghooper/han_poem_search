@@ -62,8 +62,6 @@ const StartSchema = z.object({
    * workflow. `all` re-runs everything and pays for it again.
    */
   rerun: z.enum(['unresolved', 'all']).optional(),
-  /** Must match the estimate the user was shown. Guards against a stale confirmation. */
-  acknowledgedCostUsd: z.number().nonnegative().optional(),
 });
 
 export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataDir: string): void {
@@ -216,16 +214,6 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
     }
 
     const est = estimate({ rows: pending, agent: parsed.data.agent });
-    // A confirmation is only meaningful against the number the user actually saw. If the
-    // options changed after the dialog was shown, the estimate moved and the confirmation is
-    // stale — which is exactly when an expensive run gets started by accident.
-    if (
-      est.severity !== 'trivial' &&
-      parsed.data.acknowledgedCostUsd !== undefined &&
-      Math.abs(parsed.data.acknowledgedCostUsd - est.costUsd) > 0.01
-    ) {
-      return reply.code(409).send({ error: 'estimate changed since it was shown', estimate: est });
-    }
 
     await deps.db
       .update(batchJob)

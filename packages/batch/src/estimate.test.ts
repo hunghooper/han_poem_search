@@ -3,59 +3,36 @@ import { estimate, humanSeconds } from './estimate.js';
 
 const noAgent = { enabled: false, capUsd: null };
 
+/**
+ * Cost is no longer projected. The six measured agent runs span sevenfold, so any single
+ * figure was either a median that understated the bad case or a maximum that overstated the
+ * ordinary one — and the gateway's console reports what was actually spent. Time is still
+ * projected, because nothing else reports it and it is not money.
+ */
 describe('estimate', () => {
-  it('costs nothing with the agent off', () => {
-    const e = estimate({ rows: 50_000, agent: noAgent });
-    expect(e.costUsd).toBe(0);
-    expect(e.agentRows).toBe(0);
-    expect(e.severity).toBe('serious'); // still hours of local search
+  it('projects time, and does not project cost', () => {
+    const e = estimate({ rows: 1000, agent: noAgent });
+    expect(e.seconds).toBeGreaterThan(0);
+    expect(e).not.toHaveProperty('costUsd');
   });
 
-  // The number this whole feature needs to show before anyone presses start. The user chose
-  // "cap optional", which is theirs to choose — but not to be surprised by.
-  it('puts a real number on 50,000 rows with the agent uncapped', () => {
+  it('counts no agent rows when the agent is off', () => {
+    expect(estimate({ rows: 50_000, agent: noAgent }).agentRows).toBe(0);
+  });
+
+  it('puts real time on 50,000 rows with the agent on', () => {
     const e = estimate({ rows: 50_000, agent: { enabled: true, capUsd: null } });
-    expect(e.costUsd).toBeGreaterThan(100);
+    expect(e.agentRows).toBe(15_000);
     expect(e.seconds).toBeGreaterThan(86_400);
-    expect(e.severity).toBe('serious');
   });
 
-  it('lets a cap bound the spend', () => {
-    const e = estimate({ rows: 50_000, agent: { enabled: true, capUsd: 5 } });
-    expect(e.costUsd).toBeLessThanOrEqual(5);
-    expect(e.capBinds).toBe(true);
-  });
-
-  // A cap stops the AGENT, not the run: capped rows still get a local search and a real
-  // status. Reporting them as unexecuted would be the same collapse the status column exists
-  // to prevent, one level up.
-  it('does not leave capped rows unexecuted', () => {
-    const e = estimate({ rows: 50_000, agent: { enabled: true, capUsd: 1 } });
-    expect(e.rowsNotExecuted).toBe(0);
-  });
-
-  // A single row with the agent on is not free, and an estimate that says $0.00 for it is
-  // the one direction a cost estimate must never round.
-  it('never quotes zero for a run that will call the model', () => {
-    const e = estimate({ rows: 1, agent: { enabled: true, capUsd: null } });
-    expect(e.agentRows).toBe(1);
-    expect(e.costUsd).toBeGreaterThan(0);
-  });
-
-  // The spread between the cheapest and dearest measured agent run is sevenfold. Quoting one
-  // number from the middle of that hides the only thing the reader needs: how bad it could be.
-  it('quotes a range, and the headline figure is the top of it', () => {
-    const e = estimate({ rows: 10_000, agent: { enabled: true, capUsd: null } });
-    expect(e.costUsdLow).toBeLessThan(e.costUsd);
-    expect(e.costUsd / e.costUsdLow).toBeGreaterThan(5);
-  });
-
-  it('reports a small local-only run as trivial', () => {
-    expect(estimate({ rows: 100, agent: noAgent }).severity).toBe('trivial');
+  // A single row that will call the model must not round down to "no agent involved".
+  it('never rounds a run that will call the model down to zero', () => {
+    expect(estimate({ rows: 1, agent: { enabled: true, capUsd: null } }).agentRows).toBe(1);
   });
 
   it('is safe on an empty file', () => {
-    expect(estimate({ rows: 0, agent: noAgent })).toMatchObject({ rows: 0, costUsd: 0, seconds: 0 });
+    expect(estimate({ rows: 0, agent: noAgent })).toEqual({ rows: 0, agentRows: 0, seconds: 0 });
   });
 });
 

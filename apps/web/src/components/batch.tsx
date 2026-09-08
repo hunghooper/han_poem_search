@@ -41,10 +41,6 @@ interface Estimate {
   agentRequestedButUnavailable?: boolean;
   agentRows: number;
   seconds: number;
-  costUsd: number;
-  costUsdLow: number;
-  capBinds: boolean;
-  severity: 'trivial' | 'notable' | 'serious';
 }
 
 interface Progress {
@@ -120,7 +116,6 @@ export function BatchPanel({
   const [progress, setProgress] = useState<Progress | null>(null);
   const [available, setAvailable] = useState<ExportColumn[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [confirmText, setConfirmText] = useState('');
   const [rerun, setRerun] = useState<'unresolved' | 'all'>('unresolved');
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [busy, setBusy] = useState(false);
@@ -235,7 +230,6 @@ export function BatchPanel({
       .then((r) => r.json() as Promise<Estimate>)
       .then(setEstimate)
       .catch(() => undefined);
-    setConfirmText('');
   }, [scan, agentEnabled, capUsd, finished, rerun, apiKey]);
 
   // Poll while the job runs. A batch is long enough that a page left open must keep telling
@@ -269,7 +263,6 @@ export function BatchPanel({
           column,
           agent: { enabled: agentEnabled, capUsd: cap },
           rerun: finished ? rerun : undefined,
-          acknowledgedCostUsd: estimate?.costUsd,
         }),
       });
       if (!res.ok) setError(((await res.json()) as { error?: string }).error ?? 'start failed');
@@ -283,14 +276,12 @@ export function BatchPanel({
     return `${API}/api/batch/${scan?.jobId}/export?format=${format}&columns=${encodeURIComponent(cols)}`;
   };
 
-  const needsTypedConfirm = estimate?.severity === 'serious' && agentEnabled;
-  const confirmed = !needsTypedConfirm || confirmText.trim() === String(estimate?.costUsd ?? '');
   // Not merely warned about — blocked. Pressing start here costs hours and delivers a file
   // with an empty agent column; the user has to either supply a key or switch the agent off,
   // and both are one click away.
   const agentBlocked = estimate?.agentRequestedButUnavailable === true;
   const canStart =
-    Boolean(scan && column) && !busy && !progress?.running && confirmed && !agentBlocked;
+    Boolean(scan && column) && !busy && !progress?.running && !agentBlocked;
 
   return (
     <div style={S.overlay} onClick={onClose}>
@@ -477,17 +468,9 @@ export function BatchPanel({
             </section>
 
             {estimate && (
-              <section style={{ ...S.section, ...severityStyle(estimate.severity) }}>
+              <section style={S.section}>
                 <h3 style={S.h3}>{t(lang, 'batch.estimate')}</h3>
                 <div style={S.estGrid}>
-                  <span>{t(lang, 'batch.estCost')}</span>
-                  {/* A range, because the measured spread is sevenfold. One number here would
-                      imply a precision the measurements do not support. */}
-                  <strong>
-                    {estimate.costUsd > 0
-                      ? `$${estimate.costUsdLow.toFixed(2)} – $${estimate.costUsd.toFixed(2)}`
-                      : '$0.00'}
-                  </strong>
                   <span>{t(lang, 'batch.estTime')}</span>
                   <strong>{humanTime(estimate.seconds, lang)}</strong>
                   <span>{t(lang, 'batch.estAgentRows')}</span>
@@ -495,27 +478,11 @@ export function BatchPanel({
                 </div>
                 <p style={S.hint}>{t(lang, 'batch.estimateNote')}</p>
 
-                {/* The warning goes HERE, beside the number, not in a trace read afterwards.
-                    A run once quoted agent rows and a cost against a gateway that was not
-                    configured, ran for two hours and never called the model once. */}
+                {/* Not about money — about whether the agent can run at all. A run once
+                    quoted agent rows against a gateway that was not configured, ran for two
+                    hours and never called the model once. */}
                 {estimate.agentRequestedButUnavailable && (
                   <p style={S.warn}>{t(lang, 'batch.agentUnavailable')}</p>
-                )}
-
-                {/* Typing the number is the friction. A run of this size should not start on a
-                    click that could have been a mis-aim. */}
-                {needsTypedConfirm && !progress?.running && (
-                  <div style={S.confirm}>
-                    <label style={S.capLabel}>
-                      {t(lang, 'batch.confirmSerious')}
-                      <input
-                        value={confirmText}
-                        onChange={(e) => setConfirmText(e.target.value)}
-                        placeholder={String(estimate.costUsd)}
-                        style={S.input}
-                      />
-                    </label>
-                  </div>
                 )}
               </section>
             )}
@@ -665,13 +632,6 @@ function humanTime(seconds: number, lang: UiLanguage): string {
   if (seconds < 172800) return `${(seconds / 3600).toFixed(1)} ${t(lang, 'batch.unitHour')}`;
   return `${(seconds / 86400).toFixed(1)} ${t(lang, 'batch.unitDay')}`;
 }
-
-const severityStyle = (s: Estimate['severity']): React.CSSProperties =>
-  s === 'serious'
-    ? { borderColor: '#cf222e', background: '#fff5f5' }
-    : s === 'notable'
-      ? { borderColor: '#9a6700', background: '#fffbf0' }
-      : {};
 
 const S: Record<string, React.CSSProperties> = {
   overlay: {

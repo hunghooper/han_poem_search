@@ -1,14 +1,18 @@
 /**
- * What this run will cost and how long it will take, before it starts.
+ * How long this run will take, before it starts.
  *
- * The user asked for the agent cap to be optional, which is theirs to decide. What is not
- * optional is knowing: 50,000 rows with the agent on and no cap is roughly 26 days and $600,
- * and nobody should discover that from a bill. So the estimate is computed here, shown before
- * the start button does anything, and the confirmation names the numbers.
+ * IT NO LONGER PROJECTS COST, deliberately. It used to, and the projection was worth less than
+ * it looked: the six measured agent runs span sevenfold ($0.0083 to $0.0608), so any single
+ * figure was either a median that understated the bad case or a maximum that overstated the
+ * ordinary one. The gateway's own console reports actual spend, which is a better number than
+ * a guess with that much spread.
  *
- * The figures come from measurement, not from guessing — see docs/adr/010 and the Phase 3
- * runs. They are approximate and labelled as such; the point is the order of magnitude, which
- * is what separates "press it" from "do not press it".
+ * What replaced it is not nothing. The CAP still works, and it is a different thing from an
+ * estimate: a console tells you what you spent after you spent it, while the cap stops the
+ * agent at a figure the user set. And `cost_usd` per row survives in the export, because a
+ * console reports totals and cannot say which row of a spreadsheet cost what.
+ *
+ * Time is still projected, because that is not money and nothing else reports it.
  */
 
 export interface EstimateInput {
@@ -29,16 +33,6 @@ export interface Estimate {
   /** Rows expected to call the model. */
   agentRows: number;
   seconds: number;
-  /** The top of the measured range — what the confirmation is taken against. */
-  costUsd: number;
-  /** The bottom of it. Shown beside `costUsd` so a 7x spread is visible, not hidden. */
-  costUsdLow: number;
-  /** True when the cap will stop the run before every row is searched. */
-  capBinds: boolean;
-  /** Rows expected to finish as NOT_EXECUTED because the cap was reached first. */
-  rowsNotExecuted: number;
-  /** Shown prominently, and the reason the confirmation exists. */
-  severity: 'trivial' | 'notable' | 'serious';
 }
 
 /** Measured: exact match 3–70ms, the full local pipeline including rerank ~700ms. */
@@ -46,22 +40,6 @@ const LOCAL_SECONDS = 0.75;
 
 /** Measured across live Phase 3/4 runs: 27.8s, 45s, 48.5s end to end. */
 const AGENT_SECONDS = 45;
-
-/**
- * MEASURED across every live agent run on record (n=6):
- *
- *   $0.0083  $0.0086  $0.0098  $0.0124  $0.0149  $0.0608
- *
- * A SEVENFOLD spread, and the estimate used to quote the median. Over 12,360 rows that is the
- * difference between $154 and $751 — so a single number here does not merely lose precision,
- * it loses the decision. A cost estimate must err high: the figure the confirmation is taken
- * against is the top of the measured range, and the low end is reported beside it so the
- * spread is visible rather than implied.
- *
- * n=6 is a small sample and these will move. They are labelled as measurements, not promises.
- */
-const AGENT_COST_USD_LOW = 0.008;
-const AGENT_COST_USD = 0.061;
 
 /** Observed share of golden-set queries that fall through to the agent. */
 const DEFAULT_AGENT_RATE = 0.3;
@@ -73,45 +51,20 @@ export function estimate(input: EstimateInput): Estimate {
   const concurrency = Math.max(1, input.concurrency ?? DEFAULT_CONCURRENCY);
   const rate = input.agent.enabled ? clamp01(input.agentRate ?? DEFAULT_AGENT_RATE) : 0;
 
-  // Ceil, not round. A cost estimate must err high: rounding down turned a one-row re-run
-  // with the agent on into "$0.00", which reads as free for work that is not.
-  const wanted = Math.ceil(rows * rate);
-  const cap = input.agent.capUsd;
-
-  // The cap binds on COST, and cost only accrues on rows that reach the agent. A cap of $5
-  // over 50,000 rows does not stop the run — it stops the agent, and the remaining rows still
-  // get a local search. They are only NOT_EXECUTED if the local pass is skipped, which it
-  // never is.
-  const affordable = cap === null ? wanted : Math.min(wanted, Math.floor(cap / AGENT_COST_USD));
-  const capBinds = affordable < wanted;
+  // Ceil, not round: a one-row re-run with the agent on rounds down to zero agent rows, which
+  // reads as "the agent will not be involved" for a run where it will.
+  const agentRows = Math.ceil(rows * rate);
 
   const localSeconds = (rows * LOCAL_SECONDS) / concurrency;
-  const agentSeconds = (affordable * AGENT_SECONDS) / concurrency;
-  const costUsd = affordable * AGENT_COST_USD;
+  const agentSeconds = (agentRows * AGENT_SECONDS) / concurrency;
 
   return {
     rows,
-    agentRows: affordable,
+    agentRows,
     seconds: Math.round(localSeconds + agentSeconds),
-    costUsd: Math.round(costUsd * 100) / 100,
-    costUsdLow: Math.round(affordable * AGENT_COST_USD_LOW * 100) / 100,
-    capBinds,
-    // Capped rows still get a local answer, so nothing is left unexecuted by the cap alone.
-    rowsNotExecuted: 0,
-    severity: severityOf(costUsd, localSeconds + agentSeconds),
   };
 }
 
-/**
- * Anything past an hour or ten dollars is `serious` and the UI makes the user type to confirm.
- * The thresholds are arbitrary but the tiers are not: the difference between a run you can
- * watch and a run you have to plan for is the thing worth surfacing.
- */
-function severityOf(costUsd: number, seconds: number): Estimate['severity'] {
-  if (costUsd >= 10 || seconds >= 3600) return 'serious';
-  if (costUsd >= 1 || seconds >= 300) return 'notable';
-  return 'trivial';
-}
 
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
