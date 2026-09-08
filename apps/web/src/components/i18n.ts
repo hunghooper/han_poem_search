@@ -120,6 +120,10 @@ const vi: Dict = {
   'batch.historyNote': 'Mở lại một job cũ thay vì upload lại — upload lại tạo job mới và chạy lại toàn bộ, tốn tiền cho cả những dòng đã tìm thấy.',
   'batch.back': 'Danh sách',
   'batch.delete': 'Xoá job và file của nó',
+  'settings.gateway': 'Cổng mô hình',
+  'settings.apiKey': 'Khoá API của bạn',
+  'settings.keyPlaceholder': 'Dán khoá vào đây',
+  'settings.keyNote': 'Khoá chỉ nằm trong trình duyệt này và mất khi bạn đóng tab. Nó đi kèm từng yêu cầu để tính vào tài khoản của bạn, không bao giờ được ghi vào cấu hình dự án. Bỏ trống thì các tính năng cần mô hình sẽ báo là không dùng được — tìm kiếm trong kho vẫn chạy bình thường.',
 };
 
 const en: Dict = {
@@ -225,6 +229,10 @@ const en: Dict = {
   'batch.historyNote': 'Reopen a job instead of uploading the file again — a re-upload is a new job and re-runs every row, paying again for the ones already found.',
   'batch.back': 'All jobs',
   'batch.delete': 'Delete this job and its files',
+  'settings.gateway': 'Model gateway',
+  'settings.apiKey': 'Your API key',
+  'settings.keyPlaceholder': 'Paste your key',
+  'settings.keyNote': 'The key stays in this browser and is gone when you close the tab. It travels with each request so calls bill your account, and is never written to the project configuration. Leave it empty and model features report themselves unavailable — corpus search still works.',
 };
 
 const zh: Dict = {
@@ -330,6 +338,10 @@ const zh: Dict = {
   'batch.historyNote': '重新開啟舊工作，不要重新上傳——重新上傳會建立新工作並重跑所有列，已找到的列也要再付一次費。',
   'batch.back': '工作列表',
   'batch.delete': '刪除此工作及其檔案',
+  'settings.gateway': '模型閘道',
+  'settings.apiKey': '你的 API 金鑰',
+  'settings.keyPlaceholder': '貼上金鑰',
+  'settings.keyNote': '金鑰只留在這個瀏覽器，關閉分頁即消失。它隨每次請求送出，因此費用計入你的帳號，且絕不寫入專案設定。留空則需要模型的功能會回報為不可用，語料檢索仍正常運作。',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };

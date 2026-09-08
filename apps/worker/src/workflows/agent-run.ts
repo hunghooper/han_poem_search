@@ -137,6 +137,9 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
         messages,
         tools: available,
         maxTokens: 4096,
+        // The id only. A key placed in a workflow argument would be written into history,
+        // which is persisted and replayed; the activity looks the key up by this instead.
+        runId: input.runId,
       });
     } catch (e) {
       // Ends the AGENT, not the run. Letting this escape would leave the caller with no

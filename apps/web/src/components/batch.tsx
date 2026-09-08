@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { UiLanguage } from '@han/shared/runtime-config';
+import { authHeaders } from './settings';
 import { t } from './i18n';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -98,7 +99,16 @@ const STATUS_COLOR: Record<string, string> = {
   unavailable: '#cf222e',
 };
 
-export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () => void }) {
+export function BatchPanel({
+  lang,
+  apiKey,
+  onClose,
+}: {
+  lang: UiLanguage;
+  /** Sent only when starting a run — a batch bills whoever pressed the button. */
+  apiKey: string;
+  onClose: () => void;
+}) {
   const [scan, setScan] = useState<Scan | null>(null);
   const [column, setColumn] = useState<string>('');
   const [agentEnabled, setAgentEnabled] = useState(false);
@@ -249,7 +259,7 @@ export function BatchPanel({ lang, onClose }: { lang: UiLanguage; onClose: () =>
       const cap = capUsd.trim() === '' ? null : Number(capUsd);
       const res = await fetch(`${API}/api/batch/${scan.jobId}/start`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...authHeaders(apiKey) },
         body: JSON.stringify({
           column,
           agent: { enabled: agentEnabled, capUsd: cap },

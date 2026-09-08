@@ -28,11 +28,14 @@ import { buildRow, cellText } from '@han/batch/row';
 import { EXPORT_COLUMNS } from '@han/batch/export-schema';
 import { readJsonl } from '@han/batch/jsonl';
 import type { RuntimeConfig } from '@han/shared/runtime-config';
+import type { LlmProvider } from '@han/llm/provider';
 import { runSearch, type SearchDeps } from './search.js';
 import type { RunStore } from './events.js';
 
 export interface BatchDeps extends SearchDeps {
   store: RunStore;
+  /** Rebuilds the tool set against a different provider, for a job running on a visitor's key. */
+  makeToolsWith: (provider: LlmProvider) => SearchDeps['makeTools'];
 }
 
 export interface JobRow {
@@ -53,6 +56,21 @@ const ALL_COLUMNS: string[] = EXPORT_COLUMNS.map((c) => c.key);
 
 /** Live jobs, so progress can be read and a cancel can be honoured mid-run. */
 const running = new Map<string, { cancelled: boolean }>();
+
+/**
+ * A gateway key supplied by whoever started this job.
+ *
+ * In memory only, and dropped when the job ends: it is a secret, so it must not go into
+ * `batch_job` where it would outlive the visit and sit in a backup. A job resumed after a
+ * restart therefore has no key and runs without the agent — which is the honest degradation,
+ * because the person who could authorise the spend is no longer there to be asked.
+ */
+const jobKeys = new Map<string, LlmProvider>();
+
+export function setJobProvider(jobId: string, provider: LlmProvider | null): void {
+  if (provider) jobKeys.set(jobId, provider);
+  else jobKeys.delete(jobId);
+}
 
 export const isRunning = (jobId: string): boolean => running.has(jobId);
 
@@ -157,6 +175,7 @@ export async function runBatch(
       .where(eq(batchJob.id, job.id));
   } finally {
     running.delete(job.id);
+    jobKeys.delete(job.id);
   }
 }
 
@@ -210,7 +229,12 @@ async function searchOne(
       ...deps.config,
       agent: { ...deps.config.agent, enabled: agentAllowed },
     };
-    const outcome = await runSearch({ ...deps, config }, deps.store, runId, query);
+    // A job started with someone's own key bills that key for every row of it.
+    const jobProvider = jobKeys.get(job.id) ?? null;
+    const rowDeps = jobProvider
+      ? { ...deps, config, provider: jobProvider, makeTools: deps.makeToolsWith(jobProvider) }
+      : { ...deps, config };
+    const outcome = await runSearch(rowDeps, deps.store, runId, query);
     const costUsd = costOf(deps.store, runId);
 
     const result = buildRow(

@@ -5,7 +5,10 @@ import { decode } from '@han/shared/serde';
 import { NOTABLE_FLAGS, STEP_LABEL, styleFor } from '@/components/step-config';
 import {
   DEFAULT_SETTINGS,
+  authHeaders,
+  loadApiKey,
   loadSettings,
+  saveApiKey,
   saveSettings,
   SettingsPanel,
   type ServerConfig,
@@ -64,12 +67,16 @@ export default function Home() {
   const [server, setServer] = useState<ServerConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
+  // Deliberately NOT part of `settings`: that blob is persisted and is the thing a user
+  // exports to share their configuration. A key does not belong in it.
+  const [apiKey, setApiKey] = useState('');
   const lang = settings.ui.language;
   const vertical = settings.ui.vertical;
 
   // Settings load after mount, not during render: localStorage does not exist on the server,
   // and reading it in render would make the first paint differ from the markup Next sent.
   useEffect(() => setSettings(loadSettings()), []);
+  useEffect(() => setApiKey(loadApiKey()), []);
   useEffect(() => {
     void fetch(`${API}/api/config`)
       .then((r) => r.json())
@@ -95,7 +102,9 @@ export default function Home() {
 
       const res = await fetch(`${API}/api/search`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        // The key goes in a header, never the body: a body is what validation errors and
+        // request logs quote back.
+        headers: { 'content-type': 'application/json', ...authHeaders(apiKey) },
         // Session overrides travel with the request; the server never persists them.
         body: JSON.stringify({
           query,
@@ -157,7 +166,7 @@ export default function Home() {
       </div>
       <p className="sub">{t(lang, 'app.tagline', { n: '78,455' })}</p>
 
-      {batchOpen && <BatchPanel lang={lang} onClose={() => setBatchOpen(false)} />}
+      {batchOpen && <BatchPanel lang={lang} apiKey={apiKey} onClose={() => setBatchOpen(false)} />}
 
       <SettingsPanel
         open={settingsOpen}
@@ -165,6 +174,11 @@ export default function Home() {
         settings={settings}
         server={server}
         onChange={updateSettings}
+        apiKey={apiKey}
+        onApiKeyChange={(k) => {
+          setApiKey(k);
+          saveApiKey(k);
+        }}
       />
 
       <form onSubmit={search}>

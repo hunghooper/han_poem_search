@@ -27,6 +27,8 @@ import type { ReasonResult, ToolCallResult, WorkflowEvent } from '../shared.js';
  * Built once per worker process, not per activity: a fresh pool and model client per call
  * would spend more on connection setup than on the work.
  */
+let priceTableCache: ReturnType<typeof loadPriceTable> | undefined;
+
 let deps: {
   db: ReturnType<typeof drizzle>;
   provider: LlmProvider | null;
@@ -51,8 +53,14 @@ async function init() {
   } catch {
     // costUsd then reads null everywhere, which the trace reports rather than hides.
   }
+  // Kept module-wide so a per-run provider built from a visitor's own key is priced the same
+  // way the worker's own is.
+  priceTableCache = priceTable;
 
-  const apiKey = process.env.RAMCLOUDS_API_KEY;
+  // See the API's initLlm: with this set the worker holds no usable key of its own, so the
+  // agent only runs for a caller who supplied one.
+  const bringYourOwnKey = process.env.LLM_REQUIRE_SESSION_KEY === 'true';
+  const apiKey = bringYourOwnKey ? undefined : process.env.RAMCLOUDS_API_KEY;
   const baseURL = process.env.RAMCLOUDS_BASE_URL;
   const provider =
     apiKey && baseURL
@@ -140,16 +148,51 @@ export async function listTools(
     .map((t) => ({ name: t.name, description: t.description, jsonSchema: t.jsonSchema }));
 }
 
+/**
+ * The gateway key for this run, if the caller supplied their own.
+ *
+ * Read from Redis by run id rather than taken from the workflow input, and that is deliberate:
+ * workflow history is persisted to Postgres and replayed for the life of the run, so a key
+ * placed in the input would be a secret written into a durable log. The run id is already in
+ * the input and is not a secret, so it is the whole of what crosses into Temporal.
+ *
+ * Null means "use the worker's own key", which is the ordinary single-operator case.
+ */
+async function sessionProviderFor(
+  d: NonNullable<typeof deps>,
+  runId: string | undefined,
+): Promise<LlmProvider | null> {
+  if (!runId || !d.redis) return null;
+  const key = await d.redis.get(`runkey:${runId}`).catch(() => null);
+  const baseURL = process.env.RAMCLOUDS_BASE_URL;
+  if (!key || !baseURL) return null;
+
+  // No failover: the fallback gateway is the operator's account, and quietly moving a
+  // visitor's traffic onto it is the surprise this whole path exists to prevent.
+  return withFailover({
+    primary: createOpenAiCompatibleProvider({
+      name: process.env.LLM_PRIMARY_PROVIDER ?? 'ramclouds',
+      apiKey: key,
+      baseURL,
+      ...(priceTableCache ? { priceTable: priceTableCache } : {}),
+    }),
+  });
+}
+
 /** One reasoning turn. The activity owns the model call; the workflow owns what to do with it. */
 export async function reason(req: {
   model: string | null;
   messages: Array<{ role: string; content: string | null; toolCalls?: unknown; toolCallId?: string }>;
   tools: Array<{ name: string; description: string; jsonSchema: Record<string, unknown> }>;
   maxTokens: number;
+  /** Not the key — just the id the key is filed under. See sessionProviderFor. */
+  runId?: string;
 }): Promise<ReasonResult> {
   const d = await init();
   const model = req.model ?? d.reasoningModel;
-  if (!d.provider || !model) {
+  const session = await sessionProviderFor(d, req.runId);
+  const provider = session ?? d.provider;
+  if (!provider || !model) {
     // ApplicationFailure with an explicit `type`, not a plain Error: the workflow's
     // nonRetryableErrorTypes list matches on the failure TYPE, never on the message. Throwing
     // `new Error('CONFIG_INVALID: ...')` reads as if it were covered and is retried anyway —
@@ -176,7 +219,7 @@ export async function reason(req: {
   // until startToCloseTimeout expires, so a restarted worker sits idle for the remainder of
   // that window — long enough to spend the whole run budget doing nothing.
   const res = await beatingWhile(
-    d.provider.complete(
+    provider.complete(
       {
         model,
         messages: req.messages as LlmMessage[],

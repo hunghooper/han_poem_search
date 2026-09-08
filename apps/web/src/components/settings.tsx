@@ -23,6 +23,41 @@ import { LANGUAGE_NAMES, t } from './i18n';
 
 const STORAGE_KEY = 'han-search.settings.v1';
 
+/**
+ * The gateway key lives in sessionStorage, NOT in the settings blob.
+ *
+ * Two reasons, and both matter. It must not outlive the browser session — a shared or borrowed
+ * machine should not keep someone's key. And the settings blob is the thing a user exports or
+ * screenshots to share "the settings that produced this result"; a secret inside it would
+ * travel with every one of those.
+ */
+const KEY_STORAGE = 'han-search.gateway-key';
+
+export function loadApiKey(): string {
+  try {
+    return sessionStorage.getItem(KEY_STORAGE) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveApiKey(key: string): void {
+  try {
+    if (key.trim().length === 0) sessionStorage.removeItem(KEY_STORAGE);
+    else sessionStorage.setItem(KEY_STORAGE, key.trim());
+  } catch {
+    // Nothing to fall back to; the user re-enters it, which is the safe direction.
+  }
+}
+
+/** The header the server reads it from. Never the request body — see apps/api/src/session-key.ts. */
+export const API_KEY_HEADER = 'x-llm-api-key';
+
+/** Request headers for a call that should bill the viewer's own key when they gave one. */
+export function authHeaders(key: string): Record<string, string> {
+  return key.trim().length > 0 ? { [API_KEY_HEADER]: key.trim() } : {};
+}
+
 export interface Settings {
   ui: UiConfig;
   overrides: Overrides;
@@ -69,9 +104,20 @@ interface Props {
   settings: Settings;
   server: ServerConfig | null;
   onChange: (s: Settings) => void;
+  /** Held by the page, not by `settings` — a secret must not ride along in the saved blob. */
+  apiKey: string;
+  onApiKeyChange: (key: string) => void;
 }
 
-export function SettingsPanel({ open, onClose, settings, server, onChange }: Props) {
+export function SettingsPanel({
+  open,
+  onClose,
+  settings,
+  server,
+  onChange,
+  apiKey,
+  onApiKeyChange,
+}: Props) {
   const lang = settings.ui.language;
   const base = server?.config ?? DEFAULT_RUNTIME_CONFIG;
   const [dirty, setDirty] = useState(false);
@@ -280,6 +326,24 @@ export function SettingsPanel({ open, onClose, settings, server, onChange }: Pro
         <div className="fields">
           {modelSelect('reasoning')}
           {modelSelect('answer')}
+        </div>
+      </section>
+
+      <section className="group">
+        <h3>{t(lang, 'settings.gateway')}</h3>
+        <p className="note">{t(lang, 'settings.keyNote')}</p>
+        <div className="fields">
+          <label className="field">
+            <span className="fname">{t(lang, 'settings.apiKey')}</span>
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={apiKey}
+              placeholder={t(lang, 'settings.keyPlaceholder')}
+              onChange={(e) => onApiKeyChange(e.target.value)}
+            />
+          </label>
         </div>
       </section>
     </div>

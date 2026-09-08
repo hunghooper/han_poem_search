@@ -24,7 +24,14 @@ import { createOpenAiCompatibleProvider } from '@han/llm/adapters/openai-compati
 import { withFailover } from '@han/llm/failover';
 import { loadPriceTable } from '@han/llm/pricing';
 import type { LlmProvider } from '@han/llm/provider';
+import { Redis } from 'ioredis';
 import { AgentEventBridge } from './agent-bridge.js';
+import {
+  dropSessionKey,
+  providerForKey,
+  sessionKeyOf,
+  stashSessionKey,
+} from './session-key.js';
 import { PostgresEventSink, loadRun } from './event-sink.js';
 import { loadRuntimeConfig } from '@han/config/runtime';
 import { applyOverrides, OverridesSchema, type RuntimeConfig } from '@han/shared/runtime-config';
@@ -113,16 +120,17 @@ await app.register(multipart, {
  * The LLM provider, or null. Null is a supported state: exact matching and the semantic layer
  * work without it, and the agent step then reports UNAVAILABLE rather than being invisible.
  */
+let sharedPriceTable: ReturnType<typeof loadPriceTable> | undefined;
+
 function initLlm(): { provider: LlmProvider | null; reasoningModel: string | null; answerModel: string | null } {
-  const apiKey = process.env.RAMCLOUDS_API_KEY;
+  // An explicit opt-out for a shared deployment: the server holds no usable key, so every
+  // model call must bring its own and nothing can quietly bill the operator. Relying on an
+  // unset variable would be fragile — the process loads the repo `.env` itself.
+  const bringYourOwnKey = process.env.LLM_REQUIRE_SESSION_KEY === 'true';
+  const apiKey = bringYourOwnKey ? undefined : process.env.RAMCLOUDS_API_KEY;
   const baseURL = process.env.RAMCLOUDS_BASE_URL;
   const reasoningModel = process.env.LLM_MODEL_REASONING ?? null;
   const answerModel = process.env.LLM_MODEL_ANSWER ?? reasoningModel;
-  if (!apiKey || !baseURL) {
-    app.log.warn('no LLM gateway configured — the agent fallback is unavailable');
-    return { provider: null, reasoningModel: null, answerModel: null };
-  }
-
   let priceTable;
   try {
     // Resolved from THIS module, not from cwd. The API is started via `pnpm --filter`, whose
@@ -134,6 +142,14 @@ function initLlm(): { provider: LlmProvider | null; reasoningModel: string | nul
   } catch (e) {
     // An unreadable pricing file must not silently disable cost accounting.
     app.log.warn({ err: e }, 'pricing table unreadable — costUsd will be null on every call');
+  }
+  sharedPriceTable = priceTable;
+
+  // No server key is a supported state, not a failure: a visitor supplying their own key
+  // still gets a priced run, and everything that does not need a model still works.
+  if (!apiKey || !baseURL) {
+    app.log.warn('no server LLM key — model features need a key supplied per request');
+    return { provider: null, reasoningModel, answerModel };
   }
 
   const primary = createOpenAiCompatibleProvider({
@@ -183,6 +199,22 @@ const deps = {
   ),
   debug: process.env.DEBUG_MODE_ENABLED === 'true',
 };
+
+/**
+ * A second connection, because the bridge's is a SUBSCRIBER — a Redis client in subscriber
+ * mode refuses ordinary commands, so reusing it here would fail on every set.
+ */
+const keyStore: Redis | null = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null;
+
+/** The tool set rebuilt against another provider — for a batch running on a visitor's key. */
+const makeToolsWith = (provider: LlmProvider) => (config: RuntimeConfig) =>
+  createTools({
+    db,
+    model: semantic.model,
+    vectors: semantic.vectors,
+    provider,
+    answerModel: config.models.answer ?? llm.answerModel,
+  });
 
 /** Committed defaults. Session overrides are applied per request and never written back. */
 const baseConfig: RuntimeConfig = loadRuntimeConfig();
@@ -246,13 +278,45 @@ app.post('/api/search', async (req, reply) => {
   }
 
   const runId = store.create(parsed.data.query);
+  const config = applyOverrides(baseConfig, parsed.data.overrides);
+
+  // A key supplied by whoever is using the app bills THEM, not the server operator. It comes
+  // from a header rather than the body so it never appears in a validation error or a request
+  // log, and it reaches the agent through Redis rather than through workflow history.
+  const sessionKey = sessionKeyOf(req);
+  const baseURL = process.env.RAMCLOUDS_BASE_URL;
+  const sessionProvider =
+    sessionKey && baseURL ? providerForKey(sessionKey, baseURL, sharedPriceTable) : null;
+
+  if (sessionKey) await stashSessionKey(keyStore, runId, sessionKey);
+
+  const runDeps = sessionProvider
+    ? {
+        ...deps,
+        config,
+        provider: sessionProvider,
+        makeTools: (c: RuntimeConfig) =>
+          createTools({
+            db,
+            model: semantic.model,
+            vectors: semantic.vectors,
+            provider: sessionProvider,
+            answerModel: c.models.answer ?? llm.answerModel,
+          }),
+      }
+    : { ...deps, config };
+
   // Return immediately so the client can attach to the stream before work begins; the run is
   // then observable from its first event rather than only from its result.
   // runSearch settles the outcome into the store itself, before it emits final_answer.
-  const config = applyOverrides(baseConfig, parsed.data.overrides);
-  void runSearch({ ...deps, config }, store, runId, parsed.data.query).catch((e: unknown) => {
-    app.log.error({ err: e, runId }, 'search run failed');
-  });
+  void runSearch(runDeps, store, runId, parsed.data.query)
+    .catch((e: unknown) => {
+      app.log.error({ err: e, runId }, 'search run failed');
+    })
+    .finally(() => {
+      // Gone as soon as the run is over, rather than sitting out the hour-long expiry.
+      void dropSessionKey(keyStore, runId);
+    });
   return reply.code(202).send(encode({ runId }));
 });
 
@@ -347,15 +411,15 @@ app.get('/api/runs/:runId/stream', { websocket: true }, (socket, req) => {
 });
 
 const BATCH_DIR = process.env.BATCH_DIR ?? fileURLToPath(new URL('../../../.data/batch', import.meta.url));
-registerBatchRoutes(app, { ...deps, store, config: baseConfig }, BATCH_DIR);
+registerBatchRoutes(app, { ...deps, store, config: baseConfig, makeToolsWith }, BATCH_DIR);
 
 await app.listen({ port: PORT, host: HOST });
 
 // A batch interrupted by a restart resumes from the highest row already written. Without
 // this it would sit at `running` forever, showing a progress bar nobody is advancing.
-const resumed = await resumeInterrupted({ ...deps, store, config: baseConfig });
+const resumed = await resumeInterrupted({ ...deps, store, config: baseConfig, makeToolsWith });
 if (resumed.length > 0) app.log.info({ jobs: resumed }, 'resumed interrupted batch jobs');
 
 // After the resume, so a job about to be picked up still owns its file when the sweep runs.
-const swept = await sweepOrphanFiles({ ...deps, store, config: baseConfig }, BATCH_DIR);
+const swept = await sweepOrphanFiles({ ...deps, store, config: baseConfig, makeToolsWith }, BATCH_DIR);
 if (swept.files > 0) app.log.info(swept, 'swept orphaned batch files');

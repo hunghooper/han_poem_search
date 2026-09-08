@@ -22,6 +22,7 @@ import type { FastifyInstance } from 'fastify';
 // Imported for its type augmentation: without it `request.file()` does not exist on the
 // request type, even though the plugin is registered.
 import '@fastify/multipart';
+import { providerForKey, sessionKeyOf } from './session-key.js';
 import { count, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { batchJob, batchRow } from '@han/db/schema';
@@ -38,6 +39,7 @@ import {
   countPending,
   isRunning,
   runBatch,
+  setJobProvider,
   type BatchDeps,
   type JobRow,
   type RerunMode,
@@ -219,6 +221,14 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchDeps, dataD
         status: 'running',
       })
       .where(eq(batchJob.id, id));
+
+    // A key supplied with THIS request bills the person who pressed start, for every row.
+    const sessionKey = sessionKeyOf(request);
+    const baseURL = process.env.RAMCLOUDS_BASE_URL;
+    setJobProvider(
+      id,
+      sessionKey && baseURL ? providerForKey(sessionKey, baseURL, undefined) : null,
+    );
 
     const updated = await loadJob(deps, id);
     void runBatch(updated as JobRow, deps, mode);
