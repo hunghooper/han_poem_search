@@ -274,3 +274,15 @@ describe('han_added', () => {
     expect(DEFAULT_COLUMNS).not.toContain('added_source');
   });
 });
+
+/**
+ * Found by exporting a real job: 9,223 rows the run never reached carried `added: "no"` —
+ * a claim about provenance on a row with no result at all.
+ */
+describe('han_added on a row with no answer', () => {
+  it('is empty, not "no"', () => {
+    for (const status of [StepStatus.NOT_EXECUTED, StepStatus.NO_RESULT, StepStatus.SKIPPED]) {
+      expect(buildRow({ status, outcome: null, top: null }, ['added']).added).toBeNull();
+    }
+  });
+});

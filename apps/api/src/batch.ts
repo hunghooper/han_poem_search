@@ -496,6 +496,19 @@ function rowFor(
   if (columns.includes('form_label') && picked.form_label === null) {
     picked.form_label = formLabelVi(stored.form as string | null | undefined);
   }
+  // Same trick, same reason: `added` is a pure function of the `dataset` already stored on the
+  // row, so a job that ran before this column existed still exports it rather than showing a
+  // blank where a provenance warning belongs.
+  if (columns.includes('added') && picked.added === null) {
+    const ds = stored.dataset as string | null | undefined;
+    // Falls back to 'no' rather than null whenever the row HAS an answer, matching what the
+    // run-time path writes. A result from the model or an outside site has no dataset, and the
+    // honest answer to "did this come from an addition" is still no. Only a row with no answer
+    // at all leaves the cell empty.
+    const answering = stored.status === 'has_result' || stored.status === 'low_confidence';
+    picked.added =
+      ds === 'user-added' ? 'user' : ds === 'agent-proposed' ? 'agent' : answering ? 'no' : null;
+  }
   return picked;
 }
 

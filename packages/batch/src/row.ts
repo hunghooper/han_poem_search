@@ -117,7 +117,12 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
     // Read off the dataset the poem was written with, not stored separately: one fact, one
     // place. `user-added` and `agent-proposed` are set by the add path and by nothing else.
     case 'added':
-      return additionOrigin(top?.provenance?.dataset ?? null);
+      // Gated on the row having an answer. A row nobody searched cannot say "this did not
+      // come from an addition" — it has nothing to say at all, and writing 'no' there fills
+      // nine thousand untouched rows with a claim.
+      return ANSWERING.includes(input.status)
+        ? additionOrigin(top?.provenance?.dataset ?? null)
+        : null;
     case 'added_source':
       return top?.provenance?.dataset && top.provenance.dataset !== 'chinese-poetry'
         ? (top.url ?? top.provenance.file ?? null)
