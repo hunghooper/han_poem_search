@@ -39,7 +39,7 @@ import { RunStore } from './events.js';
 import { runSearch } from './search.js';
 import { registerBatchRoutes, sweepOrphanFiles } from './batch.js';
 import { registerCorpusRoutes } from './corpus.js';
-import { resumeInterrupted } from './batch-runner.js';
+import { flagInterrupted } from './batch-runner.js';
 
 /**
  * Same reasoning as the worker's loadRootEnv: the process must be able to start correctly on
@@ -437,11 +437,14 @@ registerCorpusRoutes(app, db);
 
 await app.listen({ port: PORT, host: HOST });
 
-// A batch interrupted by a restart resumes from the highest row already written. Without
-// this it would sit at `running` forever, showing a progress bar nobody is advancing.
-const resumed = await resumeInterrupted({ ...deps, store, config: baseConfig, makeToolsWith, keyStore });
-if (resumed.length > 0) app.log.info({ jobs: resumed }, 'resumed interrupted batch jobs');
+// A batch interrupted by a restart is MARKED, not restarted — see flagInterrupted. Left at
+// `running` it would show a progress bar nobody is advancing; restarted, it spends money
+// nobody asked for.
+const interrupted = await flagInterrupted({ ...deps, store, config: baseConfig, makeToolsWith, keyStore });
+if (interrupted.length > 0) {
+  app.log.warn({ jobs: interrupted }, 'batch jobs were interrupted; they are waiting for a re-run');
+}
 
-// After the resume, so a job about to be picked up still owns its file when the sweep runs.
+// After the marking, so a job still owns its file when the sweep runs.
 const swept = await sweepOrphanFiles({ ...deps, store, config: baseConfig, makeToolsWith, keyStore }, BATCH_DIR);
 if (swept.files > 0) app.log.info(swept, 'swept orphaned batch files');

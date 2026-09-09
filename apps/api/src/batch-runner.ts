@@ -5,14 +5,14 @@
  * in Phase 4 because a single run is a multi-minute conversation with a model, holding state
  * that exists nowhere else until it finishes. A batch is the opposite shape: its state is a
  * row in `batch_row`, committed the moment that row is done. Killing the API mid-batch loses
- * at most the row in flight, and `resumeInterrupted` picks the job up from the highest index
- * already written.
+ * at most the row in flight; the job is marked `interrupted` at the next boot and a re-run
+ * picks up exactly the rows that never got a result.
  *
  * So the durability here is Postgres's rather than Temporal's — and it is real, not a claim:
  * rows are idempotent on (job_id, row_index), so a resumed job cannot pay twice for work it
  * already did. What it does NOT give, and Temporal would, is automatic retry of the
- * orchestration itself. If this process never comes back, nothing restarts the job until
- * someone starts the API again.
+ * orchestration itself — and after `flagInterrupted`, that is deliberate: restarting a batch
+ * costs real money, so a person asks for it.
  *
  * Each row's AGENT still runs as a Temporal workflow, because `runSearch` calls
  * `runAgentWorkflow` exactly as a single search does. Batch reuses the search pipeline whole
@@ -20,7 +20,7 @@
  * the UI says another" is a bug with no good failure mode.
  */
 
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { batchJob, batchRow } from '@han/db/schema';
 import { StepStatus } from '@han/shared/status';
@@ -371,19 +371,35 @@ export async function countPending(
 }
 
 /**
- * Jobs that were running when the process died.
+ * Jobs that were running when the process died. They are MARKED, not restarted.
  *
- * Called at boot. Without it, a batch interrupted by a deploy sits at `running` forever,
- * showing a progress bar nobody is advancing — which looks exactly like a slow job.
+ * This used to relaunch them, and the reasoning was sound as far as it went: a batch
+ * interrupted by a deploy otherwise sits at `running` forever, showing a progress bar nobody
+ * is advancing, which looks exactly like a slow job. Marking it solves that too, and does not
+ * spend money to do it.
+ *
+ * WHAT WENT WRONG. `runBatch` writes `running` when it starts and the terminal status only
+ * when it finishes, so a process killed mid-run leaves the job `running` for good. In
+ * development the API runs under `tsx watch` and reboots on every file save — so one abandoned
+ * job was relaunched on save after save, and a cancel racing a fresh resume was simply
+ * overwritten. MEASURED on a real job: 5,296 rows to 5,424, **$11.88**, none of it asked for,
+ * and `agent_cap_usd` was null so nothing capped it.
+ *
+ * An interrupted job now says `interrupted` and waits. Picking it back up is the re-run the
+ * API already makes a person ask for out loud — `rerun: 'unresolved'` runs exactly the rows
+ * that never got a result. Resuming is one click; it is just no longer something the machine
+ * decides on its own with someone else's money.
  */
-export async function resumeInterrupted(deps: BatchDeps): Promise<string[]> {
+export async function flagInterrupted(deps: BatchDeps): Promise<string[]> {
   const jobs = await deps.db
-    .select()
+    .select({ id: batchJob.id })
     .from(batchJob)
-    .where(and(eq(batchJob.status, 'running'), sql`${batchJob.queryColumn} is not null`));
+    .where(eq(batchJob.status, 'running'));
+  if (jobs.length === 0) return [];
 
-  for (const job of jobs) {
-    void runBatch(job as JobRow, deps);
-  }
+  await deps.db
+    .update(batchJob)
+    .set({ status: 'interrupted' })
+    .where(eq(batchJob.status, 'running'));
   return jobs.map((j) => j.id);
 }
