@@ -406,3 +406,32 @@ button.primary:disabled { opacity: .5; cursor: not-allowed; }
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* Status and origin pickers on the additions tab. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+.filters label { display: flex; flex-direction: column; gap: 0.25rem; }
+.flabel {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.filters select {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+}
+
+/* A reviewed proposal reads quieter than one still waiting: the queue should draw the eye,
+   the archive should not. */
+.proposal.p-accepted { border-left: 3px solid var(--ok); }
+.proposal.p-rejected { border-left: 3px solid var(--line-strong); opacity: 0.72; }
+.proposal.p-pending  { border-left: 3px solid var(--accent); }

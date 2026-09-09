@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { t, tTrace, LANGUAGE_NAMES } from './i18n';
+import { t, tTrace, DICTS, LANGUAGE_NAMES } from './i18n';
 import { UI_LANGUAGES } from '@han/shared/runtime-config';
 import { msg, TRACE_CODES } from '@han/shared/trace';
 import { TRACE_LABELS } from './i18n-trace';
@@ -32,6 +32,23 @@ describe('i18n', () => {
     for (const lang of UI_LANGUAGES) {
       for (const key of [...DERIVED_KEYS, ...STATIC_KEYS]) {
         expect(t(lang, key), `${lang} is missing ${key}`).not.toBe(key);
+      }
+    }
+  });
+
+  /**
+   * Stronger than the hand-kept lists above, and it needs no maintenance: a key added to one
+   * language and forgotten in another falls back to English for whoever chose that language —
+   * a gap invisible to anyone working in one language, which is everyone most of the time.
+   */
+  it('has identical key sets in all three languages', () => {
+    const keys = Object.fromEntries(
+      UI_LANGUAGES.map((l) => [l, new Set(Object.keys(DICTS[l]))]),
+    ) as Record<(typeof UI_LANGUAGES)[number], Set<string>>;
+    for (const a of UI_LANGUAGES) {
+      for (const b of UI_LANGUAGES) {
+        const missing = [...keys[a]].filter((k) => !keys[b].has(k));
+        expect(missing, `${b} is missing what ${a} has: ${missing.join(', ')}`).toEqual([]);
       }
     }
   });

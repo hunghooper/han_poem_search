@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The three things this app does, side by side.
+ * The four things this app does, side by side.
  *
  * They were a page plus two modals, which made the batch panel and the corpus tools feel like
  * settings rather than work. They are not settings: a batch runs for hours and a corpus
@@ -15,14 +15,17 @@
 import type { UiLanguage } from '@han/shared/runtime-config';
 import { t } from './i18n';
 
-export type TabId = 'search' | 'batch' | 'corpus';
+export type TabId = 'search' | 'batch' | 'corpus' | 'additions';
 
-export const TAB_ORDER: readonly TabId[] = ['search', 'batch', 'corpus'];
+// Additions sits after corpus because that is the order the work happens in: you add, then
+// somebody reviews what was added.
+export const TAB_ORDER: readonly TabId[] = ['search', 'batch', 'corpus', 'additions'];
 
 const LABEL: Record<TabId, string> = {
   search: 'tab.search',
   batch: 'tab.batch',
   corpus: 'tab.corpus',
+  additions: 'tab.additions',
 };
 
 /** A short line under the strip saying what the open tab is for. */
@@ -30,6 +33,7 @@ const HINT: Record<TabId, string> = {
   search: 'tab.searchHint',
   batch: 'tab.batchHint',
   corpus: 'tab.corpusHint',
+  additions: 'tab.additionsHint',
 };
 
 export function Tabs({

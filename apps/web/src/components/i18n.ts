@@ -20,6 +20,30 @@ export const LANGUAGE_NAMES: Record<UiLanguage, string> = {
 type Dict = Record<string, string>;
 
 const vi: Dict = {
+  'tab.additions': 'Đề xuất & lịch sử',
+  'tab.additionsHint': 'Xem mọi bài đã được đề xuất hoặc thêm vào kho, và duyệt những đề xuất còn chờ.',
+  'add.title': 'Đề xuất và bài đã thêm',
+  'add.why': 'Mỗi bài vào kho bằng đường thêm đều được ghi lại ở đây, kèm nguồn và người chịu trách nhiệm. Đề xuất của máy chỉ là đề xuất: chưa có bản ghi, chưa vào chỉ mục, không lượt tra nào thấy được cho tới khi có người bấm nhận.',
+  'add.nPending': '{n} chờ duyệt',
+  'add.nAccepted': '{n} đã nhận',
+  'add.nRejected': '{n} đã từ chối',
+  'add.filterStatus': 'Trạng thái',
+  'add.filterOrigin': 'Nguồn gốc',
+  'add.status.all': 'Tất cả',
+  'add.status.pending': 'Chờ duyệt',
+  'add.status.accepted': 'Đã nhận',
+  'add.status.rejected': 'Đã từ chối',
+  'add.origin.all': 'Tất cả',
+  'add.origin.agent': 'Máy đề xuất',
+  'add.origin.user': 'Người tải lên',
+  'add.by': 'người thêm: {who}',
+  'add.reviewedBy': 'người duyệt: {who}',
+  'add.loading': 'Đang tải…',
+  'add.empty': 'Chưa có gì ở đây.',
+  'add.whoRequired': 'Điền tên người duyệt trước đã.',
+  'add.errLoad': 'Không tải được danh sách.',
+  'add.errReview': 'Không ghi được kết quả duyệt.',
+  'add.errNetwork': 'Không gọi được máy chủ.',
   'answer.source': 'Nguồn:',
   'answer.colophon': 'Phần lạc khoản đã tách ra trước khi tra: {lines}',
   'answer.colophonDate': ' — niên hiệu 干支 {date}',
@@ -164,7 +188,7 @@ const vi: Dict = {
   'corpus.whoPlaceholder': 'Tên hoặc email của bạn',
   'corpus.whoRequired': 'Điền tên người thêm trước đã.',
   'corpus.rulesTitle': 'Yêu cầu tối thiểu',
-  'corpus.rulesWhy': 'Mọi kết quả trong hệ thống này đều nói được nó từ đâu ra: bài trong kho mang theo bộ dữ liệu, tên file và mã commit; kết quả ngoài mang theo URL. Bài bạn thêm vào không có sẵn thứ đó, mà nó sẽ nằm chung chỉ mục với 78.455 bài có. Thiếu tên bài và tác giả thì đó không phải một bản ghi, chỉ là một mẩu văn — và một khi đã vào chỉ mục, nó được trả về tự tin y như mọi bài khác.',
+  'corpus.rulesWhy': 'Mọi kết quả trong hệ thống này đều nói được nó từ đâu ra: bài trong kho mang theo bộ dữ liệu, tên file và mã commit; kết quả ngoài mang theo URL. Bài bạn thêm vào không có sẵn thứ đó, mà nó sẽ nằm chung chỉ mục với {n} bài có. Thiếu tên bài và tác giả thì đó không phải một bản ghi, chỉ là một mẩu văn — và một khi đã vào chỉ mục, nó được trả về tự tin y như mọi bài khác.',
   'corpus.required': 'Bắt buộc',
   'corpus.optional': 'Tuỳ chọn',
   'corpus.format': 'Định dạng',
@@ -205,6 +229,30 @@ const vi: Dict = {
 };
 
 const en: Dict = {
+  'tab.additions': 'Proposals & history',
+  'tab.additionsHint': 'Every poem ever proposed for or added to the corpus, and the review queue for what is still waiting.',
+  'add.title': 'Proposals and additions',
+  'add.why': 'Every poem that entered the corpus by addition is recorded here, with its source and the person answerable for it. A verifier proposal is only a proposal: no poem row, no index entry, invisible to every search until somebody accepts it.',
+  'add.nPending': '{n} awaiting review',
+  'add.nAccepted': '{n} accepted',
+  'add.nRejected': '{n} rejected',
+  'add.filterStatus': 'Status',
+  'add.filterOrigin': 'Origin',
+  'add.status.all': 'All',
+  'add.status.pending': 'Awaiting review',
+  'add.status.accepted': 'Accepted',
+  'add.status.rejected': 'Rejected',
+  'add.origin.all': 'All',
+  'add.origin.agent': 'Proposed by the verifier',
+  'add.origin.user': 'Uploaded by a person',
+  'add.by': 'added by {who}',
+  'add.reviewedBy': 'reviewed by {who}',
+  'add.loading': 'Loading…',
+  'add.empty': 'Nothing here yet.',
+  'add.whoRequired': 'Enter who is reviewing first.',
+  'add.errLoad': 'Could not load the list.',
+  'add.errReview': 'Could not record the review.',
+  'add.errNetwork': 'Could not reach the server.',
   'answer.source': 'Source:',
   'answer.colophon': 'Inscription set aside before searching: {lines}',
   'answer.colophonDate': ' — 干支 date {date}',
@@ -349,7 +397,7 @@ const en: Dict = {
   'corpus.whoPlaceholder': 'Your name or email',
   'corpus.whoRequired': 'Enter who is adding first.',
   'corpus.rulesTitle': 'Minimum requirements',
-  'corpus.rulesWhy': 'Every result in this system can say where it came from: a corpus result carries a dataset, a file and a commit; an outside result carries a URL. A poem you add has none of that, and it will sit in the same index as 78,455 poems that do. Without a title and an author it is not a record, it is a fragment — and once it is in the index it is returned as confidently as anything else.',
+  'corpus.rulesWhy': 'Every result in this system can say where it came from: a corpus result carries a dataset, a file and a commit; an outside result carries a URL. A poem you add has none of that, and it will sit in the same index as {n} poems that do. Without a title and an author it is not a record, it is a fragment — and once it is in the index it is returned as confidently as anything else.',
   'corpus.required': 'Required',
   'corpus.optional': 'Optional',
   'corpus.format': 'Format',
@@ -390,6 +438,30 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  'tab.additions': '提議與紀錄',
+  'tab.additionsHint': '歷來提議或收入語料的詩作，以及尚待審核的提議。',
+  'add.title': '提議與新增紀錄',
+  'add.why': '凡經新增入庫的詩作皆記於此，附來源與具名之人。校驗模型的提議僅是提議：無詩作記錄、未入索引，在有人接受之前任何檢索都看不見。',
+  'add.nPending': '{n} 項待審',
+  'add.nAccepted': '{n} 項已接受',
+  'add.nRejected': '{n} 項已拒絕',
+  'add.filterStatus': '狀態',
+  'add.filterOrigin': '來歷',
+  'add.status.all': '全部',
+  'add.status.pending': '待審',
+  'add.status.accepted': '已接受',
+  'add.status.rejected': '已拒絕',
+  'add.origin.all': '全部',
+  'add.origin.agent': '校驗模型提議',
+  'add.origin.user': '由人上傳',
+  'add.by': '添加者：{who}',
+  'add.reviewedBy': '審核者：{who}',
+  'add.loading': '載入中…',
+  'add.empty': '尚無紀錄。',
+  'add.whoRequired': '請先填寫審核者。',
+  'add.errLoad': '無法載入列表。',
+  'add.errReview': '無法記錄審核結果。',
+  'add.errNetwork': '無法連線至伺服器。',
   'answer.source': '來源：',
   'answer.colophon': '檢索前已析出的落款：{lines}',
   'answer.colophonDate': '——干支紀年 {date}',
@@ -534,7 +606,7 @@ const zh: Dict = {
   'corpus.whoPlaceholder': '你的姓名或郵箱',
   'corpus.whoRequired': '請先填寫添加者。',
   'corpus.rulesTitle': '最低要求',
-  'corpus.rulesWhy': '本系統每一項結果都能說明來源：語料結果附帶資料集、檔名與 commit；外部結果附帶網址。您新增的詩作並無這些憑據，卻要與 78,455 首有憑據的詩同處一索引。缺篇名與作者者，並非一筆記錄，只是一段殘文——一旦入索引，便會與其他詩作同樣被自信地回傳。',
+  'corpus.rulesWhy': '本系統每一項結果都能說明來源：語料結果附帶資料集、檔名與 commit；外部結果附帶網址。您新增的詩作並無這些憑據，卻要與 {n} 首有憑據的詩同處一索引。缺篇名與作者者，並非一筆記錄，只是一段殘文——一旦入索引，便會與其他詩作同樣被自信地回傳。',
   'corpus.required': '必填',
   'corpus.optional': '選填',
   'corpus.format': '格式',
@@ -574,7 +646,12 @@ const zh: Dict = {
   'corpus.noAuthor': '（作者不詳）',
 };
 
-const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };
+/**
+ * Exported for `i18n.test.ts`, which asserts the three have IDENTICAL key sets. A key added to
+ * one language and forgotten in another renders as English (or as the raw key) for whoever
+ * chose that language — a gap nobody who works in one language would ever see.
+ */
+export const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };
 
 /**
  * Render a trace message in the reader's language.

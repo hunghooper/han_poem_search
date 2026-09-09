@@ -94,20 +94,53 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
   });
 
   /**
-   * What the verifier has proposed and nobody has looked at yet.
+   * Everything that has ever been proposed or added, filterable.
    *
-   * A proposal is not in the corpus. It has no poem row and no index entry; it is a suggestion
-   * with the run that produced it attached, so a reviewer reads the evidence rather than the
-   * conclusion.
+   * This replaced a `/pending` endpoint that returned only the unreviewed ones. Pending is the
+   * urgent state but it is not the interesting one: the reason additions are marked at all is
+   * so somebody can go back later and ask what got in and on whose word. An endpoint that can
+   * only answer "what needs me right now" cannot answer that.
+   *
+   * The counts come back with the page, because a reviewer needs to know there are forty
+   * rejected ones without paging through them.
    */
-  app.get('/api/corpus/pending', async () => {
+  app.get('/api/corpus/additions', async (request, reply) => {
+    const q = z
+      .object({
+        status: z.enum(['pending', 'accepted', 'rejected', 'all']).default('all'),
+        origin: z.enum(['user', 'agent', 'all']).default('all'),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        offset: z.coerce.number().int().min(0).default(0),
+      })
+      .safeParse(request.query);
+    if (!q.success) return reply.code(400).send({ error: 'invalid query', issues: q.error.issues });
+
+    const { status, origin, limit, offset } = q.data;
+    const where = [
+      ...(status === 'all' ? [] : [eq(corpusAddition.status, status)]),
+      ...(origin === 'all' ? [] : [eq(corpusAddition.origin, origin)]),
+    ];
+
     const rows = await db
       .select()
       .from(corpusAddition)
-      .where(eq(corpusAddition.status, AdditionStatus.PENDING))
+      .where(where.length > 0 ? and(...where) : undefined)
       .orderBy(desc(corpusAddition.createdAt))
-      .limit(100);
-    return { pending: rows };
+      .limit(limit)
+      .offset(offset);
+
+    // Counted over everything, not over the page: the tallies describe the store, and a tally
+    // that changed as you paged would be describing the scroll position instead.
+    const tallies = await db
+      .select({
+        status: corpusAddition.status,
+        origin: corpusAddition.origin,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(corpusAddition)
+      .groupBy(corpusAddition.status, corpusAddition.origin);
+
+    return { additions: rows, tallies, limit, offset };
   });
 
   app.post('/api/corpus/pending/:id/review', async (request, reply) => {

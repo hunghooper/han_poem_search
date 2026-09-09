@@ -18,6 +18,7 @@ import type { TraceMsg } from '@han/shared/trace';
 import { t, tTrace } from '@/components/i18n';
 import { BatchPanel } from '@/components/batch';
 import { CorpusPanel } from '@/components/corpus';
+import { AdditionsPanel } from '@/components/additions';
 import { Tabs, type TabId } from '@/components/tabs';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -372,12 +373,21 @@ export default function Home() {
 
       <div id="panel-batch" role="tabpanel" aria-labelledby="tab-batch" hidden={tab !== 'batch'}>
         {/* Mounted only while open. A batch panel polls its job every second; keeping three
-            panels mounted would keep that timer running behind the other two. */}
+            panels mounted would keep that timer running behind the others. */}
         {tab === 'batch' && <BatchPanel lang={lang} apiKey={apiKey} />}
       </div>
 
       <div id="panel-corpus" role="tabpanel" aria-labelledby="tab-corpus" hidden={tab !== 'corpus'}>
-        {tab === 'corpus' && <CorpusPanel lang={lang} />}
+        {tab === 'corpus' && <CorpusPanel lang={lang} corpusSize={corpusSize} />}
+      </div>
+
+      <div
+        id="panel-additions"
+        role="tabpanel"
+        aria-labelledby="tab-additions"
+        hidden={tab !== 'additions'}
+      >
+        {tab === 'additions' && <AdditionsPanel lang={lang} />}
       </div>
     </main>
   );
