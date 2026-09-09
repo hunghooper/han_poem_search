@@ -1,4 +1,4 @@
-"""Embedding and reranker sidecar — the spec §2.1.
+"""Embedding and reranker sidecar.
 
 The ONLY Python in the online path. Node cannot run these models well, so they are isolated
 behind a small HTTP surface:

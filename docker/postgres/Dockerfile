@@ -1,4 +1,4 @@
-# PostgreSQL 16 with pg_bigm — the spec §7.1 / §18 Q3.
+# PostgreSQL 16 with pg_bigm.
 #
 # pg_bigm is not in the official image and has no Debian package, so it is compiled here.
 # It indexes 2-grams, which is what makes a CJK character n-gram index work: pg_trgm's

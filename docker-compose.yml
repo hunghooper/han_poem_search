@@ -41,7 +41,7 @@ services:
       timeout: 3s
       retries: 20
 
-  # Temporal — the spec §2, Phase 4. Durable agent runs: a multi-minute run survives a
+  # Temporal. Durable agent runs: a multi-minute run survives a
   # worker restart because the loop is workflow code and every side effect is an activity.
   #
   # auto-setup creates and migrates its own schema inside the Postgres we already run, rather

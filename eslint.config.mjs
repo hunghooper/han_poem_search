@@ -44,7 +44,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     rules: {
-      // the spec §15 — no `any`; use `unknown` and narrow.
+      // No `any`; use `unknown` and narrow.
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-unused-vars': [
@@ -55,7 +55,7 @@ export default tseslint.config(
     },
   },
   {
-    // the spec §4.1 rule 4 — only the LLM adapters may import `openai`.
+    // Only the LLM adapters may import `openai`.
     files: ['**/*.ts', '**/*.tsx'],
     ignores: ['packages/llm/src/adapters/**'],
     rules: {
@@ -66,7 +66,7 @@ export default tseslint.config(
             {
               name: 'openai',
               message:
-                'Import the LlmProvider interface from @han/llm instead. Only packages/llm/src/adapters/ may import the openai SDK (the spec §4.1).',
+                'Import the LlmProvider interface from @han/llm instead. Only packages/llm/src/adapters/ may import the openai SDK.',
             },
           ],
         },

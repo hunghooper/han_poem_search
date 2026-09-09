@@ -1,5 +1,5 @@
 {
-  "$comment": "Golden set seeded from the maintainer's real queries (2026-09-06). Ground truth marked `confirmed: false` still needs a human decision — see docs/TODO.md. Half of these cases are NEGATIVE: they must produce no_local_result rather than an answer assembled from irrelevant top-k (the spec §1, failure mode 1).",
+  "$comment": "Golden set seeded from the maintainer's real queries (2026-09-06). Ground truth marked `confirmed: false` still needs a human decision — see docs/TODO.md. Half of these cases are NEGATIVE: they must produce no_local_result rather than an answer assembled from irrelevant top-k.",
   "cases": [
     {
       "id": "gq-01",

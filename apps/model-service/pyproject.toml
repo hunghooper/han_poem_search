@@ -1,7 +1,7 @@
 [project]
 name = "han-model-service"
 version = "0.1.0"
-description = "Embedding and reranker sidecar — the ONLY Python in the online path (the spec §2.1)"
+description = "Embedding and reranker sidecar — the ONLY Python in the online path"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
