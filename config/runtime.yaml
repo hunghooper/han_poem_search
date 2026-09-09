@@ -9,9 +9,9 @@
 # Every field is bounded by the schema in packages/shared/src/runtime-config.ts.
 
 retrieval:
-  fuseTopN: 50            # candidates into the reranker (§7.2)
-  topK: 8                 # results out (§7.2)
-  rrfK: 60                # RRF constant (§7.2)
+  fuseTopN: 50 # candidates into the reranker (§7.2)
+  topK: 8 # results out (§7.2)
+  rrfK: 60 # RRF constant (§7.2)
   maxWindowsPerReading: 400
   maxReadings: 12
   sources:
@@ -25,11 +25,11 @@ confidence:
   verifyFloor: 0.60
   noiseFloor: 0.35
   minAgreeingWindows: 2
-  minLexicalOverlap: 0.15   # ADR 008 — the floor that stops a confident 0.99 on nonsense
+  minLexicalOverlap: 0.15 # ADR 008 — the floor that stops a confident 0.99 on nonsense
 
 agent:
   enabled: true
-  maxIterations: 6          # §12
+  maxIterations: 6 # §12
   maxToolCalls: 12
   maxWallClockMs: 60000
   maxCostUsd: 0.50

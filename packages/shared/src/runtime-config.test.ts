@@ -15,8 +15,6 @@ describe('RuntimeConfigSchema', () => {
     expect(c.ui.language).toBe('vi');
   });
 
-  // Overrides arrive from a browser. A threshold of 1e9 or -1 must be rejected at the
-  // boundary, not left to wedge the confidence policy somewhere downstream.
   it('rejects out-of-range numbers rather than clamping them silently', () => {
     for (const bad of [
       { confidence: { noiseFloor: 1.5 } },
@@ -53,7 +51,6 @@ describe('applyOverrides', () => {
   it('changes only what was named, per section', () => {
     const c = applyOverrides(DEFAULT_RUNTIME_CONFIG, { confidence: { noiseFloor: 0.5 } });
     expect(c.confidence.noiseFloor).toBe(0.5);
-    // Everything else in the same section survives.
     expect(c.confidence.verifyFloor).toBe(DEFAULT_RUNTIME_CONFIG.confidence.verifyFloor);
     expect(c.agent).toEqual(DEFAULT_RUNTIME_CONFIG.agent);
   });

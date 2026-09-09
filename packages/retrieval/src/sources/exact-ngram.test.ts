@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { isOutOfOrder, windows, MAX_WINDOW_CHARS, MIN_WINDOW_CHARS } from './exact-ngram.js';
 
 describe('windows', () => {
-  // REGRESSION. Windows are matched against poem_line.text_match, where a line is 5-7
-  // characters. Generating windows up to the full input length meant the query budget was
-  // consumed entirely by windows too long to fit inside any line, and every fragment lookup
-  // returned zero rows — reported as `no_local_result`, indistinguishable from a genuine miss.
   it('never produces a window longer than a line can hold', () => {
     const long = '細草微風岸危檣獨夜舟星垂平野闊月湧大江流名豈文章著官應老病休';
     const ws = windows(long);
@@ -34,11 +30,7 @@ describe('windows', () => {
 });
 
 describe('isOutOfOrder', () => {
-  // REGRESSION. Detecting reordering by "which reorder strategy won" misses scrambled input
-  // that still matches as-written because one segment survived intact — which is exactly the
-  // §16 acceptance fragment. Order disagreement catches it without any strategy firing.
   it('detects the §16 李白 fragment, whose segments match as-written but out of sequence', () => {
-    // Line numbers of 尋雍尊師隱居 in the order the pasted fragment reaches them.
     const order = [
       { inputPos: 0, lineNo: 7 },
       { inputPos: 5, lineNo: 5 },
@@ -57,8 +49,12 @@ describe('isOutOfOrder', () => {
   });
 
   it('does not flag fewer than three distinct lines', () => {
-    // A two-line swap is as likely to be a couplet transcribed either way as it is damage.
-    expect(isOutOfOrder([{ inputPos: 0, lineNo: 1 }, { inputPos: 5, lineNo: 0 }])).toBe(false);
+    expect(
+      isOutOfOrder([
+        { inputPos: 0, lineNo: 1 },
+        { inputPos: 5, lineNo: 0 },
+      ]),
+    ).toBe(false);
   });
 
   it('tolerates a single local swap without crying reorder', () => {
@@ -85,7 +81,6 @@ describe('isOutOfOrder', () => {
       { inputPos: 10, lineNo: 1 },
       { inputPos: 20, lineNo: 2 },
     ];
-    // Line 0 first appears at position 2, so the sequence is in order.
     expect(isOutOfOrder(order)).toBe(false);
   });
 });

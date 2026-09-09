@@ -1,10 +1,3 @@
-/**
- * Parsed against a REAL page saved from sou-yun.cn on 2026-09-08. CONTRIBUTING asks for a
- * recorded-fixture test on the happy path, and for a scraper it is more than a convenience:
- * it is the contract. When sou-yun changes its markup this test fails, which is the only
- * warning anyone gets before the tool starts reporting silence.
- */
-
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -23,9 +16,6 @@ describe('parseSouyun', () => {
   });
 
   it('pairs each title with its own poem body', () => {
-    // The two halves live in separate blocks joined only by the poem id. Getting this wrong
-    // would attach one poem's lines to another poem's title, which is worse than finding
-    // nothing because it looks like an answer.
     for (const h of hits) {
       expect(h.id).toMatch(/^\d+$/u);
       expect(h.url).toContain(h.id);
@@ -39,7 +29,6 @@ describe('parseSouyun', () => {
     expect(known?.dynasty).toBe('明末清初');
   });
 
-  // The point of the whole tool: sou-yun holds what the Tang/Song corpus cannot.
   it('returns verse the local corpus could not hold', () => {
     expect(hits.some((h) => h.dynasty && /明|清/u.test(h.dynasty))).toBe(true);
   });

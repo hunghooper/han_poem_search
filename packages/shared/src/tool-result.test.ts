@@ -38,23 +38,40 @@ describe('ToolResult', () => {
 
   it('rejects NO_RESULT that actually carries rows — the classification bug the brief names', () => {
     expect(() =>
-      assertConsistent({ ...base, status: StepStatus.NO_RESULT, resultCount: 1, results: [evidence()] }),
+      assertConsistent({
+        ...base,
+        status: StepStatus.NO_RESULT,
+        resultCount: 1,
+        results: [evidence()],
+      }),
     ).toThrow(/NO_RESULT with 1 results/);
   });
 
   it('rejects HAS_RESULT with nothing in it', () => {
-    expect(() => assertConsistent({ ...base, status: StepStatus.HAS_RESULT })).toThrow(/HAS_RESULT with no results/);
+    expect(() => assertConsistent({ ...base, status: StepStatus.HAS_RESULT })).toThrow(
+      /HAS_RESULT with no results/,
+    );
   });
 
   it('rejects a resultCount that disagrees with the payload', () => {
     expect(() =>
-      assertConsistent({ ...base, status: StepStatus.HAS_RESULT, resultCount: 9, results: [evidence()] }),
+      assertConsistent({
+        ...base,
+        status: StepStatus.HAS_RESULT,
+        resultCount: 9,
+        results: [evidence()],
+      }),
     ).toThrow(/resultCount 9/);
   });
 
   it('accepts LOW_CONFIDENCE carrying rows — candidates exist, none good enough', () => {
     expect(() =>
-      assertConsistent({ ...base, status: StepStatus.LOW_CONFIDENCE, resultCount: 1, results: [evidence()] }),
+      assertConsistent({
+        ...base,
+        status: StepStatus.LOW_CONFIDENCE,
+        resultCount: 1,
+        results: [evidence()],
+      }),
     ).not.toThrow();
   });
 

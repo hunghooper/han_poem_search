@@ -1,11 +1,3 @@
-/**
- * Read a real file, write a real file, read it back.
- *
- * The readers and writers are the part where a mistake is invisible in review and obvious to
- * the user — a lost column, a shifted row, a Chinese character mangled by an encoding default.
- * So these tests go through the filesystem rather than mocking it.
- */
-
 import { afterAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -44,8 +36,6 @@ describe('jsonl', () => {
     expect(rows[0]!.values.poem).toBe('床前明月光');
   });
 
-  // A malformed line is neither skipped nor fatal. Skipping would shift every later index and
-  // quietly shorten the output; throwing on line 40,000 would discard the work already done.
   it('reports a malformed line in place, without shifting the rows after it', async () => {
     const rows = await collect(readJsonl(path));
     expect(rows[2]!.parseError).toBeDefined();
@@ -62,12 +52,13 @@ describe('jsonl', () => {
     expect(await collect(readJsonl(path, { limit: 2 }))).toHaveLength(2);
   });
 
-  // Nested under `han` rather than prefixed and flattened: a file that already has an `author`
-  // column keeps it, and ours sits beside it instead of overwriting it.
   it('writes results beside the original keys without colliding', async () => {
     const out = join(dir, 'out.jsonl');
     const w = new JsonlWriter(out);
-    await w.write({ id: 'r1', author: 'ghi chú của tôi' }, { status: 'has_result', author: '李白' });
+    await w.write(
+      { id: 'r1', author: 'ghi chú của tôi' },
+      { status: 'has_result', author: '李白' },
+    );
     await w.close();
 
     const [row] = await collect(readJsonl(out));
@@ -89,20 +80,20 @@ describe('xlsx', () => {
     const jsonl = join(dir, 'in.converted.jsonl');
     const conv = await xlsxToJsonl(path, jsonl);
 
-    // A blank header still gets a name: a column the picker cannot list is a column the user
-    // cannot choose, and dropping it silently would hide the one they wanted.
     expect(conv.headers).toEqual(['id', 'poem', 'column_3', 'note']);
     expect(conv.total).toBe(2);
 
     const rows = await collect(readJsonl(jsonl));
     expect(rows).toHaveLength(2);
-    // The regression this whole design exists for: the streaming reader returned
-    // { sharedString: 0 } here, which reads as "no Chinese in this column" and would make the
-    // scan abstain on a file that is nothing but poetry.
     expect(rows[0]!.values.poem).toBe('床前明月光');
     expect(rows.map((r) => r.index)).toEqual([0, 1]);
 
-    expect(scanColumns(rows.map((r) => r.values), conv.headers).suggested).toBe('poem');
+    expect(
+      scanColumns(
+        rows.map((r) => r.values),
+        conv.headers,
+      ).suggested,
+    ).toBe('poem');
   });
 
   it('reads rich text, which hand-marked-up files are full of', async () => {
@@ -151,9 +142,11 @@ describe('xlsx', () => {
     expect(conv.headers).toEqual(['id', 'poem', 'han_status', 'han_author']);
 
     const rows = await collect(readJsonl(back));
-    expect(rows[0]!.values).toMatchObject({ id: 'r1', han_status: 'has_result', han_author: '李白' });
-    // Null must stay empty, not become the string "null" — a cell reading "null" would be
-    // filtered as a value.
+    expect(rows[0]!.values).toMatchObject({
+      id: 'r1',
+      han_status: 'has_result',
+      han_author: '李白',
+    });
     expect(rows[1]!.values.han_author).toBeNull();
   });
 });

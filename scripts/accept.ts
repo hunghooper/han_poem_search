@@ -1,4 +1,3 @@
-/** the spec §16 Phase 1 acceptance criteria, run against the real index. */
 import './env.js';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -32,7 +31,11 @@ check(
   top?.title === '尋雍尊師隱居' && av.flags.includes('local_result_found'),
   `${top?.title ?? 'none'} — ${top?.author ?? '?'} | kind=${a.kind} flags=[${[...a.flags, ...av.flags].join(' ')}] | ${a.latencyMs}ms`,
 );
-check('  ...and is flagged as reordered', a.flags.includes('input_reordered'), `strategy=${a.reading?.strategy}`);
+check(
+  '  ...and is flagged as reordered',
+  a.flags.includes('input_reordered'),
+  `strategy=${a.reading?.strategy}`,
+);
 check('  ...in under 200ms without an LLM call', a.latencyMs < 200, `${a.latencyMs}ms`);
 
 const b = await exactNgramSearch(db, NONSENSE);

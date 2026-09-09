@@ -1,13 +1,3 @@
-/**
- * One search outcome as one export row.
- *
- * Deliberately one row per INPUT row, never one per candidate. The export has to line up with
- * the file the user uploaded — they will paste the new columns back beside the old ones, or
- * join on row order — and a run that silently turned 5,000 rows into 5,400 breaks that in a
- * way nobody notices until the numbers are wrong. Ambiguity is carried sideways in
- * `alternatives` instead of downward into extra rows.
- */
-
 import { StepStatus } from '@han/shared/status';
 import type { Evidence } from '@han/shared/evidence';
 import type { ExportRowInput, ExportValue } from './types.js';
@@ -16,13 +6,6 @@ import { formLabelVi } from './form-label.js';
 
 export type { ExportRowInput, ExportValue };
 
-/**
- * Build the `han_*` values for one row, for the selected columns only.
- *
- * Every value is a primitive or null. Null means "this run has nothing to say here", which the
- * writers render as an empty cell (XLSX) or `null` (JSONL) — never as an empty string, so a
- * field that is genuinely absent stays distinguishable from one that is present and blank.
- */
 export function buildRow(
   input: ExportRowInput,
   columns: readonly string[],
@@ -32,34 +15,16 @@ export function buildRow(
   return out;
 }
 
-/**
- * Statuses that carry an answer.
- *
- * LOW_CONFIDENCE is here on purpose: a flagged candidate is exactly what the user should see,
- * with the warning in the status column beside it. NO_RESULT is not, and that distinction is
- * the reason this set exists.
- */
 const ANSWERING: readonly StepStatus[] = [StepStatus.HAS_RESULT, StepStatus.LOW_CONFIDENCE];
 
 function valueFor(key: string, input: ExportRowInput): ExportValue {
   const { outcome } = input;
-  // A run can hold evidence the confidence policy REJECTED — the trace keeps it, which is
-  // right. Writing it into title/author beside a no_result status is not: the row then reads
-  // as an answer to anyone scanning the column, and the one cell that contradicts it is the
-  // one they are least likely to look at. Found live: nonsense input returned no_result with
-  // 駑驥 / 韩愈 filled in from a vector near-miss.
   const top = ANSWERING.includes(input.status) ? input.top : null;
-  // Gated with `top`, and for the same reason: these columns describe the candidate. Checks
-  // reported against a candidate the row does not name read as findings about nothing.
-  // The full picture stays one click away through run_id.
   const verification = ANSWERING.includes(input.status) ? (outcome?.verification ?? null) : null;
   const check = (name: 'form' | 'rhyme' | 'tone'): ExportValue =>
     verification?.checks.find((c) => c.name === name)?.outcome ?? null;
 
   switch (key) {
-    // The verdict. `status` is present for every row without exception, including rows the
-    // run never reached — those carry NOT_EXECUTED, which is the whole reason the vocabulary
-    // has that member (§5.1).
     case 'status':
       return input.status;
     case 'match_kind':
@@ -68,8 +33,6 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
       return outcome ? round(outcome.confidence) : null;
     case 'flags':
       return outcome && outcome.flags.length > 0 ? outcome.flags.join(';') : null;
-    // NOT gated on ANSWERING. A judgement of `insufficient` is exactly what a row with no
-    // answer needs to carry — blanking it would hide the reason there is no answer.
     case 'llm_verdict':
       return outcome?.llmVerdict?.verdict ?? null;
     case 'llm_notes':
@@ -114,12 +77,7 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
       return top?.retrievalMethod ?? null;
     case 'dataset':
       return top?.provenance?.dataset ?? null;
-    // Read off the dataset the poem was written with, not stored separately: one fact, one
-    // place. `user-added` and `agent-proposed` are set by the add path and by nothing else.
     case 'added':
-      // Gated on the row having an answer. A row nobody searched cannot say "this did not
-      // come from an addition" — it has nothing to say at all, and writing 'no' there fills
-      // nine thousand untouched rows with a claim.
       return ANSWERING.includes(input.status)
         ? additionOrigin(top?.provenance?.dataset ?? null)
         : null;
@@ -155,13 +113,6 @@ function valueFor(key: string, input: ExportRowInput): ExportValue {
   }
 }
 
-/**
- * How the match was made, from the flags the run already recorded.
- *
- * `ambiguous` is the one that earns its place: several poems matched the fragment equally
- * well, the system said so, and a spreadsheet that showed only the first title would be
- * presenting a coin toss as a finding.
- */
 function matchKindOf(input: ExportRowInput): ExportValue {
   if (!ANSWERING.includes(input.status)) return 'none';
   const flags = input.outcome?.flags ?? [];
@@ -171,24 +122,12 @@ function matchKindOf(input: ExportRowInput): ExportValue {
   return input.top ? 'partial' : 'none';
 }
 
-/**
- * `no`, `user` or `agent`.
- *
- * Not null for a corpus poem: a blank cell in a column about provenance reads as "unknown",
- * and the whole point of the column is that the answer is known.
- */
 function additionOrigin(dataset: string | null): ExportValue {
   if (dataset === 'user-added') return 'user';
   if (dataset === 'agent-proposed') return 'agent';
   return 'no';
 }
 
-/**
- * The corpus text that matched, narrowed to the matched span when there is one.
- *
- * Without the span this would be the whole poem, which defeats the point of the column: the
- * user wants to see WHICH line their fragment hit, beside the fragment they pasted.
- */
 function matchedText(top: Evidence | null): ExportValue {
   if (!top) return null;
   if (!top.matchedSpan) return top.content;
@@ -197,13 +136,6 @@ function matchedText(top: Evidence | null): ExportValue {
   return span.length > 0 ? span : top.content;
 }
 
-/**
- * Runner-up candidates, as `title — author (score)`.
- *
- * Populated whenever there is more than one, not only on `exact_ambiguous`: a row whose top
- * two candidates are near-tied is exactly the row a human should look at, and the score
- * difference is what tells them so.
- */
 function alternatives(input: ExportRowInput): ExportValue {
   if (!ANSWERING.includes(input.status)) return null;
   const rest = input.outcome?.evidence.slice(1, 4) ?? [];
@@ -215,5 +147,4 @@ function alternatives(input: ExportRowInput): ExportValue {
 
 const round = (n: number): number => Math.round(n * 1000) / 1000;
 
-/** Re-exported so the readers and the API agree on how a source cell becomes a query. */
 export { cellText };

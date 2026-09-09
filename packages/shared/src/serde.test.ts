@@ -9,8 +9,16 @@ describe('serde', () => {
   });
 
   it('converts nested objects and arrays', () => {
-    const wire = { run_id: 'r', metadata: { cost_usd: 1, tokens_in: 2 }, results: [{ rerank_score: 0.5 }] };
-    expect(decode(wire)).toEqual({ runId: 'r', metadata: { costUsd: 1, tokensIn: 2 }, results: [{ rerankScore: 0.5 }] });
+    const wire = {
+      run_id: 'r',
+      metadata: { cost_usd: 1, tokens_in: 2 },
+      results: [{ rerank_score: 0.5 }],
+    };
+    expect(decode(wire)).toEqual({
+      runId: 'r',
+      metadata: { costUsd: 1, tokensIn: 2 },
+      results: [{ rerankScore: 0.5 }],
+    });
     expect(encode(decode(wire))).toEqual(wire);
   });
 

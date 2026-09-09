@@ -1,14 +1,3 @@
-/**
- * Ingest — the spec §13.
- *
- *   parse JSON -> normalize (§3.2) -> derive lines -> upsert work/poem/poem_line
- *
- * Idempotent, keyed by content hash. Records the pinned commit SHA into provenance, so every
- * local result can say which snapshot of a crawled dataset it came from (§3.1 item 4).
- *
- * Embedding and Qdrant indexing are Phase 2 and deliberately absent — see docs/TODO.md.
- */
-
 import { eq, sql } from 'drizzle-orm';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -24,7 +13,6 @@ interface Options {
   root: string;
   commitSha: string;
   databaseUrl: string;
-  /** Cap the number of poems per collection — the `--sample` path from CONTRIBUTING.md. */
   limit: number | null;
 }
 
@@ -125,7 +113,8 @@ async function run(opts: Options): Promise<void> {
         .insert(author)
         .values(rows)
         .returning({ id: author.id, nameMatch: author.nameMatch });
-      for (const r of inserted) if (!authorIdByName.has(r.nameMatch)) authorIdByName.set(r.nameMatch, r.id);
+      for (const r of inserted)
+        if (!authorIdByName.has(r.nameMatch)) authorIdByName.set(r.nameMatch, r.id);
     }
     console.log(`authors: ${rawAuthors.length}`);
 
@@ -149,9 +138,6 @@ async function run(opts: Options): Promise<void> {
           .filter((p): p is Prepared => p !== null);
         if (prepared.length === 0) continue;
 
-        // Several records can share a workKey within one batch (the same poem appearing twice
-        // in a collection). Deduplicate before the insert, or ON CONFLICT fires twice in one
-        // statement and Postgres rejects the whole batch.
         const uniqueWorks = new Map(prepared.map((p) => [p.work.workKey, p.work]));
         const workRows = await db
           .insert(work)
@@ -187,7 +173,10 @@ async function run(opts: Options): Promise<void> {
         });
 
         for (let j = 0; j < lineValues.length; j += BATCH) {
-          await db.insert(poemLine).values(lineValues.slice(j, j + BATCH)).onConflictDoNothing();
+          await db
+            .insert(poemLine)
+            .values(lineValues.slice(j, j + BATCH))
+            .onConflictDoNothing();
         }
 
         poemCount += poemRows.length;
@@ -203,7 +192,9 @@ async function run(opts: Options): Promise<void> {
         .set({ poemCount, lineCount, finishedAt: new Date() })
         .where(eq(ingestRun.id, runId));
     }
-    console.log(`ingest complete: ${poemCount} poems, ${lineCount} lines in ${Date.now() - started}ms`);
+    console.log(
+      `ingest complete: ${poemCount} poems, ${lineCount} lines in ${Date.now() - started}ms`,
+    );
   } finally {
     await pool.end();
   }
@@ -212,7 +203,11 @@ async function run(opts: Options): Promise<void> {
 const argv = process.argv.slice(2);
 const limitIdx = argv.indexOf('--limit');
 const explicitLimit = limitIdx >= 0 ? Number(argv[limitIdx + 1]) : NaN;
-const limit = Number.isFinite(explicitLimit) ? explicitLimit : argv.includes('--sample') ? 2000 : null;
+const limit = Number.isFinite(explicitLimit)
+  ? explicitLimit
+  : argv.includes('--sample')
+    ? 2000
+    : null;
 
 run({
   root: process.env.CORPUS_DATA_DIR ?? './data/chinese-poetry',

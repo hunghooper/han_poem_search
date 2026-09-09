@@ -33,8 +33,6 @@ describe('idf', () => {
   });
 
   it('stays positive for a term present in every document', () => {
-    // A negative idf would make a common bigram actively harmful to a document's score,
-    // penalising poems for containing ordinary characters.
     expect(idf(78455, 78455)).toBeGreaterThan(0);
   });
 });
@@ -45,7 +43,6 @@ describe('bm25Term', () => {
     const two = bm25Term(2, 30, 30, 1);
     const ten = bm25Term(10, 30, 30, 1);
     expect(two).toBeGreaterThan(one);
-    // The k1 saturation means the 10th occurrence adds far less than the 2nd.
     expect(ten - two).toBeLessThan(two - one + BM25_K1);
   });
 

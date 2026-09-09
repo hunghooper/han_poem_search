@@ -5,19 +5,19 @@ and the three extension points you are most likely to touch: adding a tool, addi
 and adding a retrieval source.
 
 Read [`the spec`](./the spec) first — it is the architectural source of truth.
-This document is about *how to work in the repo*, not *what to build*.
+This document is about _how to work in the repo_, not _what to build_.
 
 ---
 
 ## Prerequisites
 
-| Tool | Version | Why |
-|---|---|---|
-| Node.js | 22 LTS | Backend and frontend runtime |
-| pnpm | 9+ | Workspace manager — `corepack enable` |
-| Docker + Compose | recent | Postgres, Qdrant, Temporal, Redis |
-| Python | 3.11+ | `apps/model-service` and `pipelines/` only |
-| uv | latest | Python dependency management |
+| Tool             | Version | Why                                        |
+| ---------------- | ------- | ------------------------------------------ |
+| Node.js          | 22 LTS  | Backend and frontend runtime               |
+| pnpm             | 9+      | Workspace manager — `corepack enable`      |
+| Docker + Compose | recent  | Postgres, Qdrant, Temporal, Redis          |
+| Python           | 3.11+   | `apps/model-service` and `pipelines/` only |
+| uv               | latest  | Python dependency management               |
 
 ## Setup
 
@@ -114,7 +114,7 @@ formatting:
 - **Unit tests** live beside the code as `*.test.ts`. Every exported function in
   `packages/retrieval` and `packages/agent` needs one.
 - **Integration tests** are `*.int.test.ts` and use Testcontainers. We do not mock Postgres or
-  Qdrant — the query behaviour *is* the thing under test.
+  Qdrant — the query behaviour _is_ the thing under test.
 - **Workflow tests** use `@temporalio/testing` with the time-skipping test environment. Any
   change to workflow code needs one, because determinism bugs do not show up in unit tests.
 - **Fixtures** for retrieval quality live in `packages/retrieval/fixtures/`. Add a case
@@ -134,23 +134,22 @@ If a change makes either fail, the change is wrong, not the test.
 
 ## Extension point 1 — adding an agent tool
 
-
 Adding a tool must not require touching the agent loop. If it does, stop and fix the
 abstraction instead.
 
 1. Create `packages/agent/src/tools/<name>.ts` implementing the `Tool` interface.
-2. Define `inputSchema` with Zod. Write `description` for the LLM: say what the tool is *good
-   at* and *bad at*, not just what it does. This text is the entire basis for tool selection.
+2. Define `inputSchema` with Zod. Write `description` for the LLM: say what the tool is _good
+   at_ and _bad at_, not just what it does. This text is the entire basis for tool selection.
 3. Implement `execute`. It must **never throw** — catch everything and return a `ToolResult`
    with the right `StepStatus`:
 
-   | Situation | Status |
-   |---|---|
-   | Ran fine, zero hits | `NO_RESULT` |
+   | Situation                                  | Status           |
+   | ------------------------------------------ | ---------------- |
+   | Ran fine, zero hits                        | `NO_RESULT`      |
    | Hits exist, none above the relevance floor | `LOW_CONFIDENCE` |
-   | Network error, 5xx, unparseable response | `ERROR` |
-   | Exceeded `timeoutMs` | `TIMEOUT` |
-   | No credentials, disabled, quota exhausted | `UNAVAILABLE` |
+   | Network error, 5xx, unparseable response   | `ERROR`          |
+   | Exceeded `timeoutMs`                       | `TIMEOUT`        |
+   | No credentials, disabled, quota exhausted  | `UNAVAILABLE`    |
 
    Collapsing any of these into `NO_RESULT` is the single most common mistake in this codebase.
    A timeout and an empty result mean opposite things to the agent.
@@ -207,7 +206,7 @@ directly — an ESLint `no-restricted-imports` rule enforces this outside
 
 The gateway is OpenAI-compatible, so there is **one** adapter (`openai-compatible.ts`)
 instantiated with different credentials per provider. Do not add a provider-specific adapter;
-add a provider *config*.
+add a provider _config_.
 
 To add or fix an adapter:
 

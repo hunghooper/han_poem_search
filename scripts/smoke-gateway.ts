@@ -1,13 +1,3 @@
-/**
- * Gateway smoke runner — the spec §4.5, §18 Q1.
- *
- * Produces the results table for docs/adr/002-llm-gateway.md. Runs the seven checks against
- * each model SEQUENTIALLY with a pause between calls: the gateway throttles on "excessive
- * errors", so a parallel run measures the throttle rather than the models.
- *
- *   pnpm exec tsx scripts/smoke-gateway.ts model-a model-b ...
- */
-
 import './env.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { z } from 'zod';
@@ -20,7 +10,13 @@ const dotenv = Object.fromEntries(
     .filter((l) => l.includes('=') && !l.trimStart().startsWith('#'))
     .map((l) => {
       const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).replace(/\s+#.*$/u, '').trim()];
+      return [
+        l.slice(0, i).trim(),
+        l
+          .slice(i + 1)
+          .replace(/\s+#.*$/u, '')
+          .trim(),
+      ];
     }),
 );
 
@@ -28,7 +24,10 @@ const apiKey = process.env.RAMCLOUDS_API_KEY ?? dotenv.RAMCLOUDS_API_KEY ?? '';
 const baseURL = process.env.RAMCLOUDS_BASE_URL ?? dotenv.RAMCLOUDS_BASE_URL ?? '';
 if (!apiKey || !baseURL) throw new Error('RAMCLOUDS_API_KEY / RAMCLOUDS_BASE_URL not set');
 
-const withJsonSchema = <T extends z.ZodType<unknown>>(schema: T, json: Record<string, unknown>): T => {
+const withJsonSchema = <T extends z.ZodType<unknown>>(
+  schema: T,
+  json: Record<string, unknown>,
+): T => {
   (schema as unknown as { _jsonSchema?: Record<string, unknown> })._jsonSchema = json;
   return schema;
 };
@@ -52,12 +51,6 @@ const authorTool: LlmToolDef = {
   }),
 };
 
-/**
- * Reasoning models spend max_tokens on internal reasoning BEFORE emitting content. MEASURED:
- * glm-5.3 at max_tokens=16 returns finish_reason "length" with empty content and
- * reasoning_tokens=18; at 2000 it returns "OK". A small budget therefore fails a working model
- * and looks like the model is broken, so every check here allows room to think.
- */
 const MAX_TOKENS = 2000;
 
 const PAUSE_MS = 1200;
@@ -65,7 +58,12 @@ const pause = () => new Promise((r) => setTimeout(r, PAUSE_MS));
 const sig = () => AbortSignal.timeout(90_000);
 
 type Outcome = 'pass' | 'fail' | 'error';
-interface CheckResult { n: number; name: string; outcome: Outcome; note: string }
+interface CheckResult {
+  n: number;
+  name: string;
+  outcome: Outcome;
+  note: string;
+}
 
 async function check(
   n: number,
@@ -88,10 +86,17 @@ async function runModel(model: string): Promise<CheckResult[]> {
   out.push(
     await check(1, 'plain completion', async () => {
       const r = await p.complete(
-        { model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], maxTokens: MAX_TOKENS },
+        {
+          model,
+          messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+          maxTokens: MAX_TOKENS,
+        },
         sig(),
       );
-      return { ok: Boolean(r.text?.trim()), note: r.text ? `"${r.text.trim().slice(0, 24)}"` : 'empty text' };
+      return {
+        ok: Boolean(r.text?.trim()),
+        note: r.text ? `"${r.text.trim().slice(0, 24)}"` : 'empty text',
+      };
     }),
   );
   await pause();
@@ -102,7 +107,9 @@ async function runModel(model: string): Promise<CheckResult[]> {
       const r = await p.complete(
         {
           model,
-          messages: [{ role: 'user', content: 'Find the poem containing 細草微風岸. Use the tool.' }],
+          messages: [
+            { role: 'user', content: 'Find the poem containing 細草微風岸. Use the tool.' },
+          ],
           tools: [lookupTool],
           toolChoice: 'auto',
         },
@@ -140,7 +147,10 @@ async function runModel(model: string): Promise<CheckResult[]> {
         sig(),
       );
       const text = r.text ?? '';
-      return { ok: /旅夜書懷|杜甫/u.test(text), note: text ? `"${text.replace(/\s+/gu, ' ').slice(0, 40)}"` : 'empty text' };
+      return {
+        ok: /旅夜書懷|杜甫/u.test(text),
+        note: text ? `"${text.replace(/\s+/gu, ' ').slice(0, 40)}"` : 'empty text',
+      };
     }),
   );
   await pause();
@@ -165,7 +175,10 @@ async function runModel(model: string): Promise<CheckResult[]> {
 
   out.push(
     await check(5, 'usage present', async () => {
-      const r = await p.complete({ model, messages: [{ role: 'user', content: 'Say OK' }], maxTokens: MAX_TOKENS }, sig());
+      const r = await p.complete(
+        { model, messages: [{ role: 'user', content: 'Say OK' }], maxTokens: MAX_TOKENS },
+        sig(),
+      );
       return {
         ok: !r.flags.includes('usage_unavailable') && r.usage.inputTokens > 0,
         note: `in=${r.usage.inputTokens} out=${r.usage.outputTokens}`,
@@ -178,7 +191,11 @@ async function runModel(model: string): Promise<CheckResult[]> {
     await check(6, 'abort cancels', async () => {
       const ac = new AbortController();
       const pending = p.complete(
-        { model, messages: [{ role: 'user', content: 'Write a long essay about 唐詩.' }], maxTokens: MAX_TOKENS },
+        {
+          model,
+          messages: [{ role: 'user', content: 'Write a long essay about 唐詩.' }],
+          maxTokens: MAX_TOKENS,
+        },
         ac.signal,
       );
       setTimeout(() => ac.abort(), 60);
@@ -196,11 +213,18 @@ async function runModel(model: string): Promise<CheckResult[]> {
   out.push(
     await check(7, 'CJK round-trip', async () => {
       const r = await p.complete(
-        { model, messages: [{ role: 'user', content: '請原樣重複這句話：細草微風岸，危檣獨夜舟。' }], maxTokens: MAX_TOKENS },
+        {
+          model,
+          messages: [{ role: 'user', content: '請原樣重複這句話：細草微風岸，危檣獨夜舟。' }],
+          maxTokens: MAX_TOKENS,
+        },
         sig(),
       );
       const text = r.text ?? '';
-      return { ok: /細草微風岸/u.test(text), note: text ? `"${text.replace(/\s+/gu, ' ').slice(0, 30)}"` : 'empty text' };
+      return {
+        ok: /細草微風岸/u.test(text),
+        note: text ? `"${text.replace(/\s+/gu, ' ').slice(0, 30)}"` : 'empty text',
+      };
     }),
   );
 
@@ -217,14 +241,16 @@ for (const model of models) {
   console.log(`\n=== ${model} ===`);
   const results = await runModel(model);
   all[model] = results;
-  for (const r of results) console.log(`  ${mark(r.outcome)} ${r.n}. ${r.name.padEnd(24)} ${r.note}`);
-  // Checks 2, 3 and 4 decide whether a model can drive the agent loop at all (§4.5).
+  for (const r of results)
+    console.log(`  ${mark(r.outcome)} ${r.n}. ${r.name.padEnd(24)} ${r.note}`);
   const agentReady = [2, 3, 4].every((n) => results.find((r) => r.n === n)?.outcome === 'pass');
   console.log(`  -> ${agentReady ? 'USABLE for the agent loop' : 'NOT usable for the agent loop'}`);
   await pause();
 }
 
-console.log('\n\n| model | 1 text | 2 tool call | 3 tool result | 4 two tools | 5 usage | 6 abort | 7 CJK | agent-capable |');
+console.log(
+  '\n\n| model | 1 text | 2 tool call | 3 tool result | 4 two tools | 5 usage | 6 abort | 7 CJK | agent-capable |',
+);
 console.log('|---|---|---|---|---|---|---|---|---|');
 for (const [model, results] of Object.entries(all)) {
   const cell = (n: number) => {
@@ -237,5 +263,8 @@ for (const [model, results] of Object.entries(all)) {
   );
 }
 
-writeFileSync('docs/smoke-latest.json', JSON.stringify({ ranAt: new Date().toISOString(), baseURL, results: all }, null, 2));
+writeFileSync(
+  'docs/smoke-latest.json',
+  JSON.stringify({ ranAt: new Date().toISOString(), baseURL, results: all }, null, 2),
+);
 console.log('\nwrote docs/smoke-latest.json');

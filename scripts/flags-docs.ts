@@ -1,19 +1,3 @@
-/**
- * Regenerate `docs/flags.md` from the flag registry.
- *
- * CONTRIBUTING names this in three places as a required step when adding a source, a status or
- * an aggregate flag — and the script it names had never been written, so every one of those
- * instructions failed at the last line. This is that script.
- *
- * The point of generating rather than writing the document is the point of the registry
- * itself: derived flags are `${source}_${status}` and there are |sources| x |statuses| of them.
- * A hand-written list would go stale the first time a source was added, and a stale list of
- * flags is worse than none — it is the document someone checks to find out whether a flag is
- * real.
- *
- * Run: pnpm flags:docs
- */
-
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ALL_AGGREGATE_FLAGS, flag } from '@han/shared/flags';
@@ -22,12 +6,6 @@ import { ALL_STEP_STATUSES, KNOWN_SOURCE_IDS, StepStatus } from '@han/shared/sta
 const ALL_STATUSES = ALL_STEP_STATUSES;
 const ALL_SOURCES = KNOWN_SOURCE_IDS;
 
-/**
- * What each status means, in the words the vocabulary exists to keep apart.
- *
- * §5.1 calls collapsing these the single most common mistake in the codebase, so the document
- * that lists the flags has to carry the distinction rather than just the names.
- */
 const STATUS_MEANING: Record<string, string> = {
   [StepStatus.HAS_RESULT]: 'The source ran and found something.',
   [StepStatus.NO_RESULT]: 'The source ran and found nothing. It looked.',

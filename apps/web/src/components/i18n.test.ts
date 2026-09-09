@@ -4,27 +4,52 @@ import { UI_LANGUAGES } from '@han/shared/runtime-config';
 import { msg, TRACE_CODES } from '@han/shared/trace';
 import { TRACE_LABELS } from './i18n-trace';
 
-/**
- * Every key the settings panel derives must exist in every language. A missing one renders the
- * raw key in the UI — which is how `settings.enabled` shipped as literal text: the panel builds
- * its label key from the FIELD name, and the dictionary had a hand-picked alias instead.
- */
 const DERIVED_KEYS = [
-  // settings.${field} for every number and boolean the panel renders
-  'topK', 'fuseTopN', 'rrfK',
-  'verifyFloor', 'noiseFloor', 'minLexicalOverlap', 'minAgreeingWindows',
-  'enabled', 'skipWhenNoOverlap', 'maxIterations', 'maxToolCalls', 'maxWallClockMs', 'maxCostUsd',
+  'topK',
+  'fuseTopN',
+  'rrfK',
+  'verifyFloor',
+  'noiseFloor',
+  'minLexicalOverlap',
+  'minAgreeingWindows',
+  'enabled',
+  'skipWhenNoOverlap',
+  'maxIterations',
+  'maxToolCalls',
+  'maxWallClockMs',
+  'maxCostUsd',
 ].map((k) => `settings.${k}`);
 
 const STATIC_KEYS = [
-  'app.tagline', 'search.placeholder', 'search.button', 'search.running',
-  'settings.title', 'settings.close', 'settings.reset', 'settings.session',
-  'settings.display', 'settings.language', 'settings.vertical', 'settings.debug',
-  'settings.hideSkipped', 'settings.retrieval', 'settings.sources', 'settings.exactAlways',
-  'settings.confidence', 'settings.uncalibrated', 'settings.agent', 'settings.models',
-  'settings.modelReasoning', 'settings.modelAnswer', 'settings.fromEnv',
-  'answer.none', 'answer.notAuthoritative', 'answer.horizontal', 'answer.vertical',
-  'trace.inscription', 'answer.ambiguous',
+  'app.tagline',
+  'search.placeholder',
+  'search.button',
+  'search.running',
+  'settings.title',
+  'settings.close',
+  'settings.reset',
+  'settings.session',
+  'settings.display',
+  'settings.language',
+  'settings.vertical',
+  'settings.debug',
+  'settings.hideSkipped',
+  'settings.retrieval',
+  'settings.sources',
+  'settings.exactAlways',
+  'settings.confidence',
+  'settings.uncalibrated',
+  'settings.agent',
+  'settings.models',
+  'settings.modelReasoning',
+  'settings.modelAnswer',
+  'settings.fromEnv',
+  'answer.none',
+  'answer.notAuthoritative',
+  'answer.horizontal',
+  'answer.vertical',
+  'trace.inscription',
+  'answer.ambiguous',
 ];
 
 describe('i18n', () => {
@@ -36,11 +61,6 @@ describe('i18n', () => {
     }
   });
 
-  /**
-   * Stronger than the hand-kept lists above, and it needs no maintenance: a key added to one
-   * language and forgotten in another falls back to English for whoever chose that language —
-   * a gap invisible to anyone working in one language, which is everyone most of the time.
-   */
   it('has identical key sets in all three languages', () => {
     const keys = Object.fromEntries(
       UI_LANGUAGES.map((l) => [l, new Set(Object.keys(DICTS[l]))]),
@@ -66,12 +86,6 @@ describe('i18n', () => {
   });
 });
 
-/**
- * The trace is the part a reader most needs in their own language: it is the system explaining
- * why it decided what it decided. A code emitted on the server with no label beside it renders
- * as English inside a Vietnamese page — which reads as a translation bug rather than the
- * omission it is, and nothing but this test would catch it.
- */
 describe('trace labels', () => {
   it('has every code the server can emit, in every language', () => {
     for (const lang of UI_LANGUAGES) {
@@ -95,7 +109,6 @@ describe('trace labels', () => {
     expect(tTrace('en', msg('trace.normalised', { n: 10 }))).toBe('Normalised to 10 characters');
   });
 
-  /** The prosody summary is built from its checks; the whole sentence must be one language. */
   it('renders composed messages, not a translated frame around English', () => {
     const composed = msg('trace.verify.passed', {}, [
       msg('trace.rhyme.share', { chars: '霜、鄉' }),
@@ -109,24 +122,11 @@ describe('trace labels', () => {
     expect(vi).not.toContain('alternation');
   });
 
-  /**
-   * The case that decides whether this design was worth building: a run recorded before the
-   * codes existed replays with no trace at all, and must still read as the English it was.
-   */
   it('falls back to the English the server sent when a code has no label', () => {
     expect(tTrace('vi', null, 'Reading your query')).toBe('Reading your query');
     expect(tTrace('vi', msg('trace.notAThing'), 'Reading your query')).toBe('Reading your query');
   });
 
-  /**
-   * Params cross the wire inside the event, and the wire codec (@han/shared/serde) rewrites
-   * EVERY key it walks: snake_case going out, camelCase coming back. A param named
-   * `source_url` would therefore arrive as `sourceUrl`, never match its own placeholder, and
-   * render as the literal text "{source_url}" — with no error anywhere.
-   *
-   * One lowercase word per param keeps the codec a no-op. This test is the only thing that
-   * says so.
-   */
   it('uses only param names the wire codec leaves alone', () => {
     const safe = /^[a-z][a-z0-9]*$/;
     let checked = 0;
@@ -139,12 +139,9 @@ describe('trace labels', () => {
         }
       }
     }
-    // A test that walks nothing passes for the wrong reason. This one nearly did: an earlier
-    // version of the pattern lost its escapes, matched no placeholders at all, and went green.
     expect(checked).toBeGreaterThan(100);
   });
 
-  /** A raw key on screen teaches a reader nothing; with no fallback, say nothing. */
   it('returns null rather than a raw code when there is no fallback either', () => {
     expect(tTrace('vi', msg('trace.notAThing'))).toBeNull();
   });

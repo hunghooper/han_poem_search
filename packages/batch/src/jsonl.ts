@@ -1,10 +1,3 @@
-/**
- * JSONL in, JSONL out — streamed.
- *
- * Tens of thousands of rows is the stated case, so nothing here holds the whole file. The
- * reader yields rows as they arrive; the writer takes them one at a time.
- */
-
 import { createReadStream, createWriteStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { once } from 'node:events';
@@ -12,18 +5,9 @@ import type { SourceRow } from './types.js';
 import type { ExportValue } from './types.js';
 
 export interface JsonlReadOptions {
-  /** Stop after this many rows. Used by the scan, which only needs a sample. */
   limit?: number;
 }
 
-/**
- * A malformed line is reported, not skipped and not fatal.
- *
- * Skipping silently would shift every later row's index and quietly shorten the output, which
- * is the kind of drift that is only noticed when the totals do not add up. Throwing on line
- * 40,000 of 50,000 would throw away the work. So the row is yielded with a parse error
- * attached and the run records it as an ERROR row.
- */
 export interface ParsedRow extends SourceRow {
   parseError?: string;
 }
@@ -61,7 +45,6 @@ function parseLine(line: string, index: number): ParsedRow {
   }
 }
 
-/** Count rows without parsing them — for the pre-run estimate. */
 export async function countJsonlRows(path: string): Promise<number> {
   const stream = createReadStream(path, { encoding: 'utf8' });
   const lines = createInterface({ input: stream, crlfDelay: Infinity });
@@ -75,14 +58,6 @@ export async function countJsonlRows(path: string): Promise<number> {
   return n;
 }
 
-/**
- * Writes the original row back with one added key.
- *
- * The results are NESTED under `han` rather than flattened with a prefix. JSONL is read by a
- * script, and `row.han.status` is both easier to destructure and impossible to collide with a
- * column the user already had — a file that already has an `author` column keeps it, and ours
- * sits at `han.author` beside it rather than overwriting it or fighting for a prefix.
- */
 export class JsonlWriter {
   private readonly out: ReturnType<typeof createWriteStream>;
 
@@ -94,9 +69,9 @@ export class JsonlWriter {
     await this.writeRaw({ ...original, han });
   }
 
-  /** One object, verbatim. Used by the XLSX converter, which has no results to attach yet. */
   async writeRaw(row: Record<string, unknown>): Promise<void> {
-    if (!this.out.write(JSON.stringify(row) + String.fromCharCode(10))) await once(this.out, 'drain');
+    if (!this.out.write(JSON.stringify(row) + String.fromCharCode(10)))
+      await once(this.out, 'drain');
   }
 
   async close(): Promise<void> {

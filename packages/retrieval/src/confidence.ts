@@ -1,18 +1,3 @@
-/**
- * Confidence policy — the spec §8.
- *
- * A single pure function, so it is testable and tunable without touching the pipeline.
- * Thresholds live in config, never in code.
- *
- * §7.4 insists on three separate questions, and this function keeps them separate:
- *   1. Candidate existence — did the index return rows?
- *   2. Candidate relevance — did the reranker score any above the floor?
- *   3. Final confidence   — is this enough to answer THIS question?
- *
- * `candidateCount = 20` with `top1 = 0.11` is LOW_CONFIDENCE, not a successful search. There
- * is a test asserting that, and CONTRIBUTING.md forbids weakening it.
- */
-
 import { msg, type TraceMsg } from '@han/shared/trace';
 import { StepStatus } from '@han/shared/status';
 import { AggregateFlag } from '@han/shared/flags';
@@ -21,31 +6,12 @@ import type { ExactMatchKind } from './sources/exact-ngram.js';
 export type QueryIntent = 'fragment_lookup' | 'topical' | 'metadata' | 'interpretation';
 
 export interface ConfidenceThresholds {
-  /** Rerank score at or above which a candidate is worth verifying. */
   verifyFloor: number;
-  /** Rerank score below which candidates are treated as noise. */
   noiseFloor: number;
-  /** Windows that must agree for a partial exact match to count. */
   minAgreeingWindows: number;
-  /**
-   * Minimum share of the query's characters that must appear in a candidate before any rerank
-   * score is believed.
-   *
-   * MEASURED FAILURE. Reranker scores are not calibrated relevance probabilities. The nonsense
-   * control 龘龘龘龘龘龘 was scored 0.99 against 韓愈《駑驥》 — a poem sharing not one character
-   * with it. Trusting the score alone produced exactly the outcome §16 forbids: an answer
-   * assembled from irrelevant top-k. A cross-encoder given out-of-distribution input returns a
-   * confident number, not an admission of ignorance, so something deterministic has to bound
-   * it. Character overlap is cheap, has no failure mode of its own, and cannot be fooled.
-   */
   minLexicalOverlap: number;
 }
 
-/**
- * PROVISIONAL AND UNCALIBRATED — the spec §8 says to ship these labelled as such and
- * set them properly with the offline eval harness in Phase 5. They are not tuned. Do not
- * present them as tuned, and do not change them without a calibration run recorded in an ADR.
- */
 export const PROVISIONAL_THRESHOLDS: ConfidenceThresholds = {
   verifyFloor: 0.6,
   noiseFloor: 0.35,
@@ -57,12 +23,7 @@ export interface EvaluateInput {
   intent: QueryIntent;
   exactMatch: { kind: ExactMatchKind; workIds: string[]; windowsMatched: number };
   candidateCount: number;
-  /** Descending. Empty when the reranker was unavailable or timed out. */
   rerankScores: number[];
-  /**
-   * Share of the query's distinct characters present in the best candidate, 0..1.
-   * Null when it could not be computed — treated as "unknown", never as "fine".
-   */
   lexicalOverlap?: number | null;
 }
 
@@ -71,7 +32,6 @@ export interface EvaluateOutput {
   flags: string[];
   confidence: number;
   reason: string;
-  /** The same reason, renderable in the reader's language. */
   trace: TraceMsg;
 }
 
@@ -82,24 +42,9 @@ export function evaluateLocal(
   const { exactMatch: em } = input;
   const top1 = input.rerankScores[0] ?? null;
 
-  /**
-   * The overlap gate, applied BEFORE the exact short-circuit rather than only after it.
-   *
-   * §7.1 lets five contiguous characters resolving to one work answer at confidence 1.0. That
-   * is right when five characters is most of what the user pasted and wrong when it is a
-   * ninth of it — measured on a real batch, 10.8% of exact matches returned a poem sharing
-   * under 40% of the query's characters, and the worst shared 15%.
-   *
-   * The floor is the SAME 0.15 the reranker path already uses (ADR 008), not a new number:
-   * the question both paths ask is identical — "is this candidate even about the same words"
-   * — and a second threshold for one question is a second thing nobody calibrated. On the
-   * measured distribution it rejects 0.9% of exact matches, all of them from the far tail.
-   */
   const overlapNow = input.lexicalOverlap;
   const belowFloor =
-    overlapNow !== null &&
-    overlapNow !== undefined &&
-    overlapNow < thresholds.minLexicalOverlap;
+    overlapNow !== null && overlapNow !== undefined && overlapNow < thresholds.minLexicalOverlap;
 
   if (em.kind !== 'none' && belowFloor) {
     return {
@@ -144,8 +89,6 @@ export function evaluateLocal(
     };
   }
 
-  // No exact match. Everything below depends on the semantic layer, which is Phase 2 — with
-  // no rerank scores the honest answer is "nothing found", not a low-confidence guess.
   if (input.candidateCount === 0) {
     return {
       status: StepStatus.NO_RESULT,
@@ -166,8 +109,6 @@ export function evaluateLocal(
     };
   }
 
-  // Deterministic gate BEFORE the score is read. A candidate that shares almost nothing with
-  // the query is not a low-confidence answer; it is not an answer.
   const overlap = input.lexicalOverlap;
   if (overlap !== null && overlap !== undefined && overlap < thresholds.minLexicalOverlap) {
     return {

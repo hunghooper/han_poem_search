@@ -1,9 +1,3 @@
-/**
- * Collection readers. Shapes verified against the pinned corpus, not assumed — see the notes
- * in each reader. §3 of the brief says to do exactly this before coding, and three of its
- * stated assumptions turned out not to hold.
- */
-
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -12,10 +6,8 @@ export interface RawPoem {
   sourceFile: string;
   title: string | null;
   author: string | null;
-  /** 詞牌, for 詞 records. */
   rhythmic: string | null;
   paragraphs: string[];
-  /** Upstream id where one exists. Absent for 宋詞 and 御定全唐詩. */
   upstreamId: string | null;
 }
 
@@ -32,10 +24,6 @@ const readJson = async <T>(path: string): Promise<T> =>
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === 'string');
 
-/**
- * 全唐诗/poet.{tang,song}.*.json
- * { id, title, author, paragraphs[] } — Traditional script, one couplet per paragraph.
- */
 export async function readQuanTangShi(root: string, prefix: 'tang' | 'song'): Promise<RawPoem[]> {
   const dir = join(root, '全唐诗');
   const files = (await readdir(dir))
@@ -62,13 +50,6 @@ export async function readQuanTangShi(root: string, prefix: 'tang' | 'song'): Pr
   return out;
 }
 
-/**
- * 宋词/ci.song.*.json
- * { author, rhythmic, paragraphs[] } — NO id field, and SIMPLIFIED script, contradicting
- * §3.1 item 3 which lists 宋詞 as Traditional. normalize() converts it, so the effect is
- * confined to this note. Records also contain □ placeholders for illegible characters, which
- * are stripped from textMatch by isCjk() — a line with □ is genuinely shorter than it looks.
- */
 export async function readSongCi(root: string): Promise<RawPoem[]> {
   const dir = join(root, '宋词');
   const files = (await readdir(dir))
@@ -96,10 +77,6 @@ export async function readSongCi(root: string): Promise<RawPoem[]> {
   return out;
 }
 
-/**
- * 全唐诗/authors.{tang,song}.json — { id, name, desc }
- * 宋词/author.song.json          — { name, description, short_description }, no id
- */
 export async function readAuthors(root: string): Promise<RawAuthor[]> {
   const specs: Array<{ file: string; edition: string; bioKey: string }> = [
     { file: '全唐诗/authors.tang.json', edition: '全唐詩', bioKey: 'desc' },

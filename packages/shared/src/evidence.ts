@@ -1,10 +1,3 @@
-/**
- * Evidence — the spec §5.3. FROZEN CONTRACT.
- *
- * Every result from every source is normalized into this shape before aggregation.
- * No exceptions.
- */
-
 import { z } from 'zod';
 
 export const RetrievalMethod = z.enum([
@@ -18,11 +11,6 @@ export const RetrievalMethod = z.enum([
 ]);
 export type RetrievalMethod = z.infer<typeof RetrievalMethod>;
 
-/**
- * Provenance is required for local results (§3.1 item 4). The upstream corpus is crawled
- * from the web and contains OCR errors and disputed readings — we surface what the dataset
- * says, pinned to a commit, never "the truth".
- */
 export const ProvenanceSchema = z.object({
   dataset: z.string(),
   file: z.string(),

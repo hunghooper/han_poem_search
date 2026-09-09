@@ -1,25 +1,3 @@
-/**
- * Running a batch.
- *
- * WHERE THIS RUNS, AND WHY IT IS NOT A TEMPORAL WORKFLOW. The agent loop moved into Temporal
- * in Phase 4 because a single run is a multi-minute conversation with a model, holding state
- * that exists nowhere else until it finishes. A batch is the opposite shape: its state is a
- * row in `batch_row`, committed the moment that row is done. Killing the API mid-batch loses
- * at most the row in flight; the job is marked `interrupted` at the next boot and a re-run
- * picks up exactly the rows that never got a result.
- *
- * So the durability here is Postgres's rather than Temporal's — and it is real, not a claim:
- * rows are idempotent on (job_id, row_index), so a resumed job cannot pay twice for work it
- * already did. What it does NOT give, and Temporal would, is automatic retry of the
- * orchestration itself — and after `flagInterrupted`, that is deliberate: restarting a batch
- * costs real money, so a person asks for it.
- *
- * Each row's AGENT still runs as a Temporal workflow, because `runSearch` calls
- * `runAgentWorkflow` exactly as a single search does. Batch reuses the search pipeline whole
- * rather than reimplementing it: a second copy would drift, and "the batch says one thing and
- * the UI says another" is a bug with no good failure mode.
- */
-
 import { and, eq, inArray } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { batchJob, batchRow } from '@han/db/schema';
@@ -36,9 +14,7 @@ import type { RunStore } from './events.js';
 
 export interface BatchDeps extends SearchDeps {
   store: RunStore;
-  /** Where a caller-supplied key is handed to the worker. Null means no live trace or agent key. */
   keyStore: Redis | null;
-  /** Rebuilds the tool set against a different provider, for a job running on a visitor's key. */
   makeToolsWith: (provider: LlmProvider) => SearchDeps['makeTools'];
 }
 
@@ -53,47 +29,19 @@ export interface JobRow {
   costUsd: number;
 }
 
-/** How many rows are searched at once. Bounded by the gateway and the GPU, not by ambition. */
 const CONCURRENCY = 4;
 
 const ALL_COLUMNS: string[] = EXPORT_COLUMNS.map((c) => c.key);
 
-/**
- * Live jobs, so progress can be read and a cancel can be honoured mid-run.
- *
- * `done`/`total` describe THIS PASS, not the job's lifetime, and the difference is the whole
- * point. Progress was counted as "rows that have any result", which is right for a first pass
- * and meaningless for a re-run: every row already has one, so re-running 12,360 rows of a
- * 14,519-row job displayed 14,519/14,519 from the first second and never moved. A progress
- * bar has to measure the work being done now.
- */
 const running = new Map<string, { cancelled: boolean; done: number; total: number }>();
 
-/** How far the pass currently executing has got. Null when nothing is running. */
 export function passProgress(jobId: string): { done: number; total: number } | null {
   const h = running.get(jobId);
   return h ? { done: h.done, total: h.total } : null;
 }
 
-/**
- * A gateway key supplied by whoever started this job.
- *
- * In memory only, and dropped when the job ends: it is a secret, so it must not go into
- * `batch_job` where it would outlive the visit and sit in a backup. A job resumed after a
- * restart therefore has no key and runs without the agent — which is the honest degradation,
- * because the person who could authorise the spend is no longer there to be asked.
- */
 const jobKeys = new Map<string, { provider: LlmProvider; key: string }>();
 
-/**
- * The provider AND the raw key, because two different processes need it.
- *
- * The API builds tools from the provider for answer generation. The AGENT runs in the worker,
- * which reads the key out of Redis under the run id — so holding only a provider here left
- * the worker with nothing and every agent call in a batch died with CONFIG_INVALID while the
- * API reported the job started normally. A batch supplied with a key ran for its full length
- * and never reached the model once.
- */
 export function setJobCredentials(
   jobId: string,
   creds: { provider: LlmProvider; key: string } | null,
@@ -111,28 +59,15 @@ export function cancel(jobId: string): boolean {
   return true;
 }
 
-/**
- * Run every row that does not already have a result.
- *
- * Resumable by construction: the set of remaining rows comes from what is in the table, so
- * calling this twice on one job is safe, and calling it after a crash is how the job finishes.
- */
 export async function runBatch(
   job: JobRow,
   deps: BatchDeps,
-  /** Null continues an unfinished run; a mode re-runs a job that already has results. */
   mode: RerunMode | null = null,
 ): Promise<void> {
   if (running.has(job.id)) return;
   const handle = { cancelled: false, done: 0, total: 0 };
   running.set(job.id, handle);
 
-  // EVERY column is computed and stored, not the ones the user has currently ticked.
-  //
-  // The selection is an export-time concern: the user picks columns when they download, and
-  // may download twice with different picks. Storing only the ticked ones would mean a
-  // different pick needs the whole batch run again — hours and real money to add a column
-  // that was already sitting in the search result when the row was searched.
   const selected = ALL_COLUMNS;
   const column = job.queryColumn;
   if (!column) throw new Error('BATCH_NO_COLUMN: the job has no query column');
@@ -152,15 +87,8 @@ export async function runBatch(
 
     for await (const row of readJsonl(job.dataPath)) {
       if (handle.cancelled) break;
-      // A SET of indexes, not "everything below the highest one written". Rows finish four at
-      // a time, so a process killed mid-group can leave index 5 unwritten while index 7 is
-      // committed — and a high-water mark would then skip row 5 for good, marking the job
-      // done with a row that was never searched.
       if (skip.has(row.index)) continue;
 
-      // The cap stops the AGENT, not the run. Remaining rows still get a local search and a
-      // real status: reporting them as unexecuted would say "we did not look" about rows we
-      // did look at, which is the collapse the status vocabulary exists to prevent.
       const agentAllowed =
         job.agentEnabled && (job.agentCapUsd === null || spent < job.agentCapUsd);
 
@@ -193,8 +121,6 @@ export async function runBatch(
       })
       .where(eq(batchJob.id, job.id));
   } catch (e) {
-    // The job stops, and says why. A batch that dies silently at row 12,000 leaves the user
-    // watching a progress bar that will never move again.
     await deps.db
       .update(batchJob)
       .set({
@@ -211,12 +137,6 @@ export async function runBatch(
   }
 }
 
-/**
- * One row.
- *
- * Never throws. A row that fails is a row with an ERROR status, not a batch that stops: one
- * malformed cell in 50,000 must not cost the other 49,999.
- */
 async function searchOne(
   row: { index: number; values: Record<string, unknown>; parseError?: string },
   column: string,
@@ -248,7 +168,6 @@ async function searchOne(
 
   const query = cellText(row.values[column]);
   if (query.length === 0) {
-    // An empty cell was not searched. SKIPPED, not NO_RESULT: the corpus was never asked.
     const result = buildRow({ status: StepStatus.SKIPPED, outcome: null, top: null }, columns);
     await write(StepStatus.SKIPPED, result, null, 0);
     return { costUsd: 0 };
@@ -261,7 +180,6 @@ async function searchOne(
       ...deps.config,
       agent: { ...deps.config.agent, enabled: agentAllowed },
     };
-    // A job started with someone's own key bills that key for every row of it.
     const creds = jobKeys.get(job.id) ?? null;
     const rowDeps = creds
       ? {
@@ -272,27 +190,24 @@ async function searchOne(
         }
       : { ...deps, config };
 
-    // Hand the key to the worker for THIS row, the same way a single search does. Without
-    // this the agent activity looks up `runkey:<runId>`, finds nothing, and fails.
     if (creds) await stashSessionKey(deps.keyStore, runId, creds.key);
     try {
       const outcome = await runSearch(rowDeps, deps.store, runId, query);
-    const costUsd = costOf(deps.store, runId);
+      const costUsd = costOf(deps.store, runId);
 
-    const result = buildRow(
-      {
-        status: outcome.status,
-        outcome,
-        top: outcome.evidence[0] ?? null,
-        costUsd,
-        latencyMs: Date.now() - started,
-      },
-      columns,
-    );
+      const result = buildRow(
+        {
+          status: outcome.status,
+          outcome,
+          top: outcome.evidence[0] ?? null,
+          costUsd,
+          latencyMs: Date.now() - started,
+        },
+        columns,
+      );
       await write(outcome.status, result, runId, costUsd);
       return { costUsd };
     } finally {
-      // Gone as soon as the row is done, rather than sitting out the hour-long expiry.
       await dropSessionKey(deps.keyStore, runId);
     }
   } catch (e) {
@@ -309,7 +224,6 @@ async function searchOne(
   }
 }
 
-/** What this row actually spent, summed from the event metadata the run already records. */
 function costOf(store: RunStore, runId: string): number {
   let total = 0;
   for (const e of store.since(runId, -1)) {
@@ -319,27 +233,10 @@ function costOf(store: RunStore, runId: string): number {
   return Math.round(total * 1e6) / 1e6;
 }
 
-/**
- * How a second run over a job that already has results should treat those results.
- *
- * `unresolved` is the one people actually want, and the workflow it serves is the reason this
- * exists: run the whole file locally for nothing, look at what came back, then spend money
- * only on the rows the corpus could not settle. Re-running the rows that already matched
- * exactly would pay a model to re-confirm answers that are already certain.
- */
 export type RerunMode = 'unresolved' | 'all';
 
-/**
- * Statuses a re-run leaves alone. Everything else is worth another attempt.
- *
- * SKIPPED is here because in a batch it means one thing only: the cell was empty. No amount of
- * agent will find a poem in a blank cell, so counting those rows as pending would inflate
- * every estimate — on a file with many blanks, by a lot — and quote for work that returns
- * immediately. A row that errored or timed out IS worth retrying, and is not in this list.
- */
 const SETTLED: readonly string[] = [StepStatus.HAS_RESULT, StepStatus.SKIPPED];
 
-/** Exported for its test: the line between "leave it alone" and "worth another attempt". */
 export const isSettled = (status: string): boolean => SETTLED.includes(status);
 
 async function indexesToSkip(
@@ -360,7 +257,6 @@ async function indexesToSkip(
   return new Set(rows.map((r) => r.rowIndex));
 }
 
-/** How many rows a run in this mode would actually search. What the estimate must be built on. */
 export async function countPending(
   db: NodePgDatabase<Record<string, never>>,
   jobId: string,
@@ -370,26 +266,6 @@ export async function countPending(
   return totalRows - (await indexesToSkip(db, jobId, mode)).size;
 }
 
-/**
- * Jobs that were running when the process died. They are MARKED, not restarted.
- *
- * This used to relaunch them, and the reasoning was sound as far as it went: a batch
- * interrupted by a deploy otherwise sits at `running` forever, showing a progress bar nobody
- * is advancing, which looks exactly like a slow job. Marking it solves that too, and does not
- * spend money to do it.
- *
- * WHAT WENT WRONG. `runBatch` writes `running` when it starts and the terminal status only
- * when it finishes, so a process killed mid-run leaves the job `running` for good. In
- * development the API runs under `tsx watch` and reboots on every file save — so one abandoned
- * job was relaunched on save after save, and a cancel racing a fresh resume was simply
- * overwritten. MEASURED on a real job: 5,296 rows to 5,424, **$11.88**, none of it asked for,
- * and `agent_cap_usd` was null so nothing capped it.
- *
- * An interrupted job now says `interrupted` and waits. Picking it back up is the re-run the
- * API already makes a person ask for out loud — `rerun: 'unresolved'` runs exactly the rows
- * that never got a result. Resuming is one click; it is just no longer something the machine
- * decides on its own with someone else's money.
- */
 export async function flagInterrupted(deps: BatchDeps): Promise<string[]> {
   const jobs = await deps.db
     .select({ id: batchJob.id })

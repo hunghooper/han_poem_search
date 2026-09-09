@@ -19,10 +19,6 @@ describe('checkRow', () => {
     expect(checkRow({ text: '床前明月光' }, 0).missing.sort()).toEqual(['author', 'title']);
   });
 
-  /**
-   * "text is missing" and "text is there but is not Han verse" are different problems and a
-   * person fixes them differently, so the check reports one or the other, never both.
-   */
   it('separates an absent text from a text that is not Han verse', () => {
     expect(checkRow({ ...good, text: '' }, 0).missing).toEqual(['text']);
     expect(checkRow({ ...good, text: 'hello there' }, 0).missing).toEqual(['text_han']);
@@ -52,10 +48,6 @@ describe('CorpusAdditionSchema', () => {
     expect(CorpusAdditionSchema.safeParse(good).success).toBe(true);
   });
 
-  /**
-   * A field the schema does not know is a field nobody agreed to store. Dropping it silently
-   * would let a submitter believe their data went in.
-   */
   it('refuses unknown fields rather than dropping them', () => {
     const r = CorpusAdditionSchema.safeParse({ ...good, translation: 'Trước giường ánh trăng' });
     expect(r.success).toBe(false);
@@ -68,7 +60,11 @@ describe('CorpusAdditionSchema', () => {
   });
 
   it('refuses a source_url that is not a url', () => {
-    expect(CorpusAdditionSchema.safeParse({ ...good, source_url: 'not a url' }).success).toBe(false);
-    expect(CorpusAdditionSchema.safeParse({ ...good, source_url: 'https://a.example/1' }).success).toBe(true);
+    expect(CorpusAdditionSchema.safeParse({ ...good, source_url: 'not a url' }).success).toBe(
+      false,
+    );
+    expect(
+      CorpusAdditionSchema.safeParse({ ...good, source_url: 'https://a.example/1' }).success,
+    ).toBe(true);
   });
 });

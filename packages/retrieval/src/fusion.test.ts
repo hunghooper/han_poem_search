@@ -6,7 +6,10 @@ const doc = (i: string) => ({ id: i });
 
 describe('reciprocalRankFusion', () => {
   it('scores a single list by reciprocal rank', () => {
-    const [first, second] = reciprocalRankFusion([{ source: 'bm25', items: [doc('a'), doc('b')] }], id);
+    const [first, second] = reciprocalRankFusion(
+      [{ source: 'bm25', items: [doc('a'), doc('b')] }],
+      id,
+    );
     expect(first!.score).toBeCloseTo(1 / (RRF_K + 1));
     expect(second!.score).toBeCloseTo(1 / (RRF_K + 2));
   });
@@ -19,14 +22,12 @@ describe('reciprocalRankFusion', () => {
       ],
       id,
     );
-    // 'shared' is second in both lists, so it beats either list's first place.
     expect(fused[0]!.item.id).toBe('shared');
     expect(fused[0]!.agreement).toBe(2);
     expect(fused[0]!.ranks).toEqual({ bm25: 2, vector: 2 });
   });
 
   it('needs no score calibration — only order matters', () => {
-    // Same order, wildly different underlying scales.
     const a = reciprocalRankFusion([{ source: 'x', items: [doc('p'), doc('q')] }], id);
     const b = reciprocalRankFusion([{ source: 'y', items: [doc('p'), doc('q')] }], id);
     expect(a.map((f) => f.item.id)).toEqual(b.map((f) => f.item.id));

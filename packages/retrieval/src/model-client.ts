@@ -1,11 +1,3 @@
-/**
- * Client for the model sidecar — the spec §2.1.
- *
- * The sidecar is the only source of embeddings, at ingest time and at query time both. Nothing
- * else may embed text: two embedding paths that drift apart produce a vector index that
- * retrieves confidently and wrongly, with no error anywhere.
- */
-
 import { AppError } from '@han/shared/errors';
 
 export interface ModelHealth {
@@ -21,15 +13,6 @@ export interface ModelHealth {
 export interface ModelClientOptions {
   baseUrl: string;
   timeoutMs?: number;
-  /**
-   * Separate, shorter budget for reranking.
-   *
-   * Reranking is a cross-encoder pass over up to 50 candidates and is by far the heaviest
-   * online call. Under GPU contention it was measured at 60s — long enough that a user gives
-   * up, and long past the point where the honest answer is "the reranker did not respond".
-   * §12 puts tool timeouts at 8s; the reranker is held to the same standard, and a timeout
-   * degrades the run to local_incomplete instead of blocking it.
-   */
   rerankTimeoutMs?: number;
 }
 

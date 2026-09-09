@@ -1,10 +1,3 @@
-/**
- * Environment parsing — the spec §4.4.
- *
- * Parsed and validated ONCE, at boot. The process exits with a readable message if anything
- * required is missing. Never `process.env.FOO!` scattered through the codebase.
- */
-
 import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
 
@@ -33,16 +26,17 @@ export const EnvSchema = z.object({
   RERANKER_MODEL_ID: z.string().default('BAAI/bge-reranker-v2-m3'),
 
   CORPUS_REPO_URL: z.string().url().default('https://github.com/chinese-poetry/chinese-poetry'),
-  /**
-   * Pinned deliberately. Provenance on every local result references this SHA (§3.1 item 4),
-   * and an unpinned corpus makes a retrieval regression impossible to attribute.
-   */
   CORPUS_COMMIT_SHA: z.string().min(7),
   CORPUS_DATA_DIR: z.string().default('./data/chinese-poetry'),
   CORPUS_COLLECTIONS: z
     .string()
     .default('全唐詩,宋詞')
-    .transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean)),
+    .transform((s) =>
+      s
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean),
+    ),
 
   LLM_PRIMARY_PROVIDER: z.string().default('ramclouds'),
   RAMCLOUDS_API_KEY: z.string().optional(),
@@ -81,7 +75,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   return cached;
 }
 
-/** Test seam — resets the memoized value. */
 export const resetEnvCache = (): void => {
   cached = null;
 };

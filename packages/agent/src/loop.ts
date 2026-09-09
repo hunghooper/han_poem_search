@@ -1,25 +1,3 @@
-/**
- * The agent loop — the spec §9.1.
- *
- *   while (iteration < maxIterations && withinBudget(state)) {
- *     const decision = await llmReason(state);
- *     if (decision.type === 'finish') break;
- *     const result = await callTool(decision.tool, decision.args);
- *     state = reduce(state, result);
- *     if (satisfied(state)) break;
- *   }
- *
- * Phase 3 runs this as plain async. Phase 4 moves it into Temporal workflow code with every
- * LLM call and tool call as an activity. To make that a move rather than a rewrite, this
- * function performs NO I/O of its own and reads no clock directly: `deps.now` and the two
- * callables are the only ways out, and each becomes an activity. There is no Date.now(), no
- * Math.random(), no fetch here — the four rules from CONTRIBUTING.md's Temporal section
- * already hold, a phase early.
- *
- * The agent is not another search engine. It answers one question repeatedly: what should I do
- * next? Given the §7.1 short-circuit it should fire on a minority of queries.
- */
-
 import type { LlmProvider, LlmMessage, LlmToolDef } from '@han/llm/provider';
 import { StepStatus } from '@han/shared/status';
 import type { ToolResult } from '@han/shared/tool-result';
@@ -53,7 +31,6 @@ export interface AgentEvent {
 
 export interface AgentDeps {
   provider: LlmProvider;
-  /** The opaque, gateway-specific reasoning model id. Must have passed §4.5 checks 2-4. */
   model: string;
   tools: Array<Tool<never>>;
   budget: Budget;
@@ -66,12 +43,7 @@ export interface AgentDeps {
 export interface AgentOutcome {
   state: AgentState;
   stoppedBecause:
-    | 'satisfied'
-    | 'model_finished'
-    | 'budget_exhausted'
-    | 'model_failed'
-    | 'no_tools_available';
-  /** Set when the run ended on a budget limit — the answer must be marked partial (§12). */
+    'satisfied' | 'model_finished' | 'budget_exhausted' | 'model_failed' | 'no_tools_available';
   partial: boolean;
   flags: string[];
 }
@@ -96,7 +68,8 @@ const toolDefs = (tools: Array<Tool<never>>): LlmToolDef[] =>
   tools.map((t) => ({ name: t.name, description: t.description, parameters: withSchema(t) }));
 
 const withSchema = (t: Tool<never>): LlmToolDef['parameters'] => {
-  (t.inputSchema as unknown as { _jsonSchema?: Record<string, unknown> })._jsonSchema = t.jsonSchema;
+  (t.inputSchema as unknown as { _jsonSchema?: Record<string, unknown> })._jsonSchema =
+    t.jsonSchema;
   return t.inputSchema;
 };
 
@@ -109,8 +82,6 @@ export async function runAgent(
   let budgetState: BudgetState = initialBudgetState(deps.now());
   const flags: string[] = [];
 
-  // A tool the agent cannot use is worse than no tool: the model will select it, the call will
-  // fail as UNAVAILABLE, and an iteration is spent learning what config already knew.
   const available = deps.tools.filter((t) => !t.unavailableReason?.());
   if (available.length === 0) {
     deps.emit({ kind: 'finished', iteration: 0, message: 'No external tools are configured' });
@@ -125,7 +96,6 @@ export async function runAgent(
   for (;;) {
     const check = checkBudget(budgetState, deps.budget, deps.now());
     if (!check.withinBudget) {
-      // Not an error path: answer from what was collected, marked partial (§12).
       flags.push(AGENT_BUDGET_EXHAUSTED);
       deps.emit({
         kind: 'budget_exhausted',
@@ -136,34 +106,25 @@ export async function runAgent(
       return { state, stoppedBecause: 'budget_exhausted', partial: true, flags };
     }
 
-    deps.emit({ kind: 'iteration', iteration: state.iteration, message: `Deciding what to do next` });
+    deps.emit({
+      kind: 'iteration',
+      iteration: state.iteration,
+      message: `Deciding what to do next`,
+    });
 
     let res;
     try {
       res = await deps.provider.complete(
-      {
-        model: deps.model,
-        messages,
-        tools: toolDefs(available),
-        toolChoice: 'auto',
-        // Reasoning models consume this budget on internal reasoning before emitting
-        // anything. MEASURED on the Ramclouds gateway: glm-5.3 given 16 tokens returns
-        // finish_reason "length" with empty content and no tool calls, which the loop would
-        // read as "the model chose to finish" and end the run for the wrong reason. A
-        // reasoning budget is not an output budget.
-        maxTokens: 4096,
-      },
-      deps.signal,
+        {
+          model: deps.model,
+          messages,
+          tools: toolDefs(available),
+          toolChoice: 'auto',
+          maxTokens: 4096,
+        },
+        deps.signal,
       );
     } catch (e) {
-      // The reasoning call failed or was cut off. That ends the AGENT, not the run: §12 says
-      // answer from the evidence collected, marked partial. Letting this escape would leave
-      // the caller with no final_answer at all — an opaque failure, the one outcome §1 calls
-      // unacceptable, and the hardest kind to notice because the run simply never finishes.
-      //
-      // Reported as agent_model_failed, not as budget exhaustion: one says the agent worked
-      // until it ran out of room and wants more budget, the other says the model never
-      // answered and more budget would change nothing.
       const err = e as { code?: string; message?: string };
       deps.emit({
         kind: 'model_failed',
@@ -194,8 +155,6 @@ export async function runAgent(
 
     const tool = available.find((t) => t.name === call.name);
     if (!tool) {
-      // A hallucinated tool name is the model's mistake to fix, so it goes back as a tool
-      // result rather than ending the run.
       messages.push({ role: 'assistant', content: res.text, toolCalls: res.toolCalls });
       messages.push({
         role: 'tool',
@@ -214,8 +173,6 @@ export async function runAgent(
       now: deps.now,
     });
     budgetState = recordToolCall(budgetState);
-    // A tool that called a model reports what it spent on the evidence it produced. Null
-    // means the model was unpriced, which marks the accounting degraded rather than free.
     const toolCost = toolSpend(result);
     if (toolCost !== undefined) budgetState = recordSpend(budgetState, toolCost);
     state = reduceToolResult(state, tool.name, result);
@@ -234,8 +191,6 @@ export async function runAgent(
     messages.push({
       role: 'tool',
       toolCallId: call.id,
-      // The compacted view, not the evidence: the same §9.1 rule applies to what a tool
-      // reports back as to what the agent is shown at the start.
       content: JSON.stringify({
         status: result.status,
         resultCount: result.resultCount,
@@ -245,19 +200,16 @@ export async function runAgent(
     });
 
     if (satisfied(state)) {
-      deps.emit({ kind: 'finished', iteration: state.iteration, message: 'Found relevant evidence' });
+      deps.emit({
+        kind: 'finished',
+        iteration: state.iteration,
+        message: 'Found relevant evidence',
+      });
       return { state, stoppedBecause: 'satisfied', partial: false, flags };
     }
   }
 }
 
-/**
- * What a tool spent, if it spent anything.
- *
- *   undefined — the tool made no model call, so there is nothing to bill.
- *   null      — it did, and the model is unpriced. Budget accounting is degraded from here.
- *   number    — the actual cost.
- */
 function toolSpend(r: ToolResult): number | null | undefined {
   let seen = false;
   let total = 0;

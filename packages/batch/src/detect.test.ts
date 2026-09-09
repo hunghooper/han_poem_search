@@ -17,9 +17,6 @@ describe('detect', () => {
     expect(detect(zip)).toEqual({ ok: true, kind: 'xlsx' });
   });
 
-  // Each of these is a real thing users hand over, and each needs its own sentence back. A
-  // single "unsupported file" would leave them with no idea what to do next — the difference
-  // between "convert it", "fix line 3" and "this format is not supported at all".
   it('tells a legacy .xls apart from an .xlsx', () => {
     const ole = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0, 0, 0, 0]);
     const d = detect(ole);
@@ -44,8 +41,6 @@ describe('detect', () => {
   });
 
   it('rejects UTF-16 instead of decoding it into mojibake', () => {
-    // Mojibake would not throw. It would search for characters that match nothing and report
-    // every row as no_result — a wrong answer that looks like a real one.
     const utf16 = new Uint8Array([0xff, 0xfe, 0x7b, 0x00, 0x22, 0x00]);
     const d = detect(utf16);
     expect(d.ok === false && d.reason).toBe('not_utf8');
@@ -68,8 +63,6 @@ describe('detect', () => {
   });
 
   it('does not judge a single record truncated by the sniff window', () => {
-    // The window ends mid-record on a large first row. Guessing "malformed" here would reject
-    // a perfectly good file.
     const d = detect(bytes('{"poem":"床前明月光'));
     expect(d.ok).toBe(true);
   });

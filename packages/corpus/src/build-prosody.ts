@@ -1,28 +1,3 @@
-/**
- * Derive prosody tables FROM the corpus — answers §18 Q6.
- *
- * ADR 004 established that `chinese-poetry` contains no 平水韻 rhyme table. The obvious
- * response is to source one externally. The better one is to notice that the corpus already
- * contains the information, twice over, and only needs it inverted:
- *
- * 1. TONE. `strains/` gives 平/仄 per character per poem, aligned to `poet.*.json` by id.
- *    Inverting that alignment yields a character -> tone table covering every character the
- *    corpus uses, derived from the same texts we search.
- *
- * 2. RHYME. In regulated verse the final characters of even-numbered lines share a 韻部. That
- *    is a rule the corpus obeys tens of thousands of times. Treating each well-formed poem as
- *    an assertion that its rhyme characters belong together, and taking the transitive closure
- *    with union-find, reconstructs the rhyme classes empirically.
- *
- * What this is NOT: an authoritative 平水韻. It is what THIS corpus behaves as if it believes,
- * which is the right standard for verifying candidates FROM this corpus — a candidate is being
- * checked for consistency with its own tradition, not against an external authority.
- *
- * Ambiguity is kept rather than resolved. 多音字 have both tones, and the tone table records
- * both with counts; a verifier that demands a single tone for 看 or 過 will reject correct
- * poems, because those characters genuinely take either.
- */
-
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,7 +10,6 @@ interface StrainRecord {
   strains?: string[];
 }
 
-/** Union-find over rhyme characters. */
 class DisjointSet {
   private readonly parent = new Map<string, string>();
 
@@ -69,7 +43,6 @@ class DisjointSet {
   }
 }
 
-/** Build the character -> tone table from strains/, aligned to poem text by upstream id. */
 async function buildToneTable(
   root: string,
   textById: Map<string, string>,
@@ -89,9 +62,6 @@ async function buildToneTable(
       const text = textById.get(row.id);
       if (!text) continue;
 
-      // The strain string carries the same punctuation as the poem, so both reduce to the same
-      // length under the same stripping. When they do not, the record is misaligned and using
-      // it would attribute every tone to the wrong character — skip rather than guess.
       const tones = row.strains.join('').replace(/[，。！？；、]/gu, '');
       if (tones.length !== text.length) {
         skipped += 1;
@@ -101,8 +71,6 @@ async function buildToneTable(
       for (let i = 0; i < text.length; i += 1) {
         const ch = text[i]!;
         const t = tones[i]!;
-        // ○ and ？ mark positions the source could not determine. Counting them as either tone
-        // would poison the table with the corpus's own uncertainty.
         if (t !== '平' && t !== '仄') continue;
         const entry = table[ch] ?? { ping: 0, ze: 0 };
         if (t === '平') entry.ping += 1;
@@ -113,24 +81,12 @@ async function buildToneTable(
     }
   }
 
-  console.log(`tone: aligned ${aligned} poems, skipped ${skipped} misaligned, ${Object.keys(table).length} characters`);
+  console.log(
+    `tone: aligned ${aligned} poems, skipped ${skipped} misaligned, ${Object.keys(table).length} characters`,
+  );
   return table;
 }
 
-/**
- * Build empirical 韻部 classes from even-line finals of regulated verse.
- *
- * MEASURED FAILURE, then fixed. The first implementation took the transitive closure of every
- * co-rhyming pair. Over 37,801 poems that collapsed into 7 classes, the largest holding 3,445
- * of ~3,455 characters — a single chain of noisy links joined nearly every rhyme character in
- * the corpus. Union-find has no notion of evidence strength, so one 通韻 poem, one OCR error,
- * or one mis-segmented 古詩 permanently welds two genuine classes together.
- *
- * So edges are WEIGHTED by how many poems assert them, and only edges asserted at least
- * MIN_EDGE_WEIGHT times are unioned. A wrong pairing appears once or twice; a real 韻部
- * relation appears hundreds of times. The threshold is the whole difference between a rhyme
- * table and one enormous equivalence class.
- */
 const MIN_EDGE_WEIGHT = 4;
 
 function buildRhymeGroups(poems: Array<{ finals: string[] }>): Record<string, number> {
@@ -164,8 +120,6 @@ function buildRhymeGroups(poems: Array<{ finals: string[] }>): Record<string, nu
   let id = 0;
   const sizes: number[] = [];
   for (const [, members] of groups) {
-    // Singletons and pairs are not classes; they are characters we lack evidence about, and
-    // recording them would let checkRhyme claim a judgement it cannot support.
     if (members.length < 3) continue;
     for (const m of members) out[m] = id;
     sizes.push(members.length);
@@ -183,9 +137,6 @@ function buildRhymeGroups(poems: Array<{ finals: string[] }>): Record<string, nu
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   const root = process.env.CORPUS_DATA_DIR ?? './data/chinese-poetry';
-  // Resolved from this module, not from cwd: the script runs under pnpm --filter, whose cwd
-  // is the package directory, and a cwd-relative path silently writes the table into a nested
-  // packages/retrieval/ inside packages/corpus/ where nothing will ever read it.
   const outDir = fileURLToPath(new URL('../../retrieval/src/data/', import.meta.url));
   if (!databaseUrl) throw new Error('DATABASE_URL is not set');
 
@@ -193,7 +144,6 @@ async function main(): Promise<void> {
   const db = drizzle(pool);
 
   try {
-    // Poems with an upstream id, for the tone alignment.
     const poemsRes = await db.execute<{ upstreamId: string; textMatch: string }>(sql`
       SELECT upstream_id AS "upstreamId", text_match AS "textMatch"
       FROM poem WHERE upstream_id IS NOT NULL
@@ -204,9 +154,6 @@ async function main(): Promise<void> {
 
     const tone = await buildToneTable(root, textById);
 
-    // Even-line finals from perfectly regular 5- or 7-character poems of 4 or 8 lines. The
-    // strictness is the point: only well-formed regulated verse asserts a rhyme relation, and
-    // admitting 古詩 here is what would collapse every class into one.
     const rhymeRes = await db.execute<{ poemId: string; finals: string[] }>(sql`
       SELECT p.id AS "poemId", array_agg(pl.rhyme_char ORDER BY pl.line_no) AS "finals"
       FROM poem p

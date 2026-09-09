@@ -1,30 +1,9 @@
-/**
- * Gateway smoke test — the spec §4.5. BLOCKING for Phase 3 (§18 Q1).
- *
- * "OpenAI compatibility is a claim, not a guarantee — gateways commonly proxy chat.completions
- * faithfully while handling tool calls poorly for some models."
- *
- * Run against EVERY model you intend to use and record the results in docs/adr/002-llm-gateway.md:
- *
- *     RAMCLOUDS_API_KEY=... SMOKE_MODELS=model-a,model-b pnpm vitest run --project llm smoke
- *
- * Any model failing checks 2, 3 or 4 is UNUSABLE for the agent loop (§9) but may still serve
- * rewriting and answer generation. The agent must only be pointed at models that passed.
- *
- * Skipped, not failed, without credentials: a red suite on every developer machine trains
- * people to ignore it, and this is the one suite that must never be ignored.
- */
-
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createOpenAiCompatibleProvider } from './openai-compatible.js';
 import type { LlmToolDef } from '../provider.js';
 
-/**
- * Read .env directly. Vitest does not load it, and requiring every operator to export four
- * variables by hand is how a blocking test quietly never gets run.
- */
 function fromDotenv(): Record<string, string> {
   try {
     return Object.fromEntries(
@@ -33,7 +12,13 @@ function fromDotenv(): Record<string, string> {
         .filter((l) => l.includes('=') && !l.trimStart().startsWith('#'))
         .map((l) => {
           const i = l.indexOf('=');
-          return [l.slice(0, i).trim(), l.slice(i + 1).replace(/\s+#.*$/u, '').trim()];
+          return [
+            l.slice(0, i).trim(),
+            l
+              .slice(i + 1)
+              .replace(/\s+#.*$/u, '')
+              .trim(),
+          ];
         }),
     );
   } catch {
@@ -53,8 +38,10 @@ const models = (env('SMOKE_MODELS') || env('LLM_MODEL_REASONING'))
 
 const configured = apiKey.length > 0 && baseURL.length > 0 && models.length > 0;
 
-/** A tool schema carries its JSON Schema alongside the Zod type — see the adapter. */
-const withJsonSchema = <T extends z.ZodType<unknown>>(schema: T, json: Record<string, unknown>): T => {
+const withJsonSchema = <T extends z.ZodType<unknown>>(
+  schema: T,
+  json: Record<string, unknown>,
+): T => {
   (schema as unknown as { _jsonSchema?: Record<string, unknown> })._jsonSchema = json;
   return schema;
 };
@@ -88,7 +75,11 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
 
       it('1. plain completion returns text', async () => {
         const r = await provider.complete(
-          { model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], maxTokens: 2000 },
+          {
+            model,
+            messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+            maxTokens: 2000,
+          },
           signal(),
         );
         expect(r.text).toBeTruthy();
@@ -99,7 +90,9 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
         const r = await provider.complete(
           {
             model,
-            messages: [{ role: 'user', content: 'Find the poem containing 細草微風岸. Use the tool.' }],
+            messages: [
+              { role: 'user', content: 'Find the poem containing 細草微風岸. Use the tool.' },
+            ],
             tools: [lookupTool],
             toolChoice: 'auto',
           },
@@ -107,16 +100,16 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
         );
         expect(r.toolCalls.length).toBeGreaterThan(0);
         expect(r.toolCalls[0]!.name).toBe('lookup_poem');
-        // The arguments must have parsed — a __parseError means malformed JSON came back.
         expect(r.toolCalls[0]!.args).not.toHaveProperty('__parseError');
       });
 
       it('3. a tool RESULT fed back produces a sensible second turn', async () => {
-        // The step gateways most often break (§4.5).
         const first = await provider.complete(
           {
             model,
-            messages: [{ role: 'user', content: 'Find the poem containing 細草微風岸. Use the tool.' }],
+            messages: [
+              { role: 'user', content: 'Find the poem containing 細草微風岸. Use the tool.' },
+            ],
             tools: [lookupTool],
             toolChoice: 'auto',
           },
@@ -173,7 +166,11 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
       it('6. AbortSignal actually cancels the request', async () => {
         const ac = new AbortController();
         const pending = provider.complete(
-          { model, messages: [{ role: 'user', content: 'Write a long essay about 唐詩.' }], maxTokens: 2000 },
+          {
+            model,
+            messages: [{ role: 'user', content: 'Write a long essay about 唐詩.' }],
+            maxTokens: 2000,
+          },
           ac.signal,
         );
         setTimeout(() => ac.abort(), 50);
@@ -182,7 +179,11 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
 
       it('7. a CJK prompt round-trips without mojibake', async () => {
         const r = await provider.complete(
-          { model, messages: [{ role: 'user', content: '請原樣重複這句話：細草微風岸，危檣獨夜舟。' }], maxTokens: 2000 },
+          {
+            model,
+            messages: [{ role: 'user', content: '請原樣重複這句話：細草微風岸，危檣獨夜舟。' }],
+            maxTokens: 2000,
+          },
           signal(),
         );
         expect(r.text ?? '').toMatch(/細草微風岸/);
@@ -193,7 +194,6 @@ describe.skipIf(!configured)('gateway smoke test (§4.5)', () => {
 
 describe.skipIf(configured)('gateway smoke test (not configured)', () => {
   it('is skipped until credentials and SMOKE_MODELS are set', () => {
-    // Present so the suite reports why it did not run, rather than reporting nothing.
     expect(configured).toBe(false);
   });
 });

@@ -1,15 +1,3 @@
-/**
- * Tool results — the spec §5.4. FROZEN CONTRACT.
- *
- * A tool NEVER throws. It catches and classifies:
- *
- *   Ran, zero hits ......................... NO_RESULT
- *   Hits exist, none above the floor ....... LOW_CONFIDENCE
- *   Network / 5xx / parse failure .......... ERROR
- *   Exceeded timeoutMs ..................... TIMEOUT
- *   Missing creds, disabled, quota out ..... UNAVAILABLE
- */
-
 import { z } from 'zod';
 import { StepStatus } from './status.js';
 import { EvidenceSchema } from './evidence.js';
@@ -33,10 +21,6 @@ export const ToolResultSchema = z.object({
 
 export type ToolResult = z.infer<typeof ToolResultSchema>;
 
-/**
- * Guard against the classification mistake the brief calls out: a result carrying rows must
- * not claim NO_RESULT, and a result claiming HAS_RESULT must carry rows.
- */
 export const assertConsistent = (r: ToolResult): ToolResult => {
   const hasRows = r.results.length > 0;
   if (r.status === StepStatus.NO_RESULT && hasRows) {
@@ -46,7 +30,9 @@ export const assertConsistent = (r: ToolResult): ToolResult => {
     throw new Error(`${r.toolName}: HAS_RESULT with no results`);
   }
   if (r.resultCount !== r.results.length) {
-    throw new Error(`${r.toolName}: resultCount ${r.resultCount} != results.length ${r.results.length}`);
+    throw new Error(
+      `${r.toolName}: resultCount ${r.resultCount} != results.length ${r.results.length}`,
+    );
   }
   return r;
 };

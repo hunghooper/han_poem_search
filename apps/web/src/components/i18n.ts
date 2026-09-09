@@ -1,12 +1,3 @@
-/**
- * UI labels — the spec §17 puts Vietnamese, English and Chinese labels in scope and
- * anything beyond them out of it. So this is a flat label table, not a translation framework:
- * three languages, one file, no runtime loading.
- *
- * Step names and status words live here too. A trace that "reads like a sentence" (§14.2) has
- * to read like one in the reader's language, or it reads like a log again.
- */
-
 import type { UiLanguage } from '@han/shared/runtime-config';
 import { renderTrace, type TraceMsg } from '@han/shared/trace';
 import { TRACE_LABELS } from './i18n-trace';
@@ -21,9 +12,11 @@ type Dict = Record<string, string>;
 
 const vi: Dict = {
   'tab.additions': 'Đề xuất & lịch sử',
-  'tab.additionsHint': 'Xem mọi bài đã được đề xuất hoặc thêm vào kho, và duyệt những đề xuất còn chờ.',
+  'tab.additionsHint':
+    'Xem mọi bài đã được đề xuất hoặc thêm vào kho, và duyệt những đề xuất còn chờ.',
   'add.title': 'Đề xuất và bài đã thêm',
-  'add.why': 'Mỗi bài vào kho bằng đường thêm đều được ghi lại ở đây, kèm nguồn và người chịu trách nhiệm. Đề xuất của máy chỉ là đề xuất: chưa có bản ghi, chưa vào chỉ mục, không lượt tra nào thấy được cho tới khi có người bấm nhận.',
+  'add.why':
+    'Mỗi bài vào kho bằng đường thêm đều được ghi lại ở đây, kèm nguồn và người chịu trách nhiệm. Đề xuất của máy chỉ là đề xuất: chưa có bản ghi, chưa vào chỉ mục, không lượt tra nào thấy được cho tới khi có người bấm nhận.',
   'add.nPending': '{n} chờ duyệt',
   'add.nAccepted': '{n} đã nhận',
   'add.nRejected': '{n} đã từ chối',
@@ -70,7 +63,8 @@ const vi: Dict = {
   'settings.title': 'Cài đặt',
   'settings.close': 'Đóng',
   'settings.reset': 'Khôi phục mặc định',
-  'settings.session': 'Thay đổi ở đây chỉ áp dụng cho trình duyệt này, không ghi đè cấu hình dự án.',
+  'settings.session':
+    'Thay đổi ở đây chỉ áp dụng cho trình duyệt này, không ghi đè cấu hình dự án.',
   'settings.display': 'Hiển thị',
   'settings.language': 'Ngôn ngữ',
   'settings.vertical': 'Chữ dọc 直書',
@@ -83,7 +77,8 @@ const vi: Dict = {
   'settings.sources': 'Nguồn tham gia',
   'settings.exactAlways': 'Khớp chính xác luôn chạy — đây là tầng chính, không phải tuỳ chọn.',
   'settings.confidence': 'Ngưỡng tin cậy',
-  'settings.uncalibrated': 'Các số này chưa hiệu chỉnh (§8). Đổi ở đây để thử nghiệm; đổi mặc định của dự án cần một lần hiệu chỉnh có ghi chép.',
+  'settings.uncalibrated':
+    'Các số này chưa hiệu chỉnh (§8). Đổi ở đây để thử nghiệm; đổi mặc định của dự án cần một lần hiệu chỉnh có ghi chép.',
   'settings.verifyFloor': 'Ngưỡng cần kiểm chứng',
   'settings.noiseFloor': 'Ngưỡng nhiễu',
   'settings.minLexicalOverlap': 'Tỉ lệ chữ trùng tối thiểu',
@@ -100,11 +95,13 @@ const vi: Dict = {
   'settings.modelAnswer': 'Sinh câu trả lời',
   'settings.fromEnv': 'theo môi trường',
   'answer.none': 'Không có câu trả lời đáng tin',
-  'answer.notAuthoritative': 'Đây là những gì kho dữ liệu này ghi, không phải bản hiệu đính có thẩm quyền.',
+  'answer.notAuthoritative':
+    'Đây là những gì kho dữ liệu này ghi, không phải bản hiệu đính có thẩm quyền.',
   'answer.horizontal': 'Chữ ngang',
   'answer.vertical': 'Chữ dọc 直書',
   'trace.inscription': 'Lạc khoản đã tách ra',
-  'answer.ambiguous': 'Đoạn này xuất hiện trong {n} bài. Hệ thống không đoán — đây là tất cả các bài khớp:',
+  'answer.ambiguous':
+    'Đoạn này xuất hiện trong {n} bài. Hệ thống không đoán — đây là tất cả các bài khớp:',
 
   'batch.title': 'Tra hàng loạt',
   'batch.open': 'Tra hàng loạt',
@@ -116,7 +113,8 @@ const vi: Dict = {
   'batch.chooseColumn': 'Chọn cột chứa câu thơ',
   'batch.suggested': 'gợi ý',
   'batch.abstainNoCjk': 'Không cột nào có chữ Hán. Hãy tự chọn cột cần tra.',
-  'batch.abstainAmbiguous': 'Có nhiều cột chữ Hán tương đương nhau — hệ thống không đoán. Hãy chọn cột.',
+  'batch.abstainAmbiguous':
+    'Có nhiều cột chữ Hán tương đương nhau — hệ thống không đoán. Hãy chọn cột.',
   'batch.cjkShare': 'chữ Hán',
   'batch.agentSection': 'Agent (gọi mô hình)',
   'batch.agentEnabled': 'Bật agent cho dòng kho nội bộ không chắc',
@@ -127,7 +125,8 @@ const vi: Dict = {
   'batch.estimate': 'Ước tính',
   'batch.estTime': 'Thời gian',
   'batch.estAgentRows': 'Số dòng gọi mô hình',
-  'batch.estimateNote': 'Ước tính thời gian theo số đo thực tế. Chi phí thật xem trên console của cổng mô hình.',
+  'batch.estimateNote':
+    'Ước tính thời gian theo số đo thực tế. Chi phí thật xem trên console của cổng mô hình.',
   'batch.start': 'Bắt đầu',
   'batch.cancel': 'Dừng',
   'batch.running': 'Đang chạy',
@@ -141,7 +140,8 @@ const vi: Dict = {
   'batch.exportJsonl': 'Tải .jsonl',
   'batch.exportXlsx': 'Tải .xlsx',
   'batch.pickColumns': 'Chọn cột muốn xuất',
-  'batch.lockedNote': 'Cột trạng thái luôn được xuất: không có nó thì một ô ghi "李白" trông như sự thật dù lượt tra đó không chắc chắn.',
+  'batch.lockedNote':
+    'Cột trạng thái luôn được xuất: không có nó thì một ô ghi "李白" trông như sự thật dù lượt tra đó không chắc chắn.',
   'batch.exportPartial': 'Có thể tải khi chưa chạy xong — dòng chưa tra sẽ ghi not_executed.',
   'batch.groupVerdict': 'Kết luận',
   'batch.groupIdentity': 'Bài thơ',
@@ -156,40 +156,53 @@ const vi: Dict = {
   'batch.unitDay': 'ngày',
   'batch.rerunUnresolved': 'Chạy lại {n} dòng chưa ra kết quả',
   'batch.rerunAll': 'Chạy lại toàn bộ {n} dòng',
-  'batch.rerunNote': 'Dòng đã tìm thấy và ô trống được giữ nguyên — chạy lại chúng chỉ tốn tiền mà không đổi gì.',
+  'batch.rerunNote':
+    'Dòng đã tìm thấy và ô trống được giữ nguyên — chạy lại chúng chỉ tốn tiền mà không đổi gì.',
   'batch.rerunStart': 'Chạy lại',
   'batch.history': 'Lần chạy trước',
-  'batch.historyNote': 'Mở lại một job cũ thay vì upload lại — upload lại tạo job mới và chạy lại toàn bộ, tốn tiền cho cả những dòng đã tìm thấy.',
+  'batch.historyNote':
+    'Mở lại một job cũ thay vì upload lại — upload lại tạo job mới và chạy lại toàn bộ, tốn tiền cho cả những dòng đã tìm thấy.',
   'batch.back': 'Danh sách',
   'batch.delete': 'Xoá job và file của nó',
   'settings.gateway': 'Cổng mô hình',
   'settings.apiKey': 'Khoá API của bạn',
   'settings.keyPlaceholder': 'Dán khoá vào đây',
-  'settings.keyNote': 'Khoá chỉ nằm trong trình duyệt này và mất khi bạn đóng tab. Nó đi kèm từng yêu cầu để tính vào tài khoản của bạn, không bao giờ được ghi vào cấu hình dự án. Bỏ trống thì các tính năng cần mô hình sẽ báo là không dùng được — tìm kiếm trong kho vẫn chạy bình thường.',
-  'batch.agentUnavailable': 'Agent đang bật nhưng KHÔNG chạy được: chưa có khoá API. Vào Cài đặt → Cổng mô hình để nhập khoá, hoặc tắt agent. Bấm chạy lúc này sẽ tốn hàng giờ mà cột agent vẫn trống.',
+  'settings.keyNote':
+    'Khoá chỉ nằm trong trình duyệt này và mất khi bạn đóng tab. Nó đi kèm từng yêu cầu để tính vào tài khoản của bạn, không bao giờ được ghi vào cấu hình dự án. Bỏ trống thì các tính năng cần mô hình sẽ báo là không dùng được — tìm kiếm trong kho vẫn chạy bình thường.',
+  'batch.agentUnavailable':
+    'Agent đang bật nhưng KHÔNG chạy được: chưa có khoá API. Vào Cài đặt → Cổng mô hình để nhập khoá, hoặc tắt agent. Bấm chạy lúc này sẽ tốn hàng giờ mà cột agent vẫn trống.',
   'batch.lastRun': 'Lần chạy gần nhất: đã xử lý {n} dòng lúc {at}',
   'batch.passProgress': 'đang chạy {done}/{total} dòng',
   'batch.runWithoutAgent': 'Tắt agent và chạy ngay',
   'batch.jobGone': 'Job này không còn trên máy chủ (đã bị xoá). Đã quay lại danh sách.',
   'empty.title': 'Không có câu trả lời đủ tin cậy.',
-  'empty.localOnly': 'Chỉ có kho nội bộ được tra; agent chưa được gọi. Nghĩa là kho này không có, chứ không phải bài thơ không tồn tại.',
-  'empty.agentIdle': 'Kho nội bộ đã tra và không thấy. Agent KHÔNG chạy được (thiếu khoá hoặc bị tắt), nên chưa có gì tra ngoài kho.',
-  'empty.everythingLooked': 'Cả kho nội bộ lẫn agent đều đã tra và không thấy. Kho này chỉ có thơ Đường và từ Tống.',
+  'empty.localOnly':
+    'Chỉ có kho nội bộ được tra; agent chưa được gọi. Nghĩa là kho này không có, chứ không phải bài thơ không tồn tại.',
+  'empty.agentIdle':
+    'Kho nội bộ đã tra và không thấy. Agent KHÔNG chạy được (thiếu khoá hoặc bị tắt), nên chưa có gì tra ngoài kho.',
+  'empty.everythingLooked':
+    'Cả kho nội bộ lẫn agent đều đã tra và không thấy. Kho này chỉ có thơ Đường và từ Tống.',
 
   'tab.aria': 'Các phần của ứng dụng',
   'tab.search': 'Tra một đoạn',
   'tab.batch': 'Tra hàng loạt',
   'tab.corpus': 'Bổ sung kho',
-  'tab.searchHint': 'Dán một đoạn thơ chữ Hán — kể cả khi sai thứ tự, thiếu chữ hoặc chép từ thư pháp.',
-  'tab.batchHint': 'Nộp file .jsonl hoặc .xlsx, chọn cột chứa câu thơ, rồi tải kết quả về kèm cột xuất xứ.',
-  'tab.corpusHint': 'Thêm bài thơ vào kho nội bộ. Mọi bài thêm vào đều phải nói rõ tên bài, tác giả và nguồn.',
-  'corpus.notWired': 'File được đọc ngay trong trình duyệt: bạn thấy mọi dòng bị từ chối trước khi có gì rời khỏi máy mình.',
+  'tab.searchHint':
+    'Dán một đoạn thơ chữ Hán — kể cả khi sai thứ tự, thiếu chữ hoặc chép từ thư pháp.',
+  'tab.batchHint':
+    'Nộp file .jsonl hoặc .xlsx, chọn cột chứa câu thơ, rồi tải kết quả về kèm cột xuất xứ.',
+  'tab.corpusHint':
+    'Thêm bài thơ vào kho nội bộ. Mọi bài thêm vào đều phải nói rõ tên bài, tác giả và nguồn.',
+  'corpus.notWired':
+    'File được đọc ngay trong trình duyệt: bạn thấy mọi dòng bị từ chối trước khi có gì rời khỏi máy mình.',
   'corpus.whoTitle': 'Người thêm',
-  'corpus.whoWhy': 'Bắt buộc. Bài trong kho mang theo bộ dữ liệu, tên file và mã commit; bài bạn thêm không có thứ nào trong đó, nên ít nhất nó mang tên người đã đưa nó vào. Hệ thống chưa có đăng nhập, nên đây là lời khai chứ không phải kiểm chứng — nhưng vẫn hơn một ô trống khi sau này có người hỏi bài này ở đâu ra.',
+  'corpus.whoWhy':
+    'Bắt buộc. Bài trong kho mang theo bộ dữ liệu, tên file và mã commit; bài bạn thêm không có thứ nào trong đó, nên ít nhất nó mang tên người đã đưa nó vào. Hệ thống chưa có đăng nhập, nên đây là lời khai chứ không phải kiểm chứng — nhưng vẫn hơn một ô trống khi sau này có người hỏi bài này ở đâu ra.',
   'corpus.whoPlaceholder': 'Tên hoặc email của bạn',
   'corpus.whoRequired': 'Điền tên người thêm trước đã.',
   'corpus.rulesTitle': 'Yêu cầu tối thiểu',
-  'corpus.rulesWhy': 'Mọi kết quả trong hệ thống này đều nói được nó từ đâu ra: bài trong kho mang theo bộ dữ liệu, tên file và mã commit; kết quả ngoài mang theo URL. Bài bạn thêm vào không có sẵn thứ đó, mà nó sẽ nằm chung chỉ mục với {n} bài có. Thiếu tên bài và tác giả thì đó không phải một bản ghi, chỉ là một mẩu văn — và một khi đã vào chỉ mục, nó được trả về tự tin y như mọi bài khác.',
+  'corpus.rulesWhy':
+    'Mọi kết quả trong hệ thống này đều nói được nó từ đâu ra: bài trong kho mang theo bộ dữ liệu, tên file và mã commit; kết quả ngoài mang theo URL. Bài bạn thêm vào không có sẵn thứ đó, mà nó sẽ nằm chung chỉ mục với {n} bài có. Thiếu tên bài và tác giả thì đó không phải một bản ghi, chỉ là một mẩu văn — và một khi đã vào chỉ mục, nó được trả về tự tin y như mọi bài khác.',
   'corpus.required': 'Bắt buộc',
   'corpus.optional': 'Tuỳ chọn',
   'corpus.format': 'Định dạng',
@@ -211,8 +224,10 @@ const vi: Dict = {
   'corpus.field.text_han': 'nội dung chữ Hán (dưới 4 chữ)',
   'corpus.more': 'còn {n} dòng nữa không hiển thị.',
   'corpus.add': 'Thêm {n} bài vào kho',
-  'corpus.addNote': 'Chỉ những dòng hợp lệ được gửi đi. Máy chủ kiểm tra lại bằng đúng luật này — kiểm tra ở trình duyệt là tiện lợi, không phải hàng rào.',
-  'corpus.errParse': 'Không đọc được file. Cần JSONL: mỗi dòng một object JSON, không có dấu ngoặc bao ngoài.',
+  'corpus.addNote':
+    'Chỉ những dòng hợp lệ được gửi đi. Máy chủ kiểm tra lại bằng đúng luật này — kiểm tra ở trình duyệt là tiện lợi, không phải hàng rào.',
+  'corpus.errParse':
+    'Không đọc được file. Cần JSONL: mỗi dòng một object JSON, không có dấu ngoặc bao ngoài.',
   'corpus.errEmpty': 'File không có dòng nào.',
   'corpus.adding': 'Đang thêm…',
   'corpus.out.added': '{n} bài đã thêm',
@@ -221,7 +236,8 @@ const vi: Dict = {
   'corpus.out.error': '{n} bài lỗi',
   'corpus.errNetwork': 'Không gọi được máy chủ.',
   'corpus.pendingTitle': '{n} đề xuất chờ duyệt',
-  'corpus.pendingWhy': 'Đây là ĐỀ XUẤT, chưa phải bài trong kho: chưa có bản ghi, chưa vào chỉ mục, không lượt tra nào thấy được cho tới khi có người bấm nhận. Con thẩm định nhìn ra được lúc một lượt chạy tìm thấy bài kho chưa có, nhưng một mô hình từng tính lời từ chối của chính nó thành phát hiện thì không được quyền ghi thẳng vào thứ mọi lượt tra sau này đều đọc.',
+  'corpus.pendingWhy':
+    'Đây là ĐỀ XUẤT, chưa phải bài trong kho: chưa có bản ghi, chưa vào chỉ mục, không lượt tra nào thấy được cho tới khi có người bấm nhận. Con thẩm định nhìn ra được lúc một lượt chạy tìm thấy bài kho chưa có, nhưng một mô hình từng tính lời từ chối của chính nó thành phát hiện thì không được quyền ghi thẳng vào thứ mọi lượt tra sau này đều đọc.',
   'corpus.accept': 'Nhận vào kho',
   'corpus.reject': 'Từ chối',
   'corpus.source': 'nguồn',
@@ -231,9 +247,11 @@ const vi: Dict = {
 
 const en: Dict = {
   'tab.additions': 'Proposals & history',
-  'tab.additionsHint': 'Every poem ever proposed for or added to the corpus, and the review queue for what is still waiting.',
+  'tab.additionsHint':
+    'Every poem ever proposed for or added to the corpus, and the review queue for what is still waiting.',
   'add.title': 'Proposals and additions',
-  'add.why': 'Every poem that entered the corpus by addition is recorded here, with its source and the person answerable for it. A verifier proposal is only a proposal: no poem row, no index entry, invisible to every search until somebody accepts it.',
+  'add.why':
+    'Every poem that entered the corpus by addition is recorded here, with its source and the person answerable for it. A verifier proposal is only a proposal: no poem row, no index entry, invisible to every search until somebody accepts it.',
   'add.nPending': '{n} awaiting review',
   'add.nAccepted': '{n} accepted',
   'add.nRejected': '{n} rejected',
@@ -280,7 +298,8 @@ const en: Dict = {
   'settings.title': 'Settings',
   'settings.close': 'Close',
   'settings.reset': 'Reset to defaults',
-  'settings.session': 'Changes here apply to this browser only and never overwrite the project configuration.',
+  'settings.session':
+    'Changes here apply to this browser only and never overwrite the project configuration.',
   'settings.display': 'Display',
   'settings.language': 'Language',
   'settings.vertical': 'Vertical 直書',
@@ -293,7 +312,8 @@ const en: Dict = {
   'settings.sources': 'Sources in play',
   'settings.exactAlways': 'Exact match always runs — it is the primary retriever, not an option.',
   'settings.confidence': 'Confidence thresholds',
-  'settings.uncalibrated': 'These numbers are uncalibrated (§8). Change them here to experiment; changing the project defaults needs a recorded calibration run.',
+  'settings.uncalibrated':
+    'These numbers are uncalibrated (§8). Change them here to experiment; changing the project defaults needs a recorded calibration run.',
   'settings.verifyFloor': 'Verify floor',
   'settings.noiseFloor': 'Noise floor',
   'settings.minLexicalOverlap': 'Minimum character overlap',
@@ -314,7 +334,8 @@ const en: Dict = {
   'answer.horizontal': 'Horizontal',
   'answer.vertical': 'Vertical 直書',
   'trace.inscription': 'Inscription set aside',
-  'answer.ambiguous': 'This fragment appears in {n} poems. The system does not guess — these all match:',
+  'answer.ambiguous':
+    'This fragment appears in {n} poems. The system does not guess — these all match:',
 
   'batch.title': 'Batch search',
   'batch.open': 'Batch search',
@@ -337,7 +358,8 @@ const en: Dict = {
   'batch.estimate': 'Estimate',
   'batch.estTime': 'Time',
   'batch.estAgentRows': 'Rows calling the model',
-  'batch.estimateNote': 'Time estimated from measured runs. Actual spend is on the gateway console.',
+  'batch.estimateNote':
+    'Time estimated from measured runs. Actual spend is on the gateway console.',
   'batch.start': 'Start',
   'batch.cancel': 'Stop',
   'batch.running': 'Running',
@@ -351,8 +373,10 @@ const en: Dict = {
   'batch.exportJsonl': 'Download .jsonl',
   'batch.exportXlsx': 'Download .xlsx',
   'batch.pickColumns': 'Columns to export',
-  'batch.lockedNote': 'The status column is always exported: without it a cell reading "李白" looks like a fact even when the run was not sure.',
-  'batch.exportPartial': 'Can be downloaded before the run finishes — unsearched rows export as not_executed.',
+  'batch.lockedNote':
+    'The status column is always exported: without it a cell reading "李白" looks like a fact even when the run was not sure.',
+  'batch.exportPartial':
+    'Can be downloaded before the run finishes — unsearched rows export as not_executed.',
   'batch.groupVerdict': 'Verdict',
   'batch.groupIdentity': 'Poem',
   'batch.groupText': 'Text',
@@ -366,40 +390,53 @@ const en: Dict = {
   'batch.unitDay': 'days',
   'batch.rerunUnresolved': 'Re-run the {n} unresolved rows',
   'batch.rerunAll': 'Re-run all {n} rows',
-  'batch.rerunNote': 'Rows already found, and empty cells, are left alone — re-running them costs money and changes nothing.',
+  'batch.rerunNote':
+    'Rows already found, and empty cells, are left alone — re-running them costs money and changes nothing.',
   'batch.rerunStart': 'Re-run',
   'batch.history': 'Earlier runs',
-  'batch.historyNote': 'Reopen a job instead of uploading the file again — a re-upload is a new job and re-runs every row, paying again for the ones already found.',
+  'batch.historyNote':
+    'Reopen a job instead of uploading the file again — a re-upload is a new job and re-runs every row, paying again for the ones already found.',
   'batch.back': 'All jobs',
   'batch.delete': 'Delete this job and its files',
   'settings.gateway': 'Model gateway',
   'settings.apiKey': 'Your API key',
   'settings.keyPlaceholder': 'Paste your key',
-  'settings.keyNote': 'The key stays in this browser and is gone when you close the tab. It travels with each request so calls bill your account, and is never written to the project configuration. Leave it empty and model features report themselves unavailable — corpus search still works.',
-  'batch.agentUnavailable': 'The agent is switched on but CANNOT run: no API key. Add one under Settings → Model gateway, or switch the agent off. Starting now costs hours and returns an empty agent column.',
+  'settings.keyNote':
+    'The key stays in this browser and is gone when you close the tab. It travels with each request so calls bill your account, and is never written to the project configuration. Leave it empty and model features report themselves unavailable — corpus search still works.',
+  'batch.agentUnavailable':
+    'The agent is switched on but CANNOT run: no API key. Add one under Settings → Model gateway, or switch the agent off. Starting now costs hours and returns an empty agent column.',
   'batch.lastRun': 'Last pass: {n} rows processed at {at}',
   'batch.passProgress': '{done}/{total} rows this pass',
   'batch.runWithoutAgent': 'Switch the agent off and run',
   'batch.jobGone': 'That job is no longer on the server — it was deleted. Back to the list.',
   'empty.title': 'No confident answer.',
-  'empty.localOnly': 'Only the local corpus was searched; the agent was not called. This means the corpus does not have it, not that the poem does not exist.',
-  'empty.agentIdle': 'The corpus was searched and found nothing. The agent COULD NOT run (no key, or switched off), so nothing looked outside the corpus.',
-  'empty.everythingLooked': 'The corpus and the agent both searched and found nothing. This corpus holds Tang poetry and Song ci only.',
+  'empty.localOnly':
+    'Only the local corpus was searched; the agent was not called. This means the corpus does not have it, not that the poem does not exist.',
+  'empty.agentIdle':
+    'The corpus was searched and found nothing. The agent COULD NOT run (no key, or switched off), so nothing looked outside the corpus.',
+  'empty.everythingLooked':
+    'The corpus and the agent both searched and found nothing. This corpus holds Tang poetry and Song ci only.',
 
   'tab.aria': 'Sections of the app',
   'tab.search': 'Single search',
   'tab.batch': 'Batch',
   'tab.corpus': 'Add to corpus',
-  'tab.searchHint': 'Paste a fragment of Han-character verse — reordered, damaged or copied from calligraphy.',
-  'tab.batchHint': 'Submit a .jsonl or .xlsx file, choose the column holding the verse, then download the results with provenance columns.',
-  'tab.corpusHint': 'Add poems to the local corpus. Everything added must name its title, author and source.',
-  'corpus.notWired': 'The file is read in your browser: you see every refusal before anything leaves your machine.',
+  'tab.searchHint':
+    'Paste a fragment of Han-character verse — reordered, damaged or copied from calligraphy.',
+  'tab.batchHint':
+    'Submit a .jsonl or .xlsx file, choose the column holding the verse, then download the results with provenance columns.',
+  'tab.corpusHint':
+    'Add poems to the local corpus. Everything added must name its title, author and source.',
+  'corpus.notWired':
+    'The file is read in your browser: you see every refusal before anything leaves your machine.',
   'corpus.whoTitle': 'Who is adding',
-  'corpus.whoWhy': 'Required. A corpus poem carries a dataset, a file and a commit; a poem you add carries none of them, so the least it can carry is the name of whoever put it there. There is no login, so this is a claim rather than a check — but a claim beats a blank column when somebody later asks where a poem came from.',
+  'corpus.whoWhy':
+    'Required. A corpus poem carries a dataset, a file and a commit; a poem you add carries none of them, so the least it can carry is the name of whoever put it there. There is no login, so this is a claim rather than a check — but a claim beats a blank column when somebody later asks where a poem came from.',
   'corpus.whoPlaceholder': 'Your name or email',
   'corpus.whoRequired': 'Enter who is adding first.',
   'corpus.rulesTitle': 'Minimum requirements',
-  'corpus.rulesWhy': 'Every result in this system can say where it came from: a corpus result carries a dataset, a file and a commit; an outside result carries a URL. A poem you add has none of that, and it will sit in the same index as {n} poems that do. Without a title and an author it is not a record, it is a fragment — and once it is in the index it is returned as confidently as anything else.',
+  'corpus.rulesWhy':
+    'Every result in this system can say where it came from: a corpus result carries a dataset, a file and a commit; an outside result carries a URL. A poem you add has none of that, and it will sit in the same index as {n} poems that do. Without a title and an author it is not a record, it is a fragment — and once it is in the index it is returned as confidently as anything else.',
   'corpus.required': 'Required',
   'corpus.optional': 'Optional',
   'corpus.format': 'Format',
@@ -421,8 +458,10 @@ const en: Dict = {
   'corpus.field.text_han': 'Han text (under 4 characters)',
   'corpus.more': '{n} further rows not shown.',
   'corpus.add': 'Add {n} poems to the corpus',
-  'corpus.addNote': 'Only accepted rows are sent. The server checks them again with the same rules — a browser check is a convenience, not a guard.',
-  'corpus.errParse': 'Could not read the file. JSONL is expected: one JSON object per line, with no enclosing brackets.',
+  'corpus.addNote':
+    'Only accepted rows are sent. The server checks them again with the same rules — a browser check is a convenience, not a guard.',
+  'corpus.errParse':
+    'Could not read the file. JSONL is expected: one JSON object per line, with no enclosing brackets.',
   'corpus.errEmpty': 'The file has no rows.',
   'corpus.adding': 'Adding…',
   'corpus.out.added': '{n} added',
@@ -431,7 +470,8 @@ const en: Dict = {
   'corpus.out.error': '{n} failed',
   'corpus.errNetwork': 'Could not reach the server.',
   'corpus.pendingTitle': '{n} proposals awaiting review',
-  'corpus.pendingWhy': 'These are PROPOSALS, not corpus entries: no poem row, no index entry, invisible to every search until somebody accepts. The verifier can see when a run found a poem the corpus lacks — but a model that once counted its own refusal as a finding does not get to write into what every later search reads.',
+  'corpus.pendingWhy':
+    'These are PROPOSALS, not corpus entries: no poem row, no index entry, invisible to every search until somebody accepts. The verifier can see when a run found a poem the corpus lacks — but a model that once counted its own refusal as a finding does not get to write into what every later search reads.',
   'corpus.accept': 'Accept',
   'corpus.reject': 'Reject',
   'corpus.source': 'source',
@@ -443,7 +483,8 @@ const zh: Dict = {
   'tab.additions': '提議與紀錄',
   'tab.additionsHint': '歷來提議或收入語料的詩作，以及尚待審核的提議。',
   'add.title': '提議與新增紀錄',
-  'add.why': '凡經新增入庫的詩作皆記於此，附來源與具名之人。校驗模型的提議僅是提議：無詩作記錄、未入索引，在有人接受之前任何檢索都看不見。',
+  'add.why':
+    '凡經新增入庫的詩作皆記於此，附來源與具名之人。校驗模型的提議僅是提議：無詩作記錄、未入索引，在有人接受之前任何檢索都看不見。',
   'add.nPending': '{n} 項待審',
   'add.nAccepted': '{n} 項已接受',
   'add.nRejected': '{n} 項已拒絕',
@@ -579,21 +620,25 @@ const zh: Dict = {
   'batch.rerunNote': '已找到的列與空白格保持原狀——重跑它們只會花錢而不會改變結果。',
   'batch.rerunStart': '重跑',
   'batch.history': '先前的執行',
-  'batch.historyNote': '重新開啟舊工作，不要重新上傳——重新上傳會建立新工作並重跑所有列，已找到的列也要再付一次費。',
+  'batch.historyNote':
+    '重新開啟舊工作，不要重新上傳——重新上傳會建立新工作並重跑所有列，已找到的列也要再付一次費。',
   'batch.back': '工作列表',
   'batch.delete': '刪除此工作及其檔案',
   'settings.gateway': '模型閘道',
   'settings.apiKey': '你的 API 金鑰',
   'settings.keyPlaceholder': '貼上金鑰',
-  'settings.keyNote': '金鑰只留在這個瀏覽器，關閉分頁即消失。它隨每次請求送出，因此費用計入你的帳號，且絕不寫入專案設定。留空則需要模型的功能會回報為不可用，語料檢索仍正常運作。',
-  'batch.agentUnavailable': '代理已開啟但無法執行：沒有 API 金鑰。請至設定→模型閘道填入金鑰，或關閉代理。此時開始只會耗費數小時而代理欄位仍為空白。',
+  'settings.keyNote':
+    '金鑰只留在這個瀏覽器，關閉分頁即消失。它隨每次請求送出，因此費用計入你的帳號，且絕不寫入專案設定。留空則需要模型的功能會回報為不可用，語料檢索仍正常運作。',
+  'batch.agentUnavailable':
+    '代理已開啟但無法執行：沒有 API 金鑰。請至設定→模型閘道填入金鑰，或關閉代理。此時開始只會耗費數小時而代理欄位仍為空白。',
   'batch.lastRun': '最近一次執行：{at} 處理了 {n} 列',
   'batch.passProgress': '本次執行 {done}/{total} 列',
   'batch.runWithoutAgent': '關閉代理並執行',
   'batch.jobGone': '該工作已不在伺服器上（已被刪除），已返回列表。',
   'empty.title': '沒有足夠可信的答案。',
   'empty.localOnly': '僅檢索了本地語料，未呼叫代理。這表示本語料庫沒有，而非該詩不存在。',
-  'empty.agentIdle': '本地語料已檢索且無結果。代理無法執行（缺金鑰或已關閉），因此未在語料庫外查找。',
+  'empty.agentIdle':
+    '本地語料已檢索且無結果。代理無法執行（缺金鑰或已關閉），因此未在語料庫外查找。',
   'empty.everythingLooked': '本地語料與代理均已檢索且無結果。本語料庫僅收錄唐詩與宋詞。',
 
   'tab.aria': '應用分區',
@@ -605,11 +650,13 @@ const zh: Dict = {
   'tab.corpusHint': '將詩作加入本地語料。凡新增者，均須註明篇名、作者與來源。',
   'corpus.notWired': '檔案在瀏覽器內讀取：任何資料離開本機之前，您已看見每一條遭拒的紀錄。',
   'corpus.whoTitle': '添加者',
-  'corpus.whoWhy': '必填。庫中詩作帶有數據集、文件名與 commit；你添加的詩沒有這些，至少要帶上添加者的名字。系統尚無登入，故此為自述而非查驗——但日後有人追問此詩何來時，總勝過一欄空白。',
+  'corpus.whoWhy':
+    '必填。庫中詩作帶有數據集、文件名與 commit；你添加的詩沒有這些，至少要帶上添加者的名字。系統尚無登入，故此為自述而非查驗——但日後有人追問此詩何來時，總勝過一欄空白。',
   'corpus.whoPlaceholder': '你的姓名或郵箱',
   'corpus.whoRequired': '請先填寫添加者。',
   'corpus.rulesTitle': '最低要求',
-  'corpus.rulesWhy': '本系統每一項結果都能說明來源：語料結果附帶資料集、檔名與 commit；外部結果附帶網址。您新增的詩作並無這些憑據，卻要與 {n} 首有憑據的詩同處一索引。缺篇名與作者者，並非一筆記錄，只是一段殘文——一旦入索引，便會與其他詩作同樣被自信地回傳。',
+  'corpus.rulesWhy':
+    '本系統每一項結果都能說明來源：語料結果附帶資料集、檔名與 commit；外部結果附帶網址。您新增的詩作並無這些憑據，卻要與 {n} 首有憑據的詩同處一索引。缺篇名與作者者，並非一筆記錄，只是一段殘文——一旦入索引，便會與其他詩作同樣被自信地回傳。',
   'corpus.required': '必填',
   'corpus.optional': '選填',
   'corpus.format': '格式',
@@ -641,7 +688,8 @@ const zh: Dict = {
   'corpus.out.error': '{n} 首失敗',
   'corpus.errNetwork': '無法連線至伺服器。',
   'corpus.pendingTitle': '{n} 項待審提議',
-  'corpus.pendingWhy': '此為提議，尚非語料條目：無詩作記錄、未入索引，在有人接受之前任何檢索都看不見。校驗模型能察覺某次執行找到了語料所無之詩——但一個曾把自身拒答計為發現的模型，不得直接寫入其後每次檢索所讀之物。',
+  'corpus.pendingWhy':
+    '此為提議，尚非語料條目：無詩作記錄、未入索引，在有人接受之前任何檢索都看不見。校驗模型能察覺某次執行找到了語料所無之詩——但一個曾把自身拒答計為發現的模型，不得直接寫入其後每次檢索所讀之物。',
   'corpus.accept': '接受',
   'corpus.reject': '拒絕',
   'corpus.source': '來源',
@@ -649,21 +697,8 @@ const zh: Dict = {
   'corpus.noAuthor': '（作者不詳）',
 };
 
-/**
- * Exported for `i18n.test.ts`, which asserts the three have IDENTICAL key sets. A key added to
- * one language and forgotten in another renders as English (or as the raw key) for whoever
- * chose that language — a gap nobody who works in one language would ever see.
- */
 export const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };
 
-/**
- * Render a trace message in the reader's language.
- *
- * `fallback` is the English string the server sent beside the code. It is used when the code
- * has no label — an event recorded before a code existed, or a code somebody added on the
- * server without adding labels. English is the honest degradation there; a raw `trace.x.y` on
- * screen teaches the reader nothing.
- */
 export function tTrace(
   lang: UiLanguage,
   trace: TraceMsg | null | undefined,
@@ -673,8 +708,11 @@ export function tTrace(
   return renderTrace(trace, (code) => table[code] ?? TRACE_LABELS.en[code] ?? null, fallback);
 }
 
-/** A missing key falls back to English, then to the key itself — a visible gap beats a blank. */
-export function t(lang: UiLanguage, key: string, vars: Record<string, string | number> = {}): string {
+export function t(
+  lang: UiLanguage,
+  key: string,
+  vars: Record<string, string | number> = {},
+): string {
   const raw = DICTS[lang][key] ?? DICTS.en[key] ?? key;
   return raw.replace(/\{(\w+)\}/gu, (m, name: string) => String(vars[name] ?? m));
 }

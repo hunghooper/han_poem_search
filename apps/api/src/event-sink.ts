@@ -1,40 +1,8 @@
-/**
- * Durable event log — the spec §11.
- *
- * "search_event is append-only, (run_id, seq) unique. Never UPDATE an event. Corrections are
- * new events. search_run.final_* are a materialized convenience; the event log stays
- * authoritative and the fold must reproduce them."
- *
- * Two constraints shape this, and they pull against each other:
- *
- *   1. Persistence must NOT slow the search. The §7.1 fast path answers in 15ms; awaiting a
- *      round trip per event would multiply that many times over for bookkeeping the user is
- *      not waiting on.
- *   2. Order must hold. (run_id, seq) is unique and the fold sorts by seq, so writes racing
- *      each other is survivable — but writes LOST out of order are not, because a gap in the
- *      middle of a run is indistinguishable from a run that stopped there.
- *
- * So events are queued and drained by one serial writer per process. The search never awaits
- * a write; the writer preserves order; and a failure is logged loudly rather than swallowed,
- * because a silently short event log is exactly the opaque failure §1 forbids.
- */
-
 import { sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { SearchEventSchema, type SearchEvent } from '@han/shared/events';
 import { decode } from '@han/shared/serde';
 
-/**
- * Read one persisted event back as a SearchEvent.
- *
- * SQL has one word for "absent" and it is NULL; the frozen §5.2 schema spells absence as an
- * OPTIONAL key. An event written and read back therefore fails to parse as its own contract —
- * caught by the §11 property test, which is precisely what that test is for.
- *
- * The contract is frozen (§0), so the schema is not the thing to change. The mismatch is a
- * property of the SQL representation, so it is reconciled here, where SQL lives: a NULL in a
- * column backing an optional field means the key was never set.
- */
 const OPTIONAL_COLUMNS = ['status', 'agentIteration', 'message', 'messageTrace'] as const;
 
 export function rowToEvent(row: Record<string, unknown>): SearchEvent {
@@ -47,11 +15,6 @@ export function rowToEvent(row: Record<string, unknown>): SearchEvent {
 
 export interface RunRecord {
   runId: string;
-  /**
-   * The evidence the answer rests on, in rank order. Persisted alongside the run so a reloaded
-   * run can show the poems and not merely the trace of having found them — the difference
-   * between a record of what happened and a record you can read.
-   */
   evidence: unknown[];
   query: string;
   normalizedQuery: string | null;
@@ -67,11 +30,9 @@ export interface EventSink {
   runStarted(runId: string, query: string): void;
   event(e: SearchEvent): void;
   runFinished(record: RunRecord): void;
-  /** Resolves when everything queued so far has been written. For tests and shutdown. */
   drain(): Promise<void>;
 }
 
-/** Used when no database is configured; the API still works, runs just do not survive a restart. */
 export const nullSink: EventSink = {
   runStarted: () => {},
   event: () => {},
@@ -97,8 +58,6 @@ export class PostgresEventSink implements EventSink {
       try {
         await job();
       } catch (e) {
-        // Never rethrow into the drain loop: one failed insert must not stop the writer and
-        // silently truncate every later run in the process.
         this.onError(e, what);
       }
     });
@@ -128,8 +87,6 @@ export class PostgresEventSink implements EventSink {
 
   event(e: SearchEvent): void {
     this.push(`event ${e.step}#${e.seq}`, async () => {
-      // ON CONFLICT DO NOTHING, never DO UPDATE: §11 says an event is never updated, and a
-      // duplicate (run_id, seq) means a bug upstream that an upsert would hide.
       await this.db.execute(sql`
         INSERT INTO search_event
           (event_id, run_id, seq, ts, step, source, phase, status, flags, agent_iteration, message, message_trace, metadata)
@@ -148,11 +105,6 @@ export class PostgresEventSink implements EventSink {
   runFinished(r: RunRecord): void {
     this.push('results insert', async () => {
       if (r.evidence.length === 0) return;
-      // One statement for the whole set: eight round trips to record eight rows nobody is
-      // waiting on is eight chances for the writer to fall behind the next run.
-      //
-      // Built from sql fragments rather than string concatenation — the evidence is poem text
-      // from a crawled corpus and query-derived metadata, so it is parameterised, not pasted.
       const rows = r.evidence.map(
         (e, i) => sql`(gen_random_uuid(), ${r.runId}, ${i}, ${JSON.stringify(e)}::jsonb)`,
       );
@@ -185,12 +137,6 @@ export class PostgresEventSink implements EventSink {
   }
 }
 
-/**
- * Read a finished run back from the log.
- *
- * The point of persisting events is that a run outlives the process that served it. Without
- * this the log would be write-only — technically satisfying §11 and useless to anyone.
- */
 export async function loadRun(
   db: NodePgDatabase<Record<string, never>>,
   runId: string,
@@ -217,8 +163,6 @@ export async function loadRun(
 
   return {
     events: rows.map(rowToEvent),
-    // Evidence is read back from search_result, so a reloaded run shows the poems and not
-    // only the trace of having found them.
     outcome: run
       ? {
           runId,
@@ -228,9 +172,6 @@ export async function loadRun(
           reason: (run.final_answer as string | null) ?? null,
           evidence,
           colophon: null,
-          // Verification and the colophon split are derivable from the trace but are not
-          // stored, so a reloaded run reports them absent rather than reconstructing them
-          // from event text and presenting a guess as a record.
           verification: null,
           reloadedFromLog: true,
         }

@@ -11,7 +11,10 @@ const base = {
 
 describe('evaluateLocal', () => {
   it('a single-work exact match is full confidence', () => {
-    const r = evaluateLocal({ ...base, exactMatch: { kind: 'full', workIds: ['w1'], windowsMatched: 5 } });
+    const r = evaluateLocal({
+      ...base,
+      exactMatch: { kind: 'full', workIds: ['w1'], windowsMatched: 5 },
+    });
     expect(r.status).toBe(StepStatus.HAS_RESULT);
     expect(r.confidence).toBe(1);
     expect(r.flags).toContain('exact_full_match');
@@ -28,15 +31,20 @@ describe('evaluateLocal', () => {
   });
 
   it('a partial match needs agreeing windows', () => {
-    const one = evaluateLocal({ ...base, exactMatch: { kind: 'partial', workIds: ['w1'], windowsMatched: 1 } });
+    const one = evaluateLocal({
+      ...base,
+      exactMatch: { kind: 'partial', workIds: ['w1'], windowsMatched: 1 },
+    });
     expect(one.status).not.toBe(StepStatus.HAS_RESULT);
 
-    const two = evaluateLocal({ ...base, exactMatch: { kind: 'partial', workIds: ['w1'], windowsMatched: 2 } });
+    const two = evaluateLocal({
+      ...base,
+      exactMatch: { kind: 'partial', workIds: ['w1'], windowsMatched: 2 },
+    });
     expect(two.status).toBe(StepStatus.HAS_RESULT);
     expect(two.confidence).toBe(0.85);
   });
 
-  // the spec §7.4 and CONTRIBUTING.md name this explicitly. It must never be weakened.
   it('candidates present but all scores below the floor is LOW_CONFIDENCE, never a result', () => {
     const r = evaluateLocal({ ...base, candidateCount: 20, rerankScores: [0.11, 0.09, 0.05] });
     expect(r.status).not.toBe(StepStatus.HAS_RESULT);
@@ -52,7 +60,6 @@ describe('evaluateLocal', () => {
   });
 
   it('unscored candidates are reported as incomplete, not as nothing found', () => {
-    // Phase 1 has no reranker. Saying "no result" here would hide that a whole stage is absent.
     const r = evaluateLocal({ ...base, candidateCount: 8, rerankScores: [] });
     expect(r.status).toBe(StepStatus.LOW_CONFIDENCE);
     expect(r.flags).toContain('local_incomplete');
@@ -64,13 +71,13 @@ describe('evaluateLocal', () => {
     expect(r.reason).toMatch(/requires verification/);
   });
 
-  // REGRESSION, measured against the live index. The reranker scored the nonsense query
-  // 龘龘龘龘龘龘 at 0.99 against 韓愈《駑驥》 — a poem sharing not one character with it. A
-  // cross-encoder given out-of-distribution input returns a confident number, not an
-  // admission of ignorance, so the score alone must never be able to produce an answer.
-  // This is §16's explicit prohibition and CONTRIBUTING.md's first undeletable test.
   it('refuses a high rerank score when the candidate shares nothing with the query', () => {
-    const r = evaluateLocal({ ...base, candidateCount: 8, rerankScores: [0.99], lexicalOverlap: 0 });
+    const r = evaluateLocal({
+      ...base,
+      candidateCount: 8,
+      rerankScores: [0.99],
+      lexicalOverlap: 0,
+    });
     expect(r.status).toBe(StepStatus.NO_RESULT);
     expect(r.flags).toContain('no_local_result');
     expect(r.confidence).toBe(0);
@@ -78,28 +85,25 @@ describe('evaluateLocal', () => {
   });
 
   it('accepts a high rerank score when the candidate does share the query characters', () => {
-    const r = evaluateLocal({ ...base, candidateCount: 8, rerankScores: [0.99], lexicalOverlap: 0.8 });
+    const r = evaluateLocal({
+      ...base,
+      candidateCount: 8,
+      rerankScores: [0.99],
+      lexicalOverlap: 0.8,
+    });
     expect(r.status).toBe(StepStatus.LOW_CONFIDENCE);
   });
 
   it('treats unknown overlap as unknown, not as acceptable', () => {
-    // null means "could not compute", and must not be read as passing the gate.
-    const r = evaluateLocal({ ...base, candidateCount: 8, rerankScores: [0.99], lexicalOverlap: null });
+    const r = evaluateLocal({
+      ...base,
+      candidateCount: 8,
+      rerankScores: [0.99],
+      lexicalOverlap: null,
+    });
     expect(r.status).toBe(StepStatus.LOW_CONFIDENCE);
   });
 
-  /**
-   * THIS TEST USED TO ASSERT THE OPPOSITE, on the reasoning that "an exact contiguous match is
-   * decided before any score is read". The principle is right and was applied to the wrong
-   * thing: lexical overlap is not a score. It is a deterministic check on whether the
-   * candidate is about the same characters at all, which is why ADR 008 introduced it — a
-   * cross-encoder had scored a nonsense control at 0.99.
-   *
-   * A five-character run resolving to one work short-circuits at confidence 1.0 however little
-   * of the query it accounts for. Measured on a real 14,519-row batch: 10.8% of exact matches
-   * returned a poem sharing under 40% of the query's characters, the worst 15%, all at maximum
-   * confidence. The floor here is the same 0.15 the reranker path uses, not a second number.
-   */
   it('rejects an exact match whose work shares almost none of the query', () => {
     const r = evaluateLocal({
       ...base,
@@ -112,8 +116,6 @@ describe('evaluateLocal', () => {
     expect(r.confidence).toBe(0);
   });
 
-  // The original principle, still true: a weak SCORE must not demote a real exact match. Only
-  // the deterministic character check can, and only when the candidate is unrelated.
   it('still answers on an exact match whose work does share the query characters', () => {
     const r = evaluateLocal({
       ...base,
@@ -126,8 +128,6 @@ describe('evaluateLocal', () => {
     expect(r.confidence).toBe(1);
   });
 
-  // Null is "could not compute", and must not be read as failing the gate either — an exact
-  // match with no overlap figure still answers, exactly as it did before this change.
   it('does not reject an exact match when the overlap could not be computed', () => {
     const r = evaluateLocal({
       ...base,
@@ -147,8 +147,8 @@ describe('evaluateLocal', () => {
   it('thresholds are injectable, so calibration never edits the pipeline', () => {
     const input = { ...base, candidateCount: 5, rerankScores: [0.4] };
     expect(evaluateLocal(input, PROVISIONAL_THRESHOLDS).status).toBe(StepStatus.LOW_CONFIDENCE);
-    expect(
-      evaluateLocal(input, { ...PROVISIONAL_THRESHOLDS, noiseFloor: 0.5 }).status,
-    ).toBe(StepStatus.NO_RESULT);
+    expect(evaluateLocal(input, { ...PROVISIONAL_THRESHOLDS, noiseFloor: 0.5 }).status).toBe(
+      StepStatus.NO_RESULT,
+    );
   });
 });

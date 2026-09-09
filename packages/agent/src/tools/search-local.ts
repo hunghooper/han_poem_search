@@ -1,11 +1,3 @@
-/**
- * search_local_exact and search_local_semantic — the spec §9.2.
- *
- * The agent gets the local corpus as tools too, not just as the thing that ran before it. It
- * may have rewritten the query, translated it, or realised the user meant a different poem,
- * and in each case it needs to search again with different input.
- */
-
 import { z } from 'zod';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { exactNgramSearch } from '@han/retrieval/sources/exact-ngram';
@@ -20,7 +12,9 @@ const ExactArgs = z.object({
   fragment: z.string().min(2).max(500),
 });
 
-export function createSearchLocalExactTool(db: NodePgDatabase<Record<string, never>>): Tool<z.infer<typeof ExactArgs>> {
+export function createSearchLocalExactTool(
+  db: NodePgDatabase<Record<string, never>>,
+): Tool<z.infer<typeof ExactArgs>> {
   return {
     name: 'search_local_exact',
     source: 'exact',
@@ -62,7 +56,11 @@ export function createSearchLocalExactTool(db: NodePgDatabase<Record<string, nev
           metadata: { matchKind: m.kind, reordered: m.reading?.reordered ?? false },
         });
       }
-      return okResult({ name: 'search_local_exact', source: 'exact' }, [...byWork.values()], ctx.now() - started);
+      return okResult(
+        { name: 'search_local_exact', source: 'exact' },
+        [...byWork.values()],
+        ctx.now() - started,
+      );
     },
   };
 }
@@ -98,8 +96,6 @@ export function createSearchLocalSemanticTool(
     async execute(args, ctx: ToolContext) {
       const started = ctx.now();
       const r = await hybridSearch(args.query, { db, model, vectors, topK: 8 });
-      // A hybrid run that produced candidates but nothing convincing is LOW_CONFIDENCE, not
-      // NO_RESULT — the agent must be able to tell "nothing there" from "nothing good enough".
       if (r.evidence.length > 0 && r.rerankScores.length > 0 && (r.rerankScores[0] ?? 0) < 0.35) {
         return {
           toolName: 'search_local_semantic',
@@ -111,7 +107,11 @@ export function createSearchLocalSemanticTool(
           error: null,
         };
       }
-      return okResult({ name: 'search_local_semantic', source: 'hybrid' }, r.evidence, ctx.now() - started);
+      return okResult(
+        { name: 'search_local_semantic', source: 'hybrid' },
+        r.evidence,
+        ctx.now() - started,
+      );
     },
   };
 }

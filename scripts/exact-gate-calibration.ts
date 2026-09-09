@@ -1,22 +1,3 @@
-/**
- * What does a lexical-overlap floor do to the exact-match short-circuit?
- *
- * §7.1 lets a contiguous run of five characters resolving to one work short-circuit the whole
- * pipeline at confidence 1.0. On real calligraphy that fires on inputs where the five matched
- * characters are a ninth of what the user pasted: 234 of 1,888 exact matches in a 14,519-row
- * batch returned a poem sharing under 40% of the query's characters, at maximum confidence.
- *
- * The gate that catches exactly this already exists — `minLexicalOverlap`, added after the
- * reranker scored a nonsense control at 0.99 (ADR 008). It never applied here, for a reason
- * that is not a threshold at all: the short-circuit returns `lexicalOverlap: null`, so the
- * value the gate reads is never computed on this path.
- *
- * CONTRIBUTING requires a recorded calibration before a confidence rule changes. This is it:
- * every exact match in a real job, scored the way the gate would score it.
- *
- * Run: pnpm exec tsx scripts/exact-gate-calibration.ts [jobFilename]
- */
-
 import './env.js';
 import pg from 'pg';
 import { lexicalOverlap } from '@han/retrieval/hybrid';
@@ -32,8 +13,6 @@ interface Row {
 async function main(): Promise<void> {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
-  // The query the system actually received, and the poem it actually returned. Not the
-  // exported columns — those are a rendering, and a calibration should read the source.
   const { rows } = await pool.query<Row>(
     `select r.query,
             p.text_display as content,
@@ -59,7 +38,8 @@ async function main(): Promise<void> {
     .filter((v): v is number => v !== null)
     .sort((a, b) => a - b);
 
-  const q = (p: number): number => scored[Math.min(scored.length - 1, Math.floor(scored.length * p))]!;
+  const q = (p: number): number =>
+    scored[Math.min(scored.length - 1, Math.floor(scored.length * p))]!;
 
   console.log(`\n${scored.length} exact_full_match rows from ${JOB}\n`);
   console.log('  overlap between the query and the poem returned:');
@@ -75,8 +55,6 @@ async function main(): Promise<void> {
     );
   }
 
-  // The floor already in use on the reranker path, so the two paths can share one number
-  // rather than acquiring a second threshold nobody calibrated.
   const existing = 0.15;
   const rejected = scored.filter((v) => v < existing).length;
   console.log(

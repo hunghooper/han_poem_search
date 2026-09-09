@@ -42,8 +42,6 @@ describe('runTool — a tool NEVER throws (§5.4)', () => {
   });
 
   it('classifies a slow tool as TIMEOUT, never as NO_RESULT', async () => {
-    // "Collapsing any of these into NO_RESULT is the most damaging mistake available in this
-    // codebase: a timeout and an empty result mean opposite things to the agent."
     const r = await runTool(
       mk({
         timeoutMs: 20,
@@ -99,7 +97,6 @@ describe('runTool — a tool NEVER throws (§5.4)', () => {
     );
     ac.abort();
     const r = await pending;
-    // The caller gave up; the tool did not exceed its own budget.
     expect(r.status).toBe(StepStatus.ERROR);
   });
 });
@@ -107,7 +104,10 @@ describe('runTool — a tool NEVER throws (§5.4)', () => {
 describe('redactArgs', () => {
   it('redacts marked fields and leaves the rest', () => {
     const t = mk({ redact: ['apiKey'] });
-    expect(redactArgs(t, { q: 'poem', apiKey: 'secret' })).toEqual({ q: 'poem', apiKey: '[redacted]' });
+    expect(redactArgs(t, { q: 'poem', apiKey: 'secret' })).toEqual({
+      q: 'poem',
+      apiKey: '[redacted]',
+    });
   });
 
   it('is a no-op when nothing is marked', () => {

@@ -1,22 +1,3 @@
-/**
- * Does the 平仄 check discriminate between poems, or does it just detect 古體詩?
- *
- * CONTRIBUTING requires a recorded calibration run before a verification rule changes, and
- * this is that run. The question is specific:
- *
- *   `analyseForm` classifies by SHAPE. A 五言絕句 and a 五言古絕 are both four lines of five
- *   characters — indistinguishable by shape, and the only thing that separates them is the
- *   平仄 pattern. So when the tone check reports a failure on a shape-classified 絕句, has it
- *   found a wrong candidate, or has it found a 古絕 that the shape classifier mislabelled?
- *
- * If most shape-classified regulated poems in the corpus FAIL their own tone check, the check
- * is reporting "this is ancient-style verse", not "this is the wrong poem" — and a `fail` that
- * fires on correct answers is worse than no check at all, because a column of failures beside
- * a column of correct titles teaches the reader to ignore it.
- *
- * Run: pnpm exec tsx scripts/prosody-calibration.ts [sampleSize]
- */
-
 import './env.js';
 import pg from 'pg';
 import { analyseForm } from '@han/retrieval/verify/form';
@@ -33,9 +14,7 @@ interface Tally {
   rhymePass: number;
   rhymeFail: number;
   rhymeAbstain: number;
-  /** What the pipeline ACTUALLY does with this poem — the number that matters to a user. */
   verdictFail: number;
-  /** What the OLD rule would have rejected, for the before/after in ADR 011. */
   legacyFail: number;
 }
 
@@ -54,7 +33,6 @@ const blank = (): Tally => ({
 async function main(): Promise<void> {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
-  // Whole poems, sampled at random so the result is not an artefact of ingest order.
   const { rows } = await pool.query<{ poem_id: string; lines: string[] }>(
     `select p.id as poem_id, array_agg(l.text_match order by l.line_no) as lines
        from poem p
@@ -84,11 +62,8 @@ async function main(): Promise<void> {
     else if (rhyme.consistent) tally.rhymePass += 1;
     else tally.rhymeFail += 1;
 
-    // The candidate judged against itself: a perfect match, so any `fail` here is a false
-    // negative the pipeline would show a user who pasted this exact poem.
     if (verifyCandidate(lines, lines).outcome === 'fail') tally.verdictFail += 1;
 
-    // The old rule: any tone or rhyme failure on a shape-classified regulated poem rejected.
     const REG = ['wujue', 'qijue', 'wulu', 'qilu', 'wupai', 'qipai'];
     if (REG.includes(form.form) && (tone.consistent === false || rhyme.consistent === false)) {
       tally.legacyFail += 1;
@@ -97,7 +72,8 @@ async function main(): Promise<void> {
     byForm.set(form.form, tally);
   }
 
-  const pct = (a: number, b: number): string => (b === 0 ? '   —' : `${((a / b) * 100).toFixed(0)}%`.padStart(4));
+  const pct = (a: number, b: number): string =>
+    b === 0 ? '   —' : `${((a / b) * 100).toFixed(0)}%`.padStart(4);
 
   console.log(`\nsampled ${rows.length} poems from the corpus\n`);
   console.log('form            n      tone: pass fail abst    rhyme: pass fail abst');
@@ -112,8 +88,6 @@ async function main(): Promise<void> {
     );
   }
 
-  // The number that decides it. These are poems the corpus says are correct, being judged by
-  // their own rules; every failure here is a false negative waiting to happen on a match.
   const REGULATED = ['wujue', 'qijue', 'wulu', 'qilu', 'wupai', 'qipai'];
   const regulated = sorted.filter(([f]) => REGULATED.includes(f));
   const rn = regulated.reduce((s, [, t]) => s + t.n, 0);
@@ -125,12 +99,13 @@ async function main(): Promise<void> {
   console.log(`  tone check fails on  ${rf} (${((rf / rn) * 100).toFixed(1)}%)`);
   console.log(`  rhyme check fails on ${rr} (${((rr / rn) * 100).toFixed(1)}%)`);
 
-  // What the pipeline reports, across every form, for a poem matched against itself.
   const allN = sorted.reduce((s2, [, t]) => s2 + t.n, 0);
   const allFail = sorted.reduce((s2, [, t]) => s2 + t.verdictFail, 0);
   const allLegacy = sorted.reduce((s2, [, t]) => s2 + t.legacyFail, 0);
   console.log(String.fromCharCode(10) + 'VERDICT on a perfect match, all forms:');
-  console.log(`  before: ${allLegacy}/${allN} rejected (${((allLegacy / allN) * 100).toFixed(1)}%)`);
+  console.log(
+    `  before: ${allLegacy}/${allN} rejected (${((allLegacy / allN) * 100).toFixed(1)}%)`,
+  );
   console.log(`  after:  ${allFail}/${allN} rejected (${((allFail / allN) * 100).toFixed(1)}%)`);
 
   await pool.end();

@@ -1,19 +1,3 @@
-/**
- * Offline eval harness — the spec §13, §16 Phase 2.
- *
- * Reports recall@k and MRR so a retrieval change can be judged by numbers rather than by
- * trying a few queries and forming an impression. CONTRIBUTING.md requires before/after
- * figures on any PR that affects retrieval quality; this produces them.
- *
- * The query set is SYNTHESISED FROM THE CORPUS: sample a poem, take a window of it, damage
- * that window in a known way, and the correct answer is known by construction. That is what
- * makes 500 labelled queries possible when the hand-labelled golden set has 12.
- *
- * What it does NOT measure: whether a topical query returns *good* poems. That needs human
- * judgement and the hand-labelled set. Synthetic evaluation measures whether damaged input
- * still finds the poem it came from — which is the dominant user story, and no more.
- */
-
 import './env.js';
 import { writeFile } from 'node:fs/promises';
 import pg from 'pg';
@@ -23,7 +7,14 @@ import { hybridSearch } from '@han/retrieval/hybrid';
 import { ModelClient } from '@han/retrieval/model-client';
 import { VectorStore } from '@han/retrieval/vector-store';
 
-type Damage = 'clean' | 'window' | 'line_reverse' | 'grid_transpose' | 'char_drop' | 'simplified' | 'one_per_line';
+type Damage =
+  | 'clean'
+  | 'window'
+  | 'line_reverse'
+  | 'grid_transpose'
+  | 'char_drop'
+  | 'simplified'
+  | 'one_per_line';
 
 interface Case {
   damage: Damage;
@@ -42,7 +33,6 @@ const ALL_DAMAGE: Damage[] = [
   'one_per_line',
 ];
 
-/** Deterministic PRNG so an eval run is reproducible and two runs are comparable. */
 function mulberry32(seed: number): () => number {
   let a = seed;
   return () => {
@@ -61,7 +51,6 @@ function damage(kind: Damage, lines: string[], rnd: () => number): string {
       return lines.join('\n');
 
     case 'window': {
-      // A user pastes what they remember, which is rarely the whole poem.
       const start = Math.floor(rnd() * Math.max(1, lines.length - 1));
       return lines.slice(start, start + 2).join('\n');
     }
@@ -70,7 +59,6 @@ function damage(kind: Damage, lines: string[], rnd: () => number): string {
       return [...lines].reverse().join('\n');
 
     case 'grid_transpose': {
-      // The gq-09 case: a vertical column layout pasted row-wise.
       const stream = lines.join('');
       const cols = lines.length || 4;
       const rows = Math.ceil(stream.length / cols);
@@ -87,7 +75,6 @@ function damage(kind: Damage, lines: string[], rnd: () => number): string {
     }
 
     case 'char_drop': {
-      // OCR error: one character per line becomes something else.
       return lines
         .map((l) => {
           if (l.length < 3) return l;
@@ -98,7 +85,6 @@ function damage(kind: Damage, lines: string[], rnd: () => number): string {
     }
 
     case 'simplified':
-      // A user typing on a Simplified IME searching a Traditional corpus.
       return lines.join('\n');
 
     case 'one_per_line':
@@ -128,8 +114,6 @@ async function main(): Promise<void> {
   const db = drizzle(pool);
   const rnd = mulberry32(seed);
 
-  // The semantic layer is optional; the harness reports which retrievers were live so a run
-  // taken without it is never compared against one taken with it by accident.
   let model: ModelClient | null = new ModelClient({
     baseUrl: process.env.MODEL_SERVICE_URL ?? 'http://localhost:8000',
     timeoutMs: 60000,
@@ -148,7 +132,6 @@ async function main(): Promise<void> {
   console.log(`semantic layer: ${model && vectors ? 'live' : 'ABSENT — exact + bm25 only'}`);
 
   try {
-    // Sample regulated verse: the damage models assume a poem with several comparable lines.
     const res = await db.execute<{ workId: string; title: string | null; lines: string[] }>(sql`
       SELECT p.work_id AS "workId",
              p.title_display AS "title",
@@ -178,7 +161,10 @@ async function main(): Promise<void> {
       }
     }
 
-    const byDamage = new Map<Damage, { hits1: number; hits10: number; rr: number[]; lat: number[] }>();
+    const byDamage = new Map<
+      Damage,
+      { hits1: number; hits10: number; rr: number[]; lat: number[] }
+    >();
     for (const kind of ALL_DAMAGE) byDamage.set(kind, { hits1: 0, hits10: 0, rr: [], lat: [] });
 
     let done = 0;
@@ -232,7 +218,9 @@ async function main(): Promise<void> {
     const overall10 = scores.reduce((a, s) => a + s.recallAt10 * s.n, 0) / (overallN || 1);
     const overallMrr = scores.reduce((a, s) => a + s.mrr * s.n, 0) / (overallN || 1);
     console.log('-'.repeat(62));
-    console.log(`overall          ${String(overallN).padStart(3)}            ${(overall10 * 100).toFixed(1)}%  ${overallMrr.toFixed(3)}`);
+    console.log(
+      `overall          ${String(overallN).padStart(3)}            ${(overall10 * 100).toFixed(1)}%  ${overallMrr.toFixed(3)}`,
+    );
 
     await writeFile(
       'docs/eval-latest.json',

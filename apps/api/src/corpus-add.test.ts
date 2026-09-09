@@ -8,15 +8,10 @@ const poem = {
   source_url: 'https://sou-yun.cn/Query.aspx?id=1',
 };
 
-/** The corpus lookup is the only database call the four gates can reach; nothing matches. */
 const emptyDb = {
   select: () => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) }),
 } as unknown as Db;
 
-/**
- * A database that fails on any call at all. Used to prove a gate returned BEFORE touching the
- * corpus — a gate that rejects only after querying is a gate that ran too late.
- */
 const forbiddenDb = {
   select: () => {
     throw new Error('the database must not be reached');
@@ -46,10 +41,6 @@ describe('proposeAddition', () => {
     expect(r.reason).toContain('local corpus');
   });
 
-  /**
-   * The one gate that matters most. A model can write a plausible sou-yun URL from memory, and
-   * a proposal whose source was never actually fetched is exactly what this path guards against.
-   */
   it('refuses a source URL the run never retrieved', async () => {
     const r = await proposeAddition(forbiddenDb, poem, {
       ...ctx,
@@ -65,7 +56,6 @@ describe('proposeAddition', () => {
     expect(r.proposed).toBe(false);
   });
 
-  /** The same rules a person uploading a file must pass — one definition, both callers. */
   it('refuses a proposal that fails the rules a person must pass', async () => {
     const r = await proposeAddition(forbiddenDb, { ...poem, author: '' }, ctx);
     expect(r.proposed).toBe(false);
@@ -85,7 +75,6 @@ describe('proposeAddition', () => {
 
     const r = await proposeAddition(db, poem, ctx);
     expect(r.proposed).toBe(true);
-    // Pending, and nothing else: no poem row, no lines, no index entry.
     expect(inserted).toMatchObject({ status: 'pending', origin: 'agent', runId: 'run-1' });
   });
 });

@@ -6,9 +6,6 @@ describe('resolveColumns', () => {
     expect(resolveColumns(undefined)).toEqual([...DEFAULT_COLUMNS]);
   });
 
-  // THE rule of this module. A spreadsheet is read a row at a time by someone who will never
-  // open the trace; a cell reading 李白 with no status beside it is taken as fact, whether the
-  // run was certain, guessing, or never reached that row at all.
   it('adds han_status back even when the caller leaves it out', () => {
     expect(resolveColumns(['title', 'author'])).toContain('status');
   });
@@ -21,8 +18,6 @@ describe('resolveColumns', () => {
     expect(resolveColumns(['title', 'nonsense'])).toEqual(['status', 'title']);
   });
 
-  // Two exports of the same file have to line up column for column, or pasting one beside the
-  // other silently misaligns the data.
   it('orders by the schema, not by the request', () => {
     expect(resolveColumns(['author', 'title', 'status'])).toEqual(['status', 'title', 'author']);
   });

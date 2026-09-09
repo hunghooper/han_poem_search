@@ -1,10 +1,3 @@
-/**
- * Search events — the spec §5.2. FROZEN CONTRACT.
- *
- * The event log is append-only and authoritative. Never UPDATE an event; corrections are
- * new events (§11). SearchRunState must be derivable by folding this stream — see state.ts.
- */
-
 import { z } from 'zod';
 import { TraceMsgSchema } from './trace.js';
 import { StepStatus } from './status.js';
@@ -64,11 +57,6 @@ export const SearchEventSchema = z.object({
   flags: z.array(z.string()).default([]),
   agentIteration: z.number().int().nonnegative().optional(),
   message: z.string().optional(), // English, and the fallback when a code has no label
-  /**
-   * What the message MEANT, so a reader can have it in their own language. The server does not
-   * know who will read the run — see packages/shared/src/trace.ts. Optional because events
-   * recorded before this existed replay without it, and must still read.
-   */
   messageTrace: TraceMsgSchema.optional(),
   metadata: EventMetadataSchema,
 });

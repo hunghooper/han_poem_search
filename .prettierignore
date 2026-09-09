@@ -4,3 +4,9 @@ dist
 coverage
 pnpm-lock.yaml
 data
+
+fixtures
+packages/db/migrations
+docs/eval-latest.json
+docs/gateway-availability.json
+docs/smoke-latest.json

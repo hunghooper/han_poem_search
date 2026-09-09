@@ -49,17 +49,23 @@ describe('reduce', () => {
       ev({ seq: 0, flags: [AggregateFlag.EXACT_PARTIAL_MATCH, AggregateFlag.INPUT_REORDERED] }),
       ev({ seq: 1, flags: [AggregateFlag.INPUT_REORDERED, flag('exact', StepStatus.HAS_RESULT)] }),
     ]);
-    expect(s.flags).toEqual([
-      'exact_partial_match',
-      'input_reordered',
-      'exact_has_result',
-    ]);
+    expect(s.flags).toEqual(['exact_partial_match', 'input_reordered', 'exact_has_result']);
   });
 
   it('sums cost and tokens across the run', () => {
     const s = fold([
-      ev({ seq: 0, step: 'agent', source: 'model', metadata: { costUsd: 0.01, tokensIn: 100, tokensOut: 20 } }),
-      ev({ seq: 1, step: 'llm_verification', source: 'llm_verify', metadata: { costUsd: 0.02, tokensIn: 50, tokensOut: 10 } }),
+      ev({
+        seq: 0,
+        step: 'agent',
+        source: 'model',
+        metadata: { costUsd: 0.01, tokensIn: 100, tokensOut: 20 },
+      }),
+      ev({
+        seq: 1,
+        step: 'llm_verification',
+        source: 'llm_verify',
+        metadata: { costUsd: 0.02, tokensIn: 50, tokensOut: 10 },
+      }),
     ]);
     expect(s.totalCostUsd).toBeCloseTo(0.03);
     expect(s.totalTokensIn).toBe(150);
@@ -72,13 +78,22 @@ describe('reduce', () => {
       ev({ seq: 1, step: 'tool_call', source: 'ctext', status: StepStatus.TIMEOUT }),
       ev({ seq: 2, step: 'tool_call', source: 'souyun', status: StepStatus.UNAVAILABLE }),
     ]);
-    expect(failedSources(s).map((f) => f.source).sort()).toEqual(['ctext', 'souyun']);
+    expect(
+      failedSources(s)
+        .map((f) => f.source)
+        .sort(),
+    ).toEqual(['ctext', 'souyun']);
   });
 
   it('preserves started metadata when the completed event omits it', () => {
     const s = fold([
       ev({ seq: 0, phase: 'started', metadata: { query: '撥雲尋古道' } }),
-      ev({ seq: 1, phase: 'completed', status: StepStatus.HAS_RESULT, metadata: { latencyMs: 42 } }),
+      ev({
+        seq: 1,
+        phase: 'completed',
+        status: StepStatus.HAS_RESULT,
+        metadata: { latencyMs: 42 },
+      }),
     ]);
     const st = s.steps[stepKey('exact', 'exact')];
     expect(st?.latencyMs).toBe(42);
@@ -110,11 +125,8 @@ describe('reconnect', () => {
   });
 
   it('an overlapping replay window does not double-count cost', () => {
-    const events = Array.from({ length: 6 }, (_, i) =>
-      ev({ seq: i, metadata: { costUsd: 0.01 } }),
-    );
+    const events = Array.from({ length: 6 }, (_, i) => ev({ seq: i, metadata: { costUsd: 0.01 } }));
     const prefix = fold(events.slice(0, 4));
-    // Server replays from seq 2 because the client under-reported lastSeq.
     const resumed = events.slice(2).reduce(reduce, prefix);
     expect(resumed.totalCostUsd).toBeCloseTo(0.06);
   });

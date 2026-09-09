@@ -1,28 +1,3 @@
-/**
- * The agent loop as Temporal workflow code — the spec §9.1, Phase 4.
- *
- * "The loop lives in Temporal workflow code; every LLM call and tool call is an activity. That
- * is what makes a multi-minute run survive a worker restart."
- *
- * THE FOUR RULES (CONTRIBUTING.md, "Working with Temporal"). This code is replayed from
- * history, so it must be deterministic:
- *
- *   - no unmediated clock or randomness
- *   - no fetch, no DB, no file I/O, and nothing that imports them
- *   - no in-flight logic changes without a patch
- *
- * ONE CORRECTION to CONTRIBUTING.md, which says to use `workflow.now()` in place of
- * `Date.now()`: the TypeScript SDK has no `workflow.now()`. Its sandbox replaces the global
- * `Date` and `Math.random` outright, so `Date.now()` here IS the deterministic workflow
- * clock and returns the same value on replay. `workflow.uuid4()` remains the right way to get
- * an id, because uuid generation reaches for crypto rather than Math.random.
- *
- * The plain-async loop in packages/agent was written against those rules a phase early — it
- * performed no I/O and read no clock directly — so this is the same control flow with `now`,
- * the provider and the tool runner replaced by activity proxies. The budget arithmetic, the
- * satisfaction check and the state compaction are pure, and imported unchanged.
- */
-
 import { msg, type TraceMsg } from '@han/shared/trace';
 import * as workflow from '@temporalio/workflow';
 import type { Evidence } from '@han/shared/evidence';
@@ -35,32 +10,25 @@ import {
   recordToolCall,
   type BudgetState,
 } from '@han/agent/budget';
-import { compact, initialAgentState, reduceToolResult, satisfied, type AgentState } from '@han/agent/state';
+import {
+  compact,
+  initialAgentState,
+  reduceToolResult,
+  satisfied,
+  type AgentState,
+} from '@han/agent/state';
 import { AGENT_BUDGET_EXHAUSTED } from '@han/agent/loop';
 import { AggregateFlag } from '@han/shared/flags';
 import type * as activities from '../activities/index.js';
 import type { AgentRunInput, AgentRunOutput, ToolCallResult, WorkflowEvent } from '../shared.js';
 
-/**
- * The retry policy lives HERE, in one place (§4.1 rule 2). The LLM adapter sets
- * `maxRetries: 0` precisely so this is the only retry layer — two of them duplicate tool calls
- * and blow the cost budget in ways that are painful to diagnose.
- */
 const { reason, callTool, emitEvent, listTools } = workflow.proxyActivities<typeof activities>({
   startToCloseTimeout: '2 minutes',
-  // Without this, a worker that dies mid-activity is invisible to Temporal until
-  // startToCloseTimeout expires: the replacement worker replays the history in a second and
-  // then waits out the rest of those two minutes before the activity is even rescheduled. The
-  // run survives — and arrives at its budget check with the budget already spent on the
-  // outage. Heartbeating turns a two-minute stall into a ten-second one.
   heartbeatTimeout: '30 seconds',
   retry: {
     maximumAttempts: 3,
     initialInterval: '500ms',
     backoffCoefficient: 2,
-    // A bad request fails identically on retry; a config error is not transient. These match
-    // the `type` of an ApplicationFailure, NOT the message — an activity that throws a plain
-    // Error reading 'CONFIG_INVALID: ...' is retried regardless of what this list says.
     nonRetryableErrorTypes: ['CONFIG_INVALID', 'LLM_BAD_TOOL_ARGS'],
   },
 });
@@ -102,8 +70,6 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
   const emit = (e: Omit<WorkflowEvent, 'runId'>) => emitEvent({ ...e, runId: input.runId });
 
   let state: AgentState = initialAgentState(input.query, input.flags, input.sources);
-  // Date.now() is the sandbox's clock, not the host's: on replay it returns what it returned
-  // the first time, so the budget decides identically and history does not diverge.
   let budget: BudgetState = initialBudgetState(Date.now());
   const flags: string[] = [];
 
@@ -120,7 +86,6 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
   for (;;) {
     const check = checkBudget(budget, input.config.agent, Date.now());
     if (!check.withinBudget) {
-      // Not an error path (§12): answer from what was collected, marked partial.
       flags.push(AGENT_BUDGET_EXHAUSTED);
       return stop(
         state,
@@ -138,20 +103,9 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
         messages,
         tools: available,
         maxTokens: 4096,
-        // The id only. A key placed in a workflow argument would be written into history,
-        // which is persisted and replayed; the activity looks the key up by this instead.
         runId: input.runId,
       });
     } catch (e) {
-      // Ends the AGENT, not the run. Letting this escape would leave the caller with no
-      // final_answer — the opaque failure §1 forbids, and the hardest kind to notice because
-      // the run simply never finishes.
-      //
-      // Reported as agent_model_failed, NOT as budget exhaustion. They are opposite
-      // diagnoses: exhaustion says the agent worked until it ran out of room and the fix is
-      // more budget; this says the model never answered and more budget would change
-      // nothing. This path once carried the budget flag, and an unconfigured gateway on a
-      // restarted worker duly reported itself as a run that had simply run out of time.
       flags.push(AggregateFlag.AGENT_MODEL_FAILED);
       return stop(
         state,
@@ -171,7 +125,10 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
       phase: 'completed',
       agentIteration: state.iteration,
       flags: decision.flags,
-      message: decision.toolCalls.length > 0 ? `Chose ${decision.toolCalls[0]!.name}` : 'Decided to finish',
+      message:
+        decision.toolCalls.length > 0
+          ? `Chose ${decision.toolCalls[0]!.name}`
+          : 'Decided to finish',
       messageTrace:
         decision.toolCalls.length > 0
           ? msg('trace.agent.chose', { tool: decision.toolCalls[0]!.name })
@@ -187,13 +144,14 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
     if (!call) return stop(state, flags, 'model_finished', false, decision.text ?? 'Finished');
 
     if (!available.some((t) => t.name === call.name)) {
-      // A hallucinated tool name is the model's mistake to fix, so it goes back as a tool
-      // result rather than ending the run.
       messages.push(...(decision.messages as Msg[]));
       messages.push({
         role: 'tool',
         toolCallId: call.id,
-        content: JSON.stringify({ error: `no such tool: ${call.name}`, available: available.map((t) => t.name) }),
+        content: JSON.stringify({
+          error: `no such tool: ${call.name}`,
+          available: available.map((t) => t.name),
+        }),
       });
       continue;
     }
@@ -206,7 +164,6 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
     });
 
     budget = recordToolCall(budget);
-    // A tool that called a model reports what it spent. undefined means it made no model call.
     if (result.costUsd !== undefined) budget = recordSpend(budget, result.costUsd);
 
     state = reduceToolResult(state, call.name, {
@@ -238,8 +195,6 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
     messages.push({
       role: 'tool',
       toolCallId: call.id,
-      // The compacted view, not the evidence: the same §9.1 rule applies to what a tool
-      // reports back as to what the agent is shown at the start.
       content: JSON.stringify({
         status: result.status,
         resultCount: result.resultCount,
@@ -252,7 +207,6 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
   }
 }
 
-/** `describeToolResult`'s twin — same branches, same order. */
 function toolResultTrace(name: string, r: ToolCallResult): TraceMsg {
   switch (r.status) {
     case StepStatus.HAS_RESULT:
@@ -266,8 +220,6 @@ function toolResultTrace(name: string, r: ToolCallResult): TraceMsg {
     case StepStatus.UNAVAILABLE:
       return msg('trace.tool.unavailable', { tool: name });
     case StepStatus.ERROR:
-      // The error text is the tool's own; it passes through as a value so the frame is still
-      // the reader's language.
       return msg('trace.tool.failed', { tool: name, error: r.error?.message ?? '' });
     default:
       return msg('trace.tool.other', { tool: name, status: String(r.status) });

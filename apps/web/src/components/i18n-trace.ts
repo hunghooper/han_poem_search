@@ -1,21 +1,3 @@
-/**
- * Trace sentences, in the three languages §17 puts in scope.
- *
- * Separate from `i18n.ts` because these are a different kind of label. The rest of that file
- * names buttons and columns; these are the system explaining its own reasoning, and they are
- * the text a reader most needs in their own language — a Vietnamese page that answers "why did
- * it decide that?" in English has failed at the only part that was hard.
- *
- * The codes come from `@han/shared/trace`, and `i18n.test.ts` checks this file against that
- * catalogue in all three languages. `{name}` is a value; `{parts}` is where composed
- * sub-messages land.
- *
- * FORM NAMES STAY IN HAN (五言絕句, 韻部, 平仄). They are the terms of the subject, they are
- * what the poems themselves use, and a reader looking at classical Chinese verse reads them
- * more easily than any translation of them — which is also what the request asked for: Chinese
- * is fine as long as it goes through i18n rather than being hardcoded.
- */
-
 type Dict = Record<string, string>;
 
 const vi: Dict = {
@@ -46,7 +28,8 @@ const vi: Dict = {
     'khớp chính xác nhưng dẫn tới {n} tác phẩm — đưa cả nhóm ứng viên ra, không đoán bừa một cái',
   'trace.conf.windowsAgree': '{n} cửa sổ đều chỉ về cùng một tác phẩm',
   'trace.conf.noCandidates': 'không nguồn tra nội bộ nào trả về ứng viên nào',
-  'trace.conf.unscored': 'có {n} ứng viên nhưng chưa cái nào được chấm điểm — bộ xếp hạng lại không chạy',
+  'trace.conf.unscored':
+    'có {n} ứng viên nhưng chưa cái nào được chấm điểm — bộ xếp hạng lại không chạy',
   'trace.conf.overlapBelowFloor':
     'có ứng viên, nhưng cái tốt nhất chỉ trùng {pct}% số chữ của câu bạn nhập — dưới mức sàn {floor}%, nên điểm xếp hạng {score} không đáng tin',
   'trace.conf.belowNoiseFloor': 'điểm xếp hạng cao nhất {score} nằm dưới ngưỡng nhiễu {floor}',
@@ -63,7 +46,8 @@ const vi: Dict = {
     '{form} — câu nhập đã bị đảo thứ tự, nên hình dạng dòng của nó không nói lên điều gì về bài thơ',
   'trace.verify.formMatches': '{form} — {n} chữ mỗi dòng, khớp với câu bạn nhập',
   'trace.verify.formDiffers': '{form} có {n} chữ mỗi dòng, còn câu bạn nhập có {input}',
-  'trace.verify.notRegulated': '{form} không phải cận thể — luật vần và luật bằng trắc không áp dụng',
+  'trace.verify.notRegulated':
+    '{form} không phải cận thể — luật vần và luật bằng trắc không áp dụng',
   'trace.verify.shapeGuess':
     '{parts} — nhưng bài có hình dạng này có thể là 古詩 chứ không phải {form}, nên điều đó không kết luận được gì',
   'trace.verify.toneBroken': '{parts} — điều đó khiến bài này là 古體, chứ không phải một bài khác',
@@ -106,8 +90,7 @@ const vi: Dict = {
   'trace.propose.notSufficient': 'con thẩm định không cho là chứng cứ đã đủ',
   'trace.propose.localAnswered': 'kho nội bộ đã trả lời được rồi',
   'trace.propose.urlNotRetrieved': 'nguồn được nêu không phải URL mà lượt chạy này thật sự lấy về',
-  'trace.propose.failsRules':
-    'đề xuất không qua nổi chính những luật một người phải qua: {fields}',
+  'trace.propose.failsRules': 'đề xuất không qua nổi chính những luật một người phải qua: {fields}',
   'trace.propose.duplicate': 'đã có trong kho',
 
   'trace.answer.none': 'Không có câu trả lời đủ chắc{parts}',

@@ -23,7 +23,6 @@ describe('normalize', () => {
   });
 
   it('converts Simplified input to the Traditional match form', () => {
-    // The corpus is mixed-script (§3.1 item 3); a Simplified query must reach a Traditional poem.
     expect(toMatchForm('白日依山尽')).toBe(toMatchForm('白日依山盡'));
   });
 
@@ -45,10 +44,8 @@ describe('normalize', () => {
   it('maps every match character back to its position in the display text', () => {
     const n = normalize('群峭碧摩天，逍遙不記年。');
     expect(n.matchToDisplay).toHaveLength(n.textMatch.length);
-    // 逍 is match index 5 and display index 6 — the comma shifted it by one.
     expect(n.textMatch[5]).toBe('逍');
     expect(n.textDisplay[n.matchToDisplay[5]!]).toBe('逍');
-    // Every mapping must land on the character it claims, allowing for variant folding.
     for (let i = 0; i < n.textMatch.length; i += 1) {
       const d = n.textDisplay[n.matchToDisplay[i]!];
       expect(d).toBeDefined();
@@ -109,8 +106,6 @@ describe('prosodyLines', () => {
     ]);
   });
 
-  // Nothing to split on. Inventing a caesura here would be manufacturing structure the input
-  // does not have; the form check abstains instead, which is the honest answer.
   it('leaves an unpunctuated run as one line', () => {
     expect(prosodyLines('床前明月光疑是地上霜')).toEqual(['床前明月光疑是地上霜']);
   });

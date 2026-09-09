@@ -1,26 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createOpenAiCompatibleProvider, mapFinishReason, safeJsonParse } from './openai-compatible.js';
+import {
+  createOpenAiCompatibleProvider,
+  mapFinishReason,
+  safeJsonParse,
+} from './openai-compatible.js';
 import { USAGE_UNAVAILABLE, BAD_TOOL_ARGS } from '../provider.js';
 
-/**
- * A fake gateway. The adapter is exercised end to end without credentials, which matters:
- * these are the behaviours §4.3 says gateways get wrong, and they must be tested before a key
- * exists rather than discovered with one.
- */
 const fakeGateway = (body: unknown, init: { status?: number } = {}) =>
-  vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status: init.status ?? 200,
-      headers: { 'content-type': 'application/json' },
-    }),
+  vi.fn(
+    async () =>
+      new Response(JSON.stringify(body), {
+        status: init.status ?? 200,
+        headers: { 'content-type': 'application/json' },
+      }),
   );
 
-/**
- * These exercise the NON-STREAMING path explicitly. Streaming is the adapter default (see the
- * factory), so this file pins the JSON path and streaming.test.ts pins the SSE one; both must
- * produce an identical LlmResponse, which is why buildResponse is shared between them.
- */
-const provider = (fetchImpl: ReturnType<typeof fakeGateway>, priceTable?: Record<string, { inputPerMTok: number; outputPerMTok: number }>) =>
+const provider = (
+  fetchImpl: ReturnType<typeof fakeGateway>,
+  priceTable?: Record<string, { inputPerMTok: number; outputPerMTok: number }>,
+) =>
   createOpenAiCompatibleProvider({
     name: 'fake',
     apiKey: 'test-key',
@@ -59,8 +57,6 @@ describe('mapFinishReason', () => {
   });
 
   it('treats an omitted reason as a clean end rather than an error', () => {
-    // Some gateways drop finish_reason. Erroring would reject working gateways; the presence
-    // of tool calls disambiguates the truncation case at the call site.
     expect(mapFinishReason(null)).toBe('end_turn');
     expect(mapFinishReason(undefined)).toBe('end_turn');
   });
@@ -69,7 +65,10 @@ describe('mapFinishReason', () => {
 describe('createOpenAiCompatibleProvider', () => {
   it('returns text and usage from a plain completion', async () => {
     const p = provider(fakeGateway(completion()));
-    const r = await p.complete({ model: 'test-model', messages: [{ role: 'user', content: 'hi' }] }, new AbortController().signal);
+    const r = await p.complete(
+      { model: 'test-model', messages: [{ role: 'user', content: 'hi' }] },
+      new AbortController().signal,
+    );
     expect(r.text).toBe('hello');
     expect(r.stopReason).toBe('end_turn');
     expect(r.usage.inputTokens).toBe(10);
@@ -87,7 +86,13 @@ describe('createOpenAiCompatibleProvider', () => {
               message: {
                 role: 'assistant',
                 content: null,
-                tool_calls: [{ id: 't1', type: 'function', function: { name: 'search_local_exact', arguments: '{"query":"細草微風岸"}' } }],
+                tool_calls: [
+                  {
+                    id: 't1',
+                    type: 'function',
+                    function: { name: 'search_local_exact', arguments: '{"query":"細草微風岸"}' },
+                  },
+                ],
               },
               finish_reason: 'tool_calls',
             },
@@ -97,11 +102,11 @@ describe('createOpenAiCompatibleProvider', () => {
     );
     const r = await p.complete({ model: 'm', messages: [] }, new AbortController().signal);
     expect(r.stopReason).toBe('tool_use');
-    expect(r.toolCalls).toEqual([{ id: 't1', name: 'search_local_exact', args: { query: '細草微風岸' } }]);
+    expect(r.toolCalls).toEqual([
+      { id: 't1', name: 'search_local_exact', args: { query: '細草微風岸' } },
+    ]);
   });
 
-  // §4.3: "models emit malformed JSON. Parse defensively and, on failure, return the parse
-  // error to the model as a tool result so it can correct itself. Do not crash the run."
   it('survives malformed tool arguments and carries the error forward', async () => {
     const p = provider(
       fakeGateway(
@@ -112,7 +117,13 @@ describe('createOpenAiCompatibleProvider', () => {
               message: {
                 role: 'assistant',
                 content: null,
-                tool_calls: [{ id: 't1', type: 'function', function: { name: 'search_google', arguments: '{"q": unquoted}' } }],
+                tool_calls: [
+                  {
+                    id: 't1',
+                    type: 'function',
+                    function: { name: 'search_google', arguments: '{"q": unquoted}' },
+                  },
+                ],
               },
               finish_reason: 'tool_calls',
             },
@@ -129,9 +140,6 @@ describe('createOpenAiCompatibleProvider', () => {
 });
 
 describe('degraded gateways', () => {
-  // §4.3: "usage may be absent. Gateways sometimes drop it. When missing, report zeros and set
-  // costUsd: null — never fabricate a number, and surface usage_unavailable so budget
-  // accounting is visibly degraded rather than silently wrong."
   it('reports missing usage as degraded rather than as zero cost', async () => {
     const p = provider(fakeGateway(completion({ usage: undefined })), {
       'test-model': { inputPerMTok: 1, outputPerMTok: 1 },
@@ -139,7 +147,6 @@ describe('degraded gateways', () => {
     const r = await p.complete({ model: 'test-model', messages: [] }, new AbortController().signal);
     expect(r.flags).toContain(USAGE_UNAVAILABLE);
     expect(r.usage.inputTokens).toBe(0);
-    // Not 0 — null. Zero cost is a claim; null is an admission.
     expect(r.usage.costUsd).toBeNull();
   });
 
@@ -147,11 +154,17 @@ describe('degraded gateways', () => {
     const priced = provider(fakeGateway(completion()), {
       'test-model': { inputPerMTok: 2, outputPerMTok: 10 },
     });
-    const r = await priced.complete({ model: 'test-model', messages: [] }, new AbortController().signal);
+    const r = await priced.complete(
+      { model: 'test-model', messages: [] },
+      new AbortController().signal,
+    );
     expect(r.usage.costUsd).toBeCloseTo((10 / 1e6) * 2 + (5 / 1e6) * 10);
 
     const unpriced = provider(fakeGateway(completion({ model: 'mystery-model' })));
-    const u = await unpriced.complete({ model: 'mystery-model', messages: [] }, new AbortController().signal);
+    const u = await unpriced.complete(
+      { model: 'mystery-model', messages: [] },
+      new AbortController().signal,
+    );
     expect(u.usage.costUsd).toBeNull();
   });
 
@@ -163,8 +176,6 @@ describe('degraded gateways', () => {
   });
 
   it('maps a 429 to UNAVAILABLE, not to a generic error', async () => {
-    // The status table from CONTRIBUTING.md: quota exhausted is UNAVAILABLE, and the agent
-    // treats that differently from a genuine failure.
     const p = provider(fakeGateway({ error: { message: 'rate limited' } }, { status: 429 }));
     await expect(
       p.complete({ model: 'm', messages: [] }, new AbortController().signal),
@@ -176,7 +187,9 @@ describe('degraded gateways', () => {
     const slow = vi.fn(
       () =>
         new Promise<Response>((_, reject) => {
-          ac.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+          ac.signal.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          );
         }),
     );
     const p = provider(slow as never);
@@ -189,11 +202,20 @@ describe('degraded gateways', () => {
     const p = provider(
       fakeGateway(
         completion({
-          choices: [{ index: 0, message: { role: 'assistant', content: '細草微風岸，危檣獨夜舟。' }, finish_reason: 'stop' }],
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant', content: '細草微風岸，危檣獨夜舟。' },
+              finish_reason: 'stop',
+            },
+          ],
         }),
       ),
     );
-    const r = await p.complete({ model: 'm', messages: [{ role: 'user', content: '杜甫' }] }, new AbortController().signal);
+    const r = await p.complete(
+      { model: 'm', messages: [{ role: 'user', content: '杜甫' }] },
+      new AbortController().signal,
+    );
     expect(r.text).toBe('細草微風岸，危檣獨夜舟。');
   });
 
@@ -205,13 +227,23 @@ describe('degraded gateways', () => {
         model: 'm',
         messages: [
           { role: 'user', content: 'where is this from' },
-          { role: 'assistant', content: null, toolCalls: [{ id: 't1', name: 'search_local_exact', args: { query: 'x' } }] },
+          {
+            role: 'assistant',
+            content: null,
+            toolCalls: [{ id: 't1', name: 'search_local_exact', args: { query: 'x' } }],
+          },
           { role: 'tool', content: '{"status":"no_result"}', toolCallId: 't1' },
         ],
       },
       new AbortController().signal,
     );
-    const body = JSON.parse(String((spy.mock.calls[0] as unknown[])[1] ? (((spy.mock.calls[0] as unknown[])[1] as { body?: string }).body ?? '{}') : '{}'));
+    const body = JSON.parse(
+      String(
+        (spy.mock.calls[0] as unknown[])[1]
+          ? (((spy.mock.calls[0] as unknown[])[1] as { body?: string }).body ?? '{}')
+          : '{}',
+      ),
+    );
     expect(body.messages[1].tool_calls[0].id).toBe('t1');
     expect(body.messages[2]).toMatchObject({ role: 'tool', tool_call_id: 't1' });
   });

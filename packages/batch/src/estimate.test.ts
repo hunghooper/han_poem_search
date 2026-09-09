@@ -3,12 +3,6 @@ import { estimate, humanSeconds } from './estimate.js';
 
 const noAgent = { enabled: false, capUsd: null };
 
-/**
- * Cost is no longer projected. The six measured agent runs span sevenfold, so any single
- * figure was either a median that understated the bad case or a maximum that overstated the
- * ordinary one — and the gateway's console reports what was actually spent. Time is still
- * projected, because nothing else reports it and it is not money.
- */
 describe('estimate', () => {
   it('projects time, and does not project cost', () => {
     const e = estimate({ rows: 1000, agent: noAgent });
@@ -26,7 +20,6 @@ describe('estimate', () => {
     expect(e.seconds).toBeGreaterThan(86_400);
   });
 
-  // A single row that will call the model must not round down to "no agent involved".
   it('never rounds a run that will call the model down to zero', () => {
     expect(estimate({ rows: 1, agent: { enabled: true, capUsd: null } }).agentRows).toBe(1);
   });

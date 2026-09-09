@@ -1,11 +1,3 @@
-/**
- * Runs the golden set against the real index and prints what actually happens.
- *
- * This is the Phase 1 acceptance check (the spec §16): the reordered fragment must
- * resolve with exact_partial_match + input_reordered, and a nonsense fragment must produce
- * no_local_result rather than an answer assembled from irrelevant top-k.
- */
-
 import './env.js';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
@@ -20,19 +12,24 @@ interface Case {
   id: string;
   query: string;
   damageClass: string;
-  expect: { outcome: string; flags?: string[]; title?: string; author?: string; confirmed: boolean };
+  expect: {
+    outcome: string;
+    flags?: string[];
+    title?: string;
+    author?: string;
+    confirmed: boolean;
+  };
   note: string;
 }
 
-const url = process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/poetry_search';
+const url =
+  process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/poetry_search';
 const pool = new pg.Pool({ connectionString: url, max: 4 });
 const db = drizzle(pool);
 
 const raw = await readFile('fixtures/golden/user-queries.json', 'utf8');
 const cases = (JSON.parse(raw) as { cases: Case[] }).cases;
 
-// The semantic layer is optional; the run reports which retrievers were live so two runs are
-// never compared across different configurations by accident.
 let model: ModelClient | null = new ModelClient({
   baseUrl: process.env.MODEL_SERVICE_URL ?? 'http://localhost:8000',
   timeoutMs: 60000,
@@ -51,7 +48,6 @@ try {
 console.log(`retrievers: exact + bm25${model && vectors ? ' + vector + reranker' : ' (semantic layer ABSENT)'}
 `);
 
-// A deliberately meaningless fragment — the §16 negative control.
 const NONSENSE = '龘龘龘龘龘龘';
 
 let passed = 0;
@@ -59,7 +55,6 @@ let failed = 0;
 
 const report = async (id: string, query: string, expected: string, damage: string) => {
   const started = Date.now();
-  // The 落款 is stripped before searching, exactly as the API does it.
   const colophon = splitColophon(query);
   const searchText = colophon.body.length > 0 ? colophon.body.join('\n') : query;
   const r = await hybridSearch(searchText, { db, model, vectors });
@@ -90,10 +85,14 @@ const report = async (id: string, query: string, expected: string, damage: strin
       `flags=[${[...new Set([...exact.flags, ...verdict.flags])].join(' ')}]`,
   );
   if (top) {
-    console.log(`       -> ${top.title ?? '(untitled)'} — ${top.author ?? '(unknown)'} [${top.edition}] via ${top.source}`);
+    console.log(
+      `       -> ${top.title ?? '(untitled)'} — ${top.author ?? '(unknown)'} [${top.edition}] via ${top.source}`,
+    );
     console.log(`          ${top.content.split('\n')[0]}`);
     if (exact.reading && exact.reading.reordered) {
-      console.log(`          reading: ${exact.reading.strategy}${exact.reading.cols ? ` cols=${exact.reading.cols}` : ''}`);
+      console.log(
+        `          reading: ${exact.reading.strategy}${exact.reading.cols ? ` cols=${exact.reading.cols}` : ''}`,
+      );
     }
   }
 };

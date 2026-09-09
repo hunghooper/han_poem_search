@@ -15,8 +15,6 @@ describe('cjkRatio', () => {
     expect(cjkRatio('row-00412')).toBe(0);
   });
 
-  // Kana and hangul are not classical Chinese poetry. Counting them would rank a Japanese
-  // column above the real one in a mixed-language file.
   it('does not count kana or hangul', () => {
     expect(cjkRatio('ひらがな')).toBe(0);
     expect(cjkRatio('한글')).toBe(0);
@@ -50,9 +48,6 @@ describe('scanColumns', () => {
     expect(scan.columns.find((c) => c.name === 'note')?.filled).toBeCloseTo(2 / 3);
   });
 
-  // The whole point of the module. A confident wrong default gets clicked through, the batch
-  // runs against the wrong column, and 50,000 rows come back no_result — which reads as
-  // "the corpus does not have these poems" rather than "you searched the wrong column".
   it('abstains when no column is Chinese at all', () => {
     const scan = scanColumns([{ id: 'r1', title: 'Bonjour' }]);
     expect(scan.suggested).toBeNull();

@@ -1,18 +1,3 @@
-/**
- * Text normalization — the spec §3.2.
- *
- * There is exactly ONE normalize() in this codebase. The corpus is normalized with it at
- * ingest and the query is normalized with it at search time. A second normalization path
- * anywhere is a bug that will only surface on some inputs (CONTRIBUTING.md, "Working with
- * the corpus text", rule 2).
- *
- * Four stored forms:
- *   textDisplay — original, with punctuation. Shown to the user. NEVER matched against.
- *   textTrad    — OpenCC-normalized Traditional
- *   textSimp    — OpenCC-normalized Simplified
- *   textMatch   — Traditional, punctuation stripped, variants folded, NFC. All matching.
- */
-
 import * as OpenCC from 'opencc-js';
 import variants from './data/variants.json' with { type: 'json' };
 
@@ -21,26 +6,14 @@ export interface NormalizedText {
   textTrad: string;
   textSimp: string;
   textMatch: string;
-  /** For each character of textMatch, its index in textDisplay. Powers matchedSpan. */
   matchToDisplay: number[];
 }
 
-/**
- * Punctuation and whitespace — everything stripped from textMatch.
- *
- * Deliberately explicit rather than \p{P}: the Unicode property also strips characters that
- * appear inside rare poem titles, and silently dropping a character from the match text
- * misaligns every span after it.
- *
- * Written with \u escapes rather than the literal characters. An ideographic space (U+3000)
- * sitting in source is invisible and unreviewable.
- */
 const PUNCT =
   /[\s!-/:-@[-`{-~\u00B7\u2000-\u206F\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65]/u;
 
 const isPunct = (ch: string): boolean => PUNCT.test(ch);
 
-/** True for characters we are willing to index: CJK ideographs and their extensions. */
 export const isCjk = (ch: string): boolean => {
   const cp = ch.codePointAt(0);
   if (cp === undefined) return false;
@@ -53,11 +26,6 @@ export const isCjk = (ch: string): boolean => {
   );
 };
 
-/**
- * 異體字 folding table. Data, not code (§3.2) — adding an entry requires a source for the
- * equivalence in the PR description. Guessing that two characters are variants because they
- * look similar is how you silently merge two distinct poems.
- */
 const VARIANT_MAP: ReadonlyMap<string, string> = new Map(
   Object.entries(variants.fold as Record<string, string>),
 );
@@ -67,7 +35,6 @@ export const foldVariant = (ch: string): string => VARIANT_MAP.get(ch) ?? ch;
 const toTrad = OpenCC.Converter({ from: 'cn', to: 'tw' });
 const toSimp = OpenCC.Converter({ from: 'tw', to: 'cn' });
 
-/** The OpenCC configuration, asserted to match between ingest and query time. */
 export const OPENCC_CONFIG = 'cn2tw+tw2cn' as const;
 
 export function normalize(input: string): NormalizedText {
@@ -75,12 +42,6 @@ export function normalize(input: string): NormalizedText {
   const textTrad = toTrad(textDisplay).normalize('NFC');
   const textSimp = toSimp(textDisplay).normalize('NFC');
 
-  // Build textMatch from textTrad, keeping a position map back to textDisplay.
-  //
-  // OpenCC is character-for-character for the conversions we use, so index i of textTrad
-  // corresponds to index i of textDisplay. That invariant is checked rather than assumed —
-  // if a future OpenCC config changes length, spans would silently point at the wrong
-  // characters, which is exactly the class of bug this file exists to prevent.
   const aligned = textTrad.length === textDisplay.length;
 
   const matchChars: string[] = [];
@@ -106,40 +67,14 @@ export function normalize(input: string): NormalizedText {
   };
 }
 
-/** The match form only — the hot path for query normalization. */
 export const toMatchForm = (input: string): string => normalize(input).textMatch;
 
-/**
- * Split into visual segments, preserving order, dropping empties. Reordering starts here.
- *
- * Splits on whitespace as well as newlines. In CJK text a space is not a word separator — it
- * is a deliberate segment break, the way a transcriber marks where one column ended. Treating
- * a space-separated paste as a single line hides the grid from every reorder strategy.
- */
 export const visualLines = (input: string): string[] =>
   input
     .split(/[\s\u3000]+/u)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-/**
- * Split into PROSODIC lines, for the rule checks in verify/ only.
- *
- * `visualLines` deliberately splits on whitespace alone, because reordering reads a paste as a
- * grid and a space is where the transcriber ended a column. Punctuation is not a column break,
- * so splitting on it there would corrupt the grid.
- *
- * For prosody the opposite is true, and pasting from a spreadsheet is what makes it urgent: a
- * cell holds `床前明月光，疑是地上霜` on one line, and the form check then compares "one line of
- * ten characters" against a 五言絕句 of five and reports a FAILURE for a poem it matched exactly.
- * On a batch of 50,000 spreadsheet rows that fires on nearly every correct row, which is worse
- * than not checking: a column of `fail` beside a column of correct titles teaches the reader to
- * ignore the check.
- *
- * A line with no punctuation and no spaces stays one line. There is nothing to split on, and
- * guessing a caesura would be inventing structure the input does not have — the form check
- * then abstains, which is the honest outcome.
- */
 export const prosodyLines = (input: string): string[] =>
   visualLines(input)
     .flatMap((line) => line.split(/[，。、；：？！,.;:?!·．｡､]+/u))

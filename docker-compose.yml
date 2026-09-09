@@ -56,12 +56,12 @@ services:
       POSTGRES_SEEDS: postgres
       DEFAULT_NAMESPACE: default
     ports:
-      - "7233:7233"
+      - '7233:7233'
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      test: ['CMD', 'tctl', '--address', 'temporal:7233', 'cluster', 'health']
       interval: 10s
       timeout: 5s
       retries: 20
@@ -74,7 +74,7 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:3000
     ports:
-      - "8233:8080"
+      - '8233:8080'
     depends_on:
       - temporal
 

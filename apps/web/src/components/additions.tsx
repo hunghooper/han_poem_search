@@ -1,20 +1,5 @@
 'use client';
 
-/**
- * Everything that has ever been proposed for the corpus, and what happened to it.
- *
- * WHY THIS IS ITS OWN TAB. The review list used to sit at the top of the corpus tab, and it
- * showed only what was still waiting. That is the urgent state but not the interesting one:
- * additions are marked at all so that somebody can come back later and ask what got in and on
- * whose word — an export carries `han_added` for exactly that reason. A list that can only
- * answer "what needs me right now" cannot answer that, and the accepted rows, which are the
- * ones already changing what every search returns, were the ones you could never see.
- *
- * So: all three states, filterable, with the run that produced each one. Pending rows keep
- * their Accept and Reject buttons — the review still happens here, it is just no longer the
- * only thing here.
- */
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { UiLanguage } from '@han/shared/runtime-config';
 import { t } from './i18n';
@@ -59,24 +44,17 @@ export function AdditionsPanel({ lang }: { lang: UiLanguage }) {
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [who, setWho] = useState('');
 
-  // The same name the corpus tab remembers, and for the same reason: accepting a proposal is
-  // the moment it becomes a poem every later search can return, and that decision gets a name
-  // on it. Shared key, so a person types it once for both.
   useEffect(() => {
     try {
       setWho(localStorage.getItem('han.corpus.who') ?? '');
-    } catch {
-      // Private windows and blocked site data. Typing it again is the fallback.
-    }
+    } catch {}
   }, []);
 
   const rememberWho = useCallback((v: string) => {
     setWho(v);
     try {
       localStorage.setItem('han.corpus.who', v);
-    } catch {
-      // The value still works for this page load.
-    }
+    } catch {}
   }, []);
 
   const load = useCallback(async () => {
@@ -124,7 +102,6 @@ export function AdditionsPanel({ lang }: { lang: UiLanguage }) {
 
   const named = who.trim().length > 0;
 
-  // Totals across every origin, so the chips describe the store rather than the filter.
   const count = useMemo(() => {
     const by: Record<string, number> = { pending: 0, accepted: 0, rejected: 0 };
     for (const x of tallies) by[x.status] = (by[x.status] ?? 0) + x.n;
@@ -172,8 +149,6 @@ export function AdditionsPanel({ lang }: { lang: UiLanguage }) {
           </label>
         </div>
 
-        {/* Only shown when it is needed: the field gates the review buttons, and a name box on
-            a screen with nothing to review is a question nobody asked. */}
         {pendingCount > 0 && (
           <>
             <input
@@ -209,7 +184,6 @@ export function AdditionsPanel({ lang }: { lang: UiLanguage }) {
               </div>
 
               <div className="proposal-meta">
-                {/* Origin first and always. It is the whole reason these rows are kept. */}
                 <span className={a.origin === 'agent' ? 'err-chip' : 'muted'}>
                   {t(lang, `add.origin.${a.origin}`)}
                 </span>
@@ -226,10 +200,10 @@ export function AdditionsPanel({ lang }: { lang: UiLanguage }) {
                     {t(lang, 'corpus.source')}
                   </a>
                 )}
-                {/* The run that produced it, so a reviewer reads the evidence and not only the
-                    conclusion. */}
                 {a.runId && <code>{a.runId.slice(0, 8)}</code>}
-                {a.submittedBy && <span className="muted">{t(lang, 'add.by', { who: a.submittedBy })}</span>}
+                {a.submittedBy && (
+                  <span className="muted">{t(lang, 'add.by', { who: a.submittedBy })}</span>
+                )}
                 {a.reviewedBy && (
                   <span className="muted">{t(lang, 'add.reviewedBy', { who: a.reviewedBy })}</span>
                 )}

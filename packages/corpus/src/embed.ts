@@ -1,17 +1,3 @@
-/**
- * Vector index build — the spec §13.
- *
- *   read poems -> embed via the sidecar -> write poetry_vN+1 -> flip the alias
- *
- * Never mutates the live collection. If this crashes halfway, the alias still points at the
- * previous complete index and search keeps working with the old data — which is a far better
- * failure than a live index with a hole in it.
- *
- * What gets embedded is the poem's DISPLAY text, not textMatch. Punctuation and script carry
- * meaning to a language model, and stripping them for the vector index would throw away the
- * exact signal the dense retriever is supposed to add over the n-gram index.
- */
-
 import { sql } from 'drizzle-orm';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -45,9 +31,6 @@ async function main(): Promise<void> {
 
   if (!databaseUrl) throw new Error('DATABASE_URL is not set');
 
-    // Generous: a 64-poem batch on a contended GPU can exceed two minutes, and an abort here
-  // wastes the whole run. The build is long and unattended; failing it on a slow batch is the
-  // wrong trade.
   const model = new ModelClient({ baseUrl: modelUrl, timeoutMs: 600000 });
   const health = await model.health();
   console.log(`sidecar: ${health.modelId} dim=${health.dim} device=${health.device}`);
@@ -86,17 +69,12 @@ async function main(): Promise<void> {
 
     const started = Date.now();
     let done = 0;
-    // Point ids start at 1: id 0 is reserved for the collection metadata point.
     let pointId = 1;
     let pending: Array<{ id: number; vector: number[]; payload: PoemPayload }> = [];
 
     for (let i = 0; i < rows.length; i += EMBED_BATCH) {
       const batch = rows.slice(i, i + EMBED_BATCH);
-      // Title and author go into the embedded text: a topical query like "poems about autumn
-      // moonlight by 李白" carries both, and a body-only embedding cannot represent the author.
-      const texts = batch.map((r) =>
-        [r.title, r.author, r.textDisplay].filter(Boolean).join('\n'),
-      );
+      const texts = batch.map((r) => [r.title, r.author, r.textDisplay].filter(Boolean).join('\n'));
       const vectors = await model.embed(texts);
 
       for (let j = 0; j < batch.length; j += 1) {
@@ -146,9 +124,10 @@ async function main(): Promise<void> {
     });
     await store.finalize(collection);
 
-    // Alias flip is the last step and the only step that makes the new index visible.
     await store.flipAlias(collection);
-    console.log(`alias ${alias} -> ${collection} (${pointId - 1} points, ${Math.round((Date.now() - started) / 1000)}s)`);
+    console.log(
+      `alias ${alias} -> ${collection} (${pointId - 1} points, ${Math.round((Date.now() - started) / 1000)}s)`,
+    );
   } finally {
     await pool.end();
   }

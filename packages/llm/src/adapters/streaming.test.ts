@@ -2,11 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { createOpenAiCompatibleProvider } from './openai-compatible.js';
 import { BAD_TOOL_ARGS, USAGE_UNAVAILABLE } from '../provider.js';
 
-/**
- * A fake SSE gateway. Streaming is the adapter's default path, so these cover the behaviour
- * §4.3 singles out: tool-call arguments arrive in fragments and are not valid JSON until
- * accumulated BY INDEX.
- */
 const sse = (chunks: unknown[], opts: { done?: boolean } = {}) => {
   const body =
     chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') +
@@ -17,7 +12,10 @@ const sse = (chunks: unknown[], opts: { done?: boolean } = {}) => {
   );
 };
 
-const provider = (fetchImpl: ReturnType<typeof sse>, priceTable?: Record<string, { inputPerMTok: number; outputPerMTok: number }>) =>
+const provider = (
+  fetchImpl: ReturnType<typeof sse>,
+  priceTable?: Record<string, { inputPerMTok: number; outputPerMTok: number }>,
+) =>
   createOpenAiCompatibleProvider({
     name: 'fake',
     apiKey: 'k',
@@ -48,22 +46,26 @@ describe('streaming', () => {
     expect(r.stopReason).toBe('end_turn');
   });
 
-  // The reason this module exists: no single fragment is parseable on its own.
   it('accumulates tool arguments split across fragments', async () => {
     const p = provider(
       sse([
-        delta({ tool_calls: [{ index: 0, id: 't1', function: { name: 'lookup_poem', arguments: '{"frag' } }] }),
+        delta({
+          tool_calls: [
+            { index: 0, id: 't1', function: { name: 'lookup_poem', arguments: '{"frag' } },
+          ],
+        }),
         delta({ tool_calls: [{ index: 0, function: { arguments: 'ment":"細草' } }] }),
         delta({ tool_calls: [{ index: 0, function: { arguments: '微風岸"}' } }] }, 'tool_calls'),
       ]),
     );
     const r = await p.complete({ model: 'test-model', messages: [] }, sig());
     expect(r.stopReason).toBe('tool_use');
-    expect(r.toolCalls).toEqual([{ id: 't1', name: 'lookup_poem', args: { fragment: '細草微風岸' } }]);
+    expect(r.toolCalls).toEqual([
+      { id: 't1', name: 'lookup_poem', args: { fragment: '細草微風岸' } },
+    ]);
     expect(r.flags).not.toContain(BAD_TOOL_ARGS);
   });
 
-  // §4.3 says BY INDEX, not by id — later fragments carry only the index.
   it('keeps two parallel tool calls apart by index, not by id', async () => {
     const p = provider(
       sse([
@@ -73,12 +75,15 @@ describe('streaming', () => {
             { index: 1, id: 'b', function: { name: 'lookup_author', arguments: '{"name":' } },
           ],
         }),
-        delta({
-          tool_calls: [
-            { index: 1, function: { arguments: '"李白"}' } },
-            { index: 0, function: { arguments: '"細草"}' } },
-          ],
-        }, 'tool_calls'),
+        delta(
+          {
+            tool_calls: [
+              { index: 1, function: { arguments: '"李白"}' } },
+              { index: 0, function: { arguments: '"細草"}' } },
+            ],
+          },
+          'tool_calls',
+        ),
       ]),
     );
     const r = await p.complete({ model: 'test-model', messages: [] }, sig());
@@ -91,7 +96,9 @@ describe('streaming', () => {
   it('carries an id that only ever appeared on the first fragment', async () => {
     const p = provider(
       sse([
-        delta({ tool_calls: [{ index: 0, id: 'only-here', function: { name: 'f', arguments: '{}' } }] }),
+        delta({
+          tool_calls: [{ index: 0, id: 'only-here', function: { name: 'f', arguments: '{}' } }],
+        }),
         delta({ tool_calls: [{ index: 0, function: { arguments: '' } }] }, 'tool_calls'),
       ]),
     );
@@ -102,7 +109,9 @@ describe('streaming', () => {
   it('reports malformed accumulated arguments rather than crashing', async () => {
     const p = provider(
       sse([
-        delta({ tool_calls: [{ index: 0, id: 't1', function: { name: 'f', arguments: '{"a":' } }] }),
+        delta({
+          tool_calls: [{ index: 0, id: 't1', function: { name: 'f', arguments: '{"a":' } }],
+        }),
         delta({ tool_calls: [{ index: 0, function: { arguments: ' unquoted}' } }] }, 'tool_calls'),
       ]),
     );
@@ -115,7 +124,12 @@ describe('streaming', () => {
     const p = provider(
       sse([
         delta({ content: 'OK' }, 'stop'),
-        { id: 'c1', model: 'test-model', choices: [], usage: { prompt_tokens: 12, completion_tokens: 4 } },
+        {
+          id: 'c1',
+          model: 'test-model',
+          choices: [],
+          usage: { prompt_tokens: 12, completion_tokens: 4 },
+        },
       ]),
       { 'test-model': { inputPerMTok: 1, outputPerMTok: 2 } },
     );
@@ -152,7 +166,9 @@ describe('streaming', () => {
           JSON.stringify({
             id: 'c1',
             model: 'test-model',
-            choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+            choices: [
+              { index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' },
+            ],
             usage: { prompt_tokens: 3, completion_tokens: 1 },
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
@@ -172,28 +188,31 @@ describe('streaming', () => {
 });
 
 describe('model substitution', () => {
-  // MEASURED: this gateway answers a request for `qwen-3.8-max` with `qwen3.8-flash`. Cost is
-  // looked up by the id that served the call, so the substitution silently defeats pricing —
-  // and, worse, means the model that passed the §4.5 smoke test may not be the one answering.
   it('flags a served model that is not the requested one', async () => {
-    const p = provider(sse([delta({ content: 'OK' }, 'stop')]).mockImplementation(async () =>
-      new Response(
-        `data: ${JSON.stringify({ model: 'qwen3.8-flash', choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
-        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+    const p = provider(
+      sse([delta({ content: 'OK' }, 'stop')]).mockImplementation(
+        async () =>
+          new Response(
+            `data: ${JSON.stringify({ model: 'qwen3.8-flash', choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+            { status: 200, headers: { 'content-type': 'text/event-stream' } },
+          ),
       ),
-    ));
+    );
     const r = await p.complete({ model: 'qwen-3.8-max', messages: [] }, sig());
     expect(r.flags).toContain('llm_model_substituted');
     expect(r.model).toBe('qwen3.8-flash');
   });
 
   it('does not flag a version suffix — that is the same model, not a substitution', async () => {
-    const p = provider(sse([]).mockImplementation(async () =>
-      new Response(
-        `data: ${JSON.stringify({ model: 'gpt-4o-2024-11-20', choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
-        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+    const p = provider(
+      sse([]).mockImplementation(
+        async () =>
+          new Response(
+            `data: ${JSON.stringify({ model: 'gpt-4o-2024-11-20', choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+            { status: 200, headers: { 'content-type': 'text/event-stream' } },
+          ),
       ),
-    ));
+    );
     const r = await p.complete({ model: 'gpt-4o', messages: [] }, sig());
     expect(r.flags).not.toContain('llm_model_substituted');
   });

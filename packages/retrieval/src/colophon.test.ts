@@ -21,7 +21,6 @@ describe('干支 dates', () => {
   });
 
   it('does not fire on a stem or branch alone', () => {
-    // 甲 and 子 are ordinary characters; only the ordered pair is a date.
     expect(hasCyclicalDate('子規啼夜月')).toBe(false);
     expect(hasCyclicalDate('甲光向日金鱗開')).toBe(false);
   });
@@ -55,10 +54,6 @@ describe('splitColophon', () => {
     expect(r.body).toEqual(['細草微風岸', '危檣獨夜舟', '星垂平野闊']);
   });
 
-  // gq-10 from the golden set. Both 干支 lines are stripped; 鶴舞飛翔 stays, because four
-  // plausible characters are indistinguishable from verse to this module. The retriever then
-  // correctly reports no_local_result on it — the right division of labour: this module
-  // removes what is certainly not verse, and the index decides the rest.
   it('strips the 干支 lines from a signature block, keeping what could be verse', () => {
     const r = splitColophon('辛亥月\n鶴舞飛翔\n己亥年');
     expect(r.body).toEqual(['鶴舞飛翔']);
@@ -73,7 +68,6 @@ describe('splitColophon', () => {
     expect(r.colophonLines).toEqual([]);
   });
 
-  // Scanning backwards from the end is what protects this case.
   it('does not strip an inscription-like line from the middle of a poem', () => {
     const r = splitColophon('羣峭碧摩天\n杜甫詩\n撥雲尋古道\n倚石聽流泉');
     expect(r.body).toContain('杜甫詩');

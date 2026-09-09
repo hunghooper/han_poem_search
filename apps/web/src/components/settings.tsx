@@ -1,15 +1,5 @@
 'use client';
 
-/**
- * The settings panel — configuration for the whole app, not just the search box.
- *
- * Everything here is a SESSION setting. Display preferences never leave the browser; the rest
- * travel with each search as overrides and are never written back to the server. That is the
- * point: CONTRIBUTING.md requires a recorded calibration run before retrieval thresholds
- * change, so a panel that silently rewrote the project defaults would be a way around a rule
- * that exists for good reason. The panel says so, in the reader's language.
- */
-
 import { useEffect, useState } from 'react';
 import {
   DEFAULT_RUNTIME_CONFIG,
@@ -23,14 +13,6 @@ import { LANGUAGE_NAMES, t } from './i18n';
 
 const STORAGE_KEY = 'han-search.settings.v1';
 
-/**
- * The gateway key lives in sessionStorage, NOT in the settings blob.
- *
- * Two reasons, and both matter. It must not outlive the browser session — a shared or borrowed
- * machine should not keep someone's key. And the settings blob is the thing a user exports or
- * screenshots to share "the settings that produced this result"; a secret inside it would
- * travel with every one of those.
- */
 const KEY_STORAGE = 'han-search.gateway-key';
 
 export function loadApiKey(): string {
@@ -45,15 +27,11 @@ export function saveApiKey(key: string): void {
   try {
     if (key.trim().length === 0) sessionStorage.removeItem(KEY_STORAGE);
     else sessionStorage.setItem(KEY_STORAGE, key.trim());
-  } catch {
-    // Nothing to fall back to; the user re-enters it, which is the safe direction.
-  }
+  } catch {}
 }
 
-/** The header the server reads it from. Never the request body — see apps/api/src/session-key.ts. */
 export const API_KEY_HEADER = 'x-llm-api-key';
 
-/** Request headers for a call that should bill the viewer's own key when they gave one. */
 export function authHeaders(key: string): Record<string, string> {
   return key.trim().length > 0 ? { [API_KEY_HEADER]: key.trim() } : {};
 }
@@ -65,11 +43,6 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = { ui: DEFAULT_RUNTIME_CONFIG.ui, overrides: {} };
 
-/**
- * localStorage throws in some contexts (private windows, blocked site data, thumbnailing), and
- * a settings panel is not worth a blank page. Every access is guarded and falls back to the
- * committed defaults.
- */
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -87,9 +60,7 @@ export function loadSettings(): Settings {
 export function saveSettings(s: Settings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {
-    // A viewer who blocks site data still gets a working app; they just re-set it next visit.
-  }
+  } catch {}
 }
 
 export interface ServerConfig {
@@ -104,7 +75,6 @@ interface Props {
   settings: Settings;
   server: ServerConfig | null;
   onChange: (s: Settings) => void;
-  /** Held by the page, not by `settings` — a secret must not ride along in the saved blob. */
   apiKey: string;
   onApiKeyChange: (key: string) => void;
 }
@@ -138,8 +108,10 @@ export function SettingsPanel({
     setDirty(true);
   };
 
-  /** Section-scoped override setter. An undefined value clears the override for that field. */
-  const setOver = <S extends keyof Overrides>(section: S, patch: Partial<NonNullable<Overrides[S]>>) => {
+  const setOver = <S extends keyof Overrides>(
+    section: S,
+    patch: Partial<NonNullable<Overrides[S]>>,
+  ) => {
     onChange({
       ...settings,
       overrides: {
@@ -150,8 +122,11 @@ export function SettingsPanel({
     setDirty(true);
   };
 
-  /** Effective value: the session override if there is one, otherwise the committed default. */
-  const eff = <S extends keyof Overrides, K extends string>(section: S, key: K, fallback: number | boolean | string | null) => {
+  const eff = <S extends keyof Overrides, K extends string>(
+    section: S,
+    key: K,
+    fallback: number | boolean | string | null,
+  ) => {
     const o = settings.overrides[section] as Record<string, unknown> | undefined;
     return (o?.[key] ?? fallback) as number | boolean | string | null;
   };
@@ -207,7 +182,9 @@ export function SettingsPanel({
     const current = (settings.overrides.models?.[key] ?? base.models[key] ?? '') as string;
     return (
       <label className={`field${isOverridden('models', key) ? ' over' : ''}`} key={key}>
-        <span className="fname">{t(lang, key === 'reasoning' ? 'settings.modelReasoning' : 'settings.modelAnswer')}</span>
+        <span className="fname">
+          {t(lang, key === 'reasoning' ? 'settings.modelReasoning' : 'settings.modelAnswer')}
+        </span>
         <select
           value={current}
           onChange={(e) => setOver('models', { [key]: e.target.value || null } as never)}
@@ -300,10 +277,25 @@ export function SettingsPanel({
         <h3>{t(lang, 'settings.confidence')}</h3>
         <p className="fnote warn">{t(lang, 'settings.uncalibrated')}</p>
         <div className="fields">
-          {num('confidence', 'verifyFloor', base.confidence.verifyFloor, { min: 0, max: 1, step: 0.01 })}
-          {num('confidence', 'noiseFloor', base.confidence.noiseFloor, { min: 0, max: 1, step: 0.01 })}
-          {num('confidence', 'minLexicalOverlap', base.confidence.minLexicalOverlap, { min: 0, max: 1, step: 0.01 })}
-          {num('confidence', 'minAgreeingWindows', base.confidence.minAgreeingWindows, { min: 1, max: 10 })}
+          {num('confidence', 'verifyFloor', base.confidence.verifyFloor, {
+            min: 0,
+            max: 1,
+            step: 0.01,
+          })}
+          {num('confidence', 'noiseFloor', base.confidence.noiseFloor, {
+            min: 0,
+            max: 1,
+            step: 0.01,
+          })}
+          {num('confidence', 'minLexicalOverlap', base.confidence.minLexicalOverlap, {
+            min: 0,
+            max: 1,
+            step: 0.01,
+          })}
+          {num('confidence', 'minAgreeingWindows', base.confidence.minAgreeingWindows, {
+            min: 1,
+            max: 10,
+          })}
         </div>
       </section>
 
@@ -316,7 +308,11 @@ export function SettingsPanel({
         <div className="fields">
           {num('agent', 'maxIterations', base.agent.maxIterations, { min: 1, max: 20 })}
           {num('agent', 'maxToolCalls', base.agent.maxToolCalls, { min: 1, max: 40 })}
-          {num('agent', 'maxWallClockMs', base.agent.maxWallClockMs, { min: 1000, max: 300000, step: 1000 })}
+          {num('agent', 'maxWallClockMs', base.agent.maxWallClockMs, {
+            min: 1000,
+            max: 300000,
+            step: 1000,
+          })}
           {num('agent', 'maxCostUsd', base.agent.maxCostUsd, { min: 0, max: 20, step: 0.05 })}
         </div>
       </section>

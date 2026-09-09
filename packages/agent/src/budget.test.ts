@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { checkBudget, DEFAULT_BUDGET, initialBudgetState, recordLlmCall, recordSpend, recordToolCall } from './budget.js';
+import {
+  checkBudget,
+  DEFAULT_BUDGET,
+  initialBudgetState,
+  recordLlmCall,
+  recordSpend,
+  recordToolCall,
+} from './budget.js';
 
 const at = (t: number) => initialBudgetState(t);
 
@@ -23,7 +30,6 @@ describe('checkBudget', () => {
     }
   });
 
-  // §4.3: a null cost is not zero. Enforcing a ceiling against unknown spend would be fiction.
   it('does not enforce the cost ceiling once any cost is unknown', () => {
     const s = { ...at(0), costUsd: 999, costUnknown: true };
     expect(checkBudget(s, DEFAULT_BUDGET, 0).withinBudget).toBe(true);
@@ -53,10 +59,6 @@ describe('recording', () => {
 });
 
 describe('tool timeouts must fit inside the run budget', () => {
-  // REGRESSION. ask_model was given a 90s timeout inside a 60s wall-clock budget, so the call
-  // could never complete on its own terms: every invocation was cut off by the run instead,
-  // and the trace blamed the budget rather than the tool. A timeout longer than the budget it
-  // sits inside is always a bug, so it is checked structurally rather than per tool.
   it('no registered tool can outlive the agent wall clock', async () => {
     const { createTools } = await import('./tools/index.js');
     const tools = createTools({
@@ -76,9 +78,6 @@ describe('tool timeouts must fit inside the run budget', () => {
 });
 
 describe('tool spend', () => {
-  // REGRESSION. ask_model calls a model and was discarding what it cost, so §12's ceiling
-  // covered only the agent's own reasoning calls — and ask_model is usually the largest single
-  // spend in a run. A ceiling that cannot see the biggest cost is not a ceiling.
   it('adds tool spend to the run cost without consuming an iteration', () => {
     const s = recordSpend(initialBudgetState(0), 0.02);
     expect(s.costUsd).toBeCloseTo(0.02);
@@ -88,7 +87,6 @@ describe('tool spend', () => {
   it('marks the accounting degraded when a tool used an unpriced model', () => {
     const s = recordSpend(initialBudgetState(0), null);
     expect(s.costUnknown).toBe(true);
-    // And the ceiling then stops being enforced, rather than being enforced against a fiction.
     expect(checkBudget({ ...s, costUsd: 999 }, DEFAULT_BUDGET, 0).withinBudget).toBe(true);
   });
 

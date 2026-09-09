@@ -1,33 +1,7 @@
-/**
- * The second model — the spec §10.2.
- *
- * The first model researches: it has tools, it loops, and it draws on knowledge that is in its
- * weights and nowhere in this corpus. That knowledge is real and often right, and it is also
- * unattributable — the model cannot show its working, so nothing downstream can check it.
- *
- * This one does the checking. It does not search and it has no tools. It reads what the run
- * collected and answers one question: does this evidence actually settle the query?
- *
- * WHY IT EXISTS, concretely. Asked to identify a garbled calligraphy transcription, the
- * researcher replied "I do not recognise this; it is most likely OCR damage, I cannot confirm
- * a source" — an honest and correct refusal. The `ask_model` tool counted it as a result,
- * because any non-empty reply is a reply; the run recorded `model_has_result`, and a correct
- * `no_result` became a `low_confidence` guess. A refusal is not a finding, and nothing in the
- * pipeline could tell the difference, because telling the difference requires reading the
- * text. That is what a judge is for.
- */
-
 import { z } from 'zod';
 import type { LlmProvider } from '@han/llm/provider';
 import type { Evidence } from '@han/shared/evidence';
 
-/**
- * A poem the judge thinks the corpus should keep.
- *
- * Named by the model; written by nobody. The caller decides whether this becomes a pending
- * proposal, and a person decides whether the proposal becomes a poem — see
- * docs/plans/corpus-enrichment.md for why the judge may propose and may not write.
- */
 export const ProposalSchema = z.object({
   title: z.string().min(1).max(200),
   author: z.string().min(1).max(200),
@@ -38,18 +12,11 @@ export const ProposalSchema = z.object({
 
 export type Proposal = z.infer<typeof ProposalSchema>;
 
-/** §10.2's shape, plus the optional proposal. */
 export const VerdictSchema = z.object({
   verdict: z.enum(['sufficient', 'insufficient', 'conflicting']),
   confidence: z.number().min(0).max(1),
-  /** What is missing, when the answer is not settled. Empty when it is. */
   gaps: z.array(z.string()).max(6).default([]),
-  /** One or two sentences for a human, in the trace and in the export. */
   notes: z.string().max(600).default(''),
-  /**
-   * Set only when the evidence identified a poem that came from OUTSIDE the corpus and is
-   * worth keeping. Null is the normal answer and the safe one.
-   */
   propose: ProposalSchema.nullish(),
 });
 
@@ -90,14 +57,6 @@ the field or set it to null; null is the normal answer.
 
 `;
 
-/**
- * Ask the judge.
- *
- * Never throws: a verification that fails is a verification that did not happen, and the run
- * must still finish. The caller reports UNAVAILABLE and carries on with the unjudged evidence,
- * which is the honest degradation — better than an unfinished run, and better than pretending
- * the evidence was checked.
- */
 export async function verifyWithLlm(
   input: { query: string; evidence: readonly Evidence[]; flags: readonly string[] },
   deps: { provider: LlmProvider; model: string; signal: AbortSignal },
@@ -108,7 +67,6 @@ export async function verifyWithLlm(
     method: e.retrievalMethod,
     title: e.title,
     author: e.author,
-    // Enough to judge relevance, not so much that the judge pays for whole poems.
     text: e.content.slice(0, 240),
   }));
 
@@ -126,8 +84,6 @@ export async function verifyWithLlm(
           { role: 'system', content: SYSTEM },
           { role: 'user', content: user },
         ],
-        // Reasoning models spend this budget before emitting anything, so a small number here
-        // returns empty content rather than a short answer. Measured the hard way in §4.5.
         maxTokens: 2048,
       },
       deps.signal,
@@ -146,11 +102,6 @@ export async function verifyWithLlm(
   }
 }
 
-/**
- * Models fence JSON in markdown, prepend "Here is the verdict:", or emit both. Take the first
- * balanced object and validate it; anything that does not validate is not a verdict, and
- * guessing at a malformed one would be inventing a judgement nobody made.
- */
 export function parseVerdict(text: string | null): Verdict | null {
   if (!text) return null;
   const start = text.indexOf('{');

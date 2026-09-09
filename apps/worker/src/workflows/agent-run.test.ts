@@ -1,12 +1,3 @@
-/**
- * Workflow tests — CONTRIBUTING.md: "Workflow tests use @temporalio/testing with the
- * time-skipping test environment. Any change to workflow code needs one, because determinism
- * bugs do not show up in unit tests."
- *
- * The time-skipping environment is what makes the §12 wall-clock budget testable at all: the
- * workflow believes 60 seconds passed, and the test takes milliseconds.
- */
-
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { ApplicationFailure } from '@temporalio/activity';
@@ -78,7 +69,6 @@ const toolResult = (over: Partial<ToolCallResult> = {}): ToolCallResult => ({
   ...over,
 });
 
-/** Run the workflow against scripted activities and collect what it emitted. */
 async function run(
   acts: {
     reason?: () => Promise<ReasonResult>;
@@ -91,14 +81,15 @@ async function run(
   const worker = await Worker.create({
     connection: env.nativeConnection,
     taskQueue: 'test',
-    // The bundler stats this on disk; under tsx the file is .ts, not .js.
     workflowsPath: (() => {
       const ts = fileURLToPath(new URL('./index.ts', import.meta.url));
       return existsSync(ts) ? ts : fileURLToPath(new URL('./index.js', import.meta.url));
     })(),
     activities: {
       listTools: async () =>
-        acts.tools ?? [{ name: 'ask_model', description: 'ask the model', jsonSchema: { type: 'object' } }],
+        acts.tools ?? [
+          { name: 'ask_model', description: 'ask the model', jsonSchema: { type: 'object' } },
+        ],
       reason: acts.reason ?? (async () => reasonResult()),
       callTool: acts.callTool ?? (async () => toolResult()),
       emitEvent: async (e: WorkflowEvent) => {
@@ -119,7 +110,9 @@ async function run(
 
 describe('agentRun workflow', () => {
   it('stops when the model chooses to finish', async () => {
-    const { result, events } = await run({ reason: async () => reasonResult({ text: 'nothing to add' }) });
+    const { result, events } = await run({
+      reason: async () => reasonResult({ text: 'nothing to add' }),
+    });
     expect(result.stoppedBecause).toBe('model_finished');
     expect(result.partial).toBe(false);
     expect(events.some((e) => e.step === 'agent')).toBe(true);
@@ -127,10 +120,14 @@ describe('agentRun workflow', () => {
 
   it('calls the tool the model selected and stops once satisfied', async () => {
     const { result, events } = await run({
-      reason: async () =>
-        reasonResult({ toolCalls: [{ id: 't1', name: 'ask_model', args: {} }] }),
+      reason: async () => reasonResult({ toolCalls: [{ id: 't1', name: 'ask_model', args: {} }] }),
       callTool: async () =>
-        toolResult({ status: StepStatus.HAS_RESULT, resultCount: 1, results: [evidence(1)], costUsd: 0.0009 }),
+        toolResult({
+          status: StepStatus.HAS_RESULT,
+          resultCount: 1,
+          results: [evidence(1)],
+          costUsd: 0.0009,
+        }),
     });
     expect(result.stoppedBecause).toBe('satisfied');
     expect(result.evidence).toHaveLength(1);
@@ -138,27 +135,26 @@ describe('agentRun workflow', () => {
     expect(tc?.metadata?.costUsd).toBeCloseTo(0.0009);
   });
 
-  // The time-skipping environment is what makes this testable: the workflow believes a minute
-  // passed, the test takes milliseconds.
   it('exhausts the wall-clock budget and returns partial (§12)', async () => {
     const { result, events } = await run(
       {
         reason: async () =>
           reasonResult({ toolCalls: [{ id: 't1', name: 'ask_model', args: {} }] }),
-        // Each tool call "takes" most of the budget, so the second iteration is over it.
         callTool: async () => {
           await new Promise((r) => setTimeout(r, 10));
           return toolResult();
         },
       },
-      input({ config: { ...DEFAULT_RUNTIME_CONFIG, agent: { ...DEFAULT_RUNTIME_CONFIG.agent, maxIterations: 2 } } }),
+      input({
+        config: {
+          ...DEFAULT_RUNTIME_CONFIG,
+          agent: { ...DEFAULT_RUNTIME_CONFIG.agent, maxIterations: 2 },
+        },
+      }),
     );
     expect(result.stoppedBecause).toBe('budget_exhausted');
     expect(result.partial).toBe(true);
     expect(result.flags).toContain('agent_budget_exhausted');
-    // Never fails silently. The reason is RETURNED rather than emitted: a terminal event
-    // emitted from in here races the caller's teardown of the event relay and can be lost,
-    // so the caller emits it once from this field instead.
     expect(result.stopDetail).toMatch(/Agent stopped/);
     expect(events.some((e) => e.message.includes('Agent stopped'))).toBe(false);
   });
@@ -192,26 +188,18 @@ describe('agentRun workflow', () => {
   });
 
   it('converts a reasoning-model failure into a partial outcome rather than throwing', async () => {
-    // The run must always terminate. An error escaping here would leave the caller with no
-    // final_answer at all — indistinguishable from a slow run.
     const { result } = await run({
       reason: async () => {
         throw new Error('gateway exploded');
       },
     });
     expect(result.partial).toBe(true);
-    // model_failed, not budget_exhausted. The two ask for opposite responses — one for more
-    // budget, one for a working gateway — and reporting a failure as exhaustion sent a real
-    // Phase 4 durability run to the wrong diagnosis.
     expect(result.stoppedBecause).toBe('model_failed');
     expect(result.flags).toContain('agent_model_failed');
     expect(result.flags).not.toContain('agent_budget_exhausted');
   });
 
   it('does not retry a CONFIG_INVALID failure', async () => {
-    // nonRetryableErrorTypes matches an ApplicationFailure's `type`, never a plain Error's
-    // message. A misconfigured gateway used to be retried three times and then reported as
-    // budget exhaustion, which reads as a run that simply needed longer.
     let attempts = 0;
     const { result } = await run({
       reason: () => {

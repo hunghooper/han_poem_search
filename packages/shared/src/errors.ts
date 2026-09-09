@@ -1,7 +1,3 @@
-/**
- * Typed errors — the spec §15. Never throw bare strings or plain Errors.
- */
-
 export type ErrorCode =
   | 'CONFIG_INVALID'
   | 'MODEL_MISMATCH'
@@ -45,7 +41,6 @@ export class LlmError extends AppError {}
 
 export const isAppError = (e: unknown): e is AppError => e instanceof AppError;
 
-/** Narrow an unknown thrown value into an AppError without losing information. */
 export const toAppError = (e: unknown, fallback: ErrorCode = 'INTERNAL'): AppError => {
   if (isAppError(e)) return e;
   if (e instanceof Error) return new AppError(fallback, e.message, { cause: e.name });

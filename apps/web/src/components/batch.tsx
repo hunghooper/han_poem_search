@@ -1,14 +1,5 @@
 'use client';
 
-/**
- * The batch panel: upload, choose a column, see what it will cost, run, export.
- *
- * Four steps rather than one, and the two in the middle are the reason. A single "upload and
- * go" button would let someone point a 50,000-row run at the wrong column and find out from
- * the bill. So the column is always chosen by a person — the scan only ranks the candidates,
- * and says so when it will not guess — and the estimate is shown before start does anything.
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { UiLanguage } from '@han/shared/runtime-config';
 import { authHeaders } from './settings';
@@ -47,7 +38,6 @@ interface Progress {
   status: string;
   rowsDone: number;
   totalRows: number;
-  /** The pass currently executing. Null when nothing is running. */
   pass: { done: number; total: number } | null;
   byStatus: Record<string, number>;
   error: string | null;
@@ -86,7 +76,6 @@ const GROUP_LABEL: Record<string, string> = {
   raw: 'batch.groupRaw',
 };
 
-/** Colour by meaning, not by mood: only has_result is unqualified good news. */
 const STATUS_COLOR: Record<string, string> = {
   has_result: '#1a7f37',
   low_confidence: '#9a6700',
@@ -98,14 +87,7 @@ const STATUS_COLOR: Record<string, string> = {
   unavailable: '#cf222e',
 };
 
-export function BatchPanel({
-  lang,
-  apiKey,
-}: {
-  lang: UiLanguage;
-  /** Sent only when starting a run — a batch bills whoever pressed the button. */
-  apiKey: string;
-}) {
+export function BatchPanel({ lang, apiKey }: { lang: UiLanguage; apiKey: string }) {
   const [scan, setScan] = useState<Scan | null>(null);
   const [column, setColumn] = useState<string>('');
   const [agentEnabled, setAgentEnabled] = useState(false);
@@ -116,26 +98,14 @@ export function BatchPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rerun, setRerun] = useState<'unresolved' | 'all'>('unresolved');
   const [jobs, setJobs] = useState<JobSummary[]>([]);
-  /**
-   * What the last press of the button actually did.
-   *
-   * Without this a re-run is invisible. It works, but a pass over one row finishes between
-   * two one-second polls, the status returns to `done`, and the counts are unchanged when the
-   * results are unchanged — so the screen after the click is identical to the screen before
-   * it, and the only honest reading is that nothing happened.
-   */
   const [lastRun, setLastRun] = useState<{ rows: number; at: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // A finished job cannot simply be started again: the server refuses without an explicit
-  // mode, because a silent no-op that reports `started` is the worst possible answer.
   const finished = Boolean(progress && !progress.running && progress.rowsDone > 0);
-  const settled =
-    (progress?.byStatus.has_result ?? 0) + (progress?.byStatus.skipped ?? 0);
+  const settled = (progress?.byStatus.has_result ?? 0) + (progress?.byStatus.skipped ?? 0);
   const unresolved = (progress?.rowsDone ?? 0) - settled;
-
 
   useEffect(() => {
     void fetch(`${API}/api/batch/columns`)
@@ -156,13 +126,6 @@ export function BatchPanel({
     void loadJobs();
   }, [loadJobs]);
 
-  /**
-   * Reopen a job instead of uploading its file again.
-   *
-   * Re-uploading makes a SECOND job that re-runs every row and pays for all of them. This is
-   * the cheap way back: the same job, its results intact, ready for a re-run of only what is
-   * unresolved.
-   */
   const reopen = useCallback(async (jobId: string) => {
     setBusy(true);
     setError(null);
@@ -172,7 +135,10 @@ export function BatchPanel({
         setError(((await res.json()) as { error?: string }).error ?? 'cannot reopen');
         return;
       }
-      const data = (await res.json()) as Scan & { agentEnabled: boolean; agentCapUsd: number | null };
+      const data = (await res.json()) as Scan & {
+        agentEnabled: boolean;
+        agentCapUsd: number | null;
+      };
       setScan(data);
       setColumn(data.suggested ?? '');
       setAgentEnabled(data.agentEnabled);
@@ -194,43 +160,38 @@ export function BatchPanel({
     [loadJobs],
   );
 
-  const upload = useCallback(async (file: File) => {
-    setBusy(true);
-    setError(null);
-    setProgress(null);
-    try {
-      const body = new FormData();
-      body.append('file', file);
-      const res = await fetch(`${API}/api/batch/upload`, { method: 'POST', body });
-      const data = (await res.json()) as Scan & { error?: string };
-      if (!res.ok) {
-        // The server distinguishes "this is a .xls", "this is a JSON array", "this is CSV" and
-        // says what to do about each. Showing that sentence is the whole point of detecting.
-        setError(data.error ?? 'upload failed');
-        return;
+  const upload = useCallback(
+    async (file: File) => {
+      setBusy(true);
+      setError(null);
+      setProgress(null);
+      try {
+        const body = new FormData();
+        body.append('file', file);
+        const res = await fetch(`${API}/api/batch/upload`, { method: 'POST', body });
+        const data = (await res.json()) as Scan & { error?: string };
+        if (!res.ok) {
+          setError(data.error ?? 'upload failed');
+          return;
+        }
+        setScan(data);
+        setColumn(data.suggested ?? '');
+        void loadJobs();
+      } finally {
+        setBusy(false);
       }
-      setScan(data);
-      setColumn(data.suggested ?? '');
-      void loadJobs();
-    } finally {
-      setBusy(false);
-    }
-  }, [loadJobs]);
+    },
+    [loadJobs],
+  );
 
-  // Re-estimate whenever the options change, so the number on screen is always the number the
-  // start button will act on.
   useEffect(() => {
     if (!scan) return;
     const cap = capUsd.trim() === '' ? null : Number(capUsd);
     void fetch(`${API}/api/batch/${scan.jobId}/estimate`, {
       method: 'POST',
-      // The key goes with the estimate too, or the estimate cannot know whether the agent
-      // is able to run and will quote for work that will not happen.
       headers: { 'content-type': 'application/json', ...authHeaders(apiKey) },
       body: JSON.stringify({
         agent: { enabled: agentEnabled, capUsd: cap },
-        // The estimate has to be for the rows this run would actually search. Quoting the
-        // whole file for a second pass over the leftovers would make the number meaningless.
         rerun: finished ? rerun : undefined,
       }),
     })
@@ -239,17 +200,12 @@ export function BatchPanel({
       .catch(() => undefined);
   }, [scan, agentEnabled, capUsd, finished, rerun, apiKey]);
 
-  // Poll while the job runs. A batch is long enough that a page left open must keep telling
-  // the truth about it.
   useEffect(() => {
     if (!scan) return undefined;
     let alive = true;
     const tick = async () => {
       const res = await fetch(`${API}/api/batch/${scan.jobId}`);
       if (!alive) return;
-      // The job is gone — deleted here or elsewhere, or the server lost it. Returning silently
-      // leaves a panel showing a job that no longer exists, where every button fails against a
-      // 404 and nothing explains why. Hit this while testing: a deleted job kept its panel.
       if (res.status === 404) {
         setScan(null);
         setProgress(null);
@@ -303,17 +259,11 @@ export function BatchPanel({
     return `${API}/api/batch/${scan?.jobId}/export?format=${format}&columns=${encodeURIComponent(cols)}`;
   };
 
-  // The agent being unavailable no longer disables this. It used to, and the result was a
-  // dead button whose reason sat in a paragraph the reader had not scrolled to — while the
-  // local search, which needs no key whatsoever, was perfectly able to run. The warning above
-  // now carries a button that does the right thing in one tap.
   const canStart = Boolean(scan && column) && !busy && !progress?.running;
 
   return (
     <div className="panel">
       <div>
-        {/* No overlay and no close button: this is a tab now, not a dialog. The only
-            navigation it still owns is back from one job to the list of them. */}
         {scan && !progress?.running && (
           <header style={S.header}>
             <button
@@ -348,8 +298,6 @@ export function BatchPanel({
             </button>
             <p style={S.hint}>{t(lang, 'batch.formats')}</p>
 
-            {/* Reopening beats re-uploading: the same file uploaded twice is two jobs, and
-                the second pays for every row again. */}
             {jobs.length > 0 && (
               <div style={S.history}>
                 <h3 style={S.h3}>{t(lang, 'batch.history')}</h3>
@@ -362,10 +310,7 @@ export function BatchPanel({
                           <button style={S.link} onClick={() => void reopen(j.jobId)}>
                             {j.filename}
                           </button>
-                          <span style={S.muted}>
-                            {' '}
-                            {new Date(j.createdAt).toLocaleString()}
-                          </span>
+                          <span style={S.muted}> {new Date(j.createdAt).toLocaleString()}</span>
                         </td>
                         <td style={S.td}>
                           <span style={{ color: j.running ? '#0969da' : '#57606a' }}>
@@ -373,10 +318,11 @@ export function BatchPanel({
                           </span>
                         </td>
                         <td style={S.td}>
-                          {/* The breakdown, not a bare count: which rows are still worth
-                              spending on is the question this list has to answer. */}
                           {Object.entries(j.byStatus).map(([st, n]) => (
-                            <span key={st} style={{ ...S.chip, color: STATUS_COLOR[st] ?? '#57606a' }}>
+                            <span
+                              key={st}
+                              style={{ ...S.chip, color: STATUS_COLOR[st] ?? '#57606a' }}
+                            >
                               {st} {n}{' '}
                             </span>
                           ))}
@@ -417,8 +363,6 @@ export function BatchPanel({
               </div>
 
               <h3 style={S.h3}>{t(lang, 'batch.chooseColumn')}</h3>
-              {/* The scan abstains rather than nominating the least bad column. Saying so is
-                  what stops the user clicking past a confident wrong default. */}
               {scan.abstainReason && (
                 <p style={S.warn}>
                   {t(
@@ -431,7 +375,10 @@ export function BatchPanel({
               )}
               <div style={S.columnList}>
                 {scan.columns.map((c) => (
-                  <label key={c.name} style={{ ...S.column, ...(column === c.name ? S.columnOn : {}) }}>
+                  <label
+                    key={c.name}
+                    style={{ ...S.column, ...(column === c.name ? S.columnOn : {}) }}
+                  >
                     <input
                       type="radio"
                       name="column"
@@ -440,9 +387,6 @@ export function BatchPanel({
                       disabled={progress?.running}
                     />
                     <span style={S.columnName}>{c.name}</span>
-                    {/* The badge cell is always rendered, empty when this is not the
-                        suggestion. Rendering it conditionally shifts the grid and the one
-                        highlighted row ends up misaligned against all the others. */}
                     <span style={S.badgeCell}>
                       {scan.suggested === c.name && (
                         <span style={S.badge}>{t(lang, 'batch.suggested')}</span>
@@ -500,13 +444,6 @@ export function BatchPanel({
                 </div>
                 <p style={S.hint}>{t(lang, 'batch.estimateNote')}</p>
 
-                {/* Not about money — about whether the agent can run at all. A run once
-                    quoted agent rows against a gateway that was not configured, ran for two
-                    hours and never called the model once. */}
-                {/* The warning carries the ACTION. A disabled button with its explanation
-                    somewhere else leaves the reader stuck: the local search needs no key at
-                    all, so refusing to run it because the agent cannot is refusing work the
-                    user may well want. One tap does the right thing instead. */}
                 {estimate.agentRequestedButUnavailable && (
                   <div style={S.warn}>
                     <p style={{ margin: '0 0 .6rem' }}>{t(lang, 'batch.agentUnavailable')}</p>
@@ -528,15 +465,14 @@ export function BatchPanel({
               {progress?.running ? (
                 <button
                   style={S.danger}
-                  onClick={() => void fetch(`${API}/api/batch/${scan.jobId}/cancel`, { method: 'POST' })}
+                  onClick={() =>
+                    void fetch(`${API}/api/batch/${scan.jobId}/cancel`, { method: 'POST' })
+                  }
                 >
                   {t(lang, 'batch.cancel')}
                 </button>
               ) : (
                 <>
-                  {/* A finished job needs the second run to say what it means. The server
-                      refuses a bare restart, so offering one here would only produce an
-                      error the user cannot act on. */}
                   {finished && (
                     <div style={S.rerunRow}>
                       <label style={S.check}>
@@ -575,14 +511,10 @@ export function BatchPanel({
                   <div style={S.progressRow}>
                     <strong>{t(lang, `batch.${progress.status}`)}</strong>
                     <span>
-                      {/* While a pass runs, count THAT pass. `rowsDone` counts every row that
-                          has any result, which during a re-run is all of them from the first
-                          second — true, and not progress. */}
                       {t(lang, progress.pass ? 'batch.passProgress' : 'batch.progress')
                         .replace('{done}', String(progress.pass?.done ?? progress.rowsDone))
                         .replace('{total}', String(progress.pass?.total ?? progress.totalRows))}
                     </span>
-
                   </div>
                   <div style={S.bar}>
                     <div
@@ -595,16 +527,16 @@ export function BatchPanel({
                       }}
                     />
                   </div>
-                  {/* The breakdown, not just a count. "4 found, 1 not found, 1 skipped" is a
-                      different thing from "6 done", and it is the thing worth knowing. */}
                   <div style={S.statusRow}>
                     {Object.entries(progress.byStatus).map(([status, n]) => (
-                      <span key={status} style={{ ...S.chip, color: STATUS_COLOR[status] ?? '#57606a' }}>
+                      <span
+                        key={status}
+                        style={{ ...S.chip, color: STATUS_COLOR[status] ?? '#57606a' }}
+                      >
                         {status} {n}
                       </span>
                     ))}
                   </div>
-                  {/* Says what the last press did, and survives the run finishing. */}
                   {lastRun && (
                     <p style={S.lastRun}>
                       {t(lang, 'batch.lastRun')
@@ -670,7 +602,11 @@ export function BatchPanel({
 }
 
 const kb = (bytes: number): string =>
-  bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  bytes < 1024
+    ? `${bytes} B`
+    : bytes < 1048576
+      ? `${(bytes / 1024).toFixed(1)} KB`
+      : `${(bytes / 1048576).toFixed(1)} MB`;
 
 const pct = (done: number, total: number): number =>
   total === 0 ? 0 : Math.min(100, Math.round((done / total) * 100));
@@ -740,7 +676,13 @@ const S: Record<string, React.CSSProperties> = {
     fontSize: '.82rem',
     color: '#cf222e',
   },
-  check: { display: 'flex', gap: '.4rem', alignItems: 'center', fontSize: '.85rem', padding: '.15rem 0' },
+  check: {
+    display: 'flex',
+    gap: '.4rem',
+    alignItems: 'center',
+    fontSize: '.85rem',
+    padding: '.15rem 0',
+  },
   capRow: { marginTop: '.5rem' },
   capLabel: { display: 'flex', flexDirection: 'column', gap: '.25rem', fontSize: '.82rem' },
   input: { padding: '.35rem .5rem', border: '1px solid #d0d7de', borderRadius: 4, maxWidth: 220 },
@@ -830,5 +772,4 @@ const S: Record<string, React.CSSProperties> = {
     fontSize: '.85rem',
   },
   headerButtons: { display: 'flex', gap: '.4rem' },
-
 };
