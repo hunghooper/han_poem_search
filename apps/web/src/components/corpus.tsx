@@ -54,6 +54,7 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [who, setWho] = useState('');
   const [outcome, setOutcome] = useState<{ tally: Record<string, number>; results: AddResult[] } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -97,6 +98,28 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
     void loadPending();
   }, [loadPending]);
 
+  // Remembered per browser so the field is typed once, not once per file. It is a claim about
+  // who is adding, not a login — there is no auth (§17) — but a claim with a name on it is
+  // still worth more than a blank column when somebody later asks where a poem came from.
+  useEffect(() => {
+    try {
+      setWho(localStorage.getItem('han.corpus.who') ?? '');
+    } catch {
+      // Private windows and blocked site data. Typing the name each time is the fallback.
+    }
+  }, []);
+
+  const rememberWho = useCallback((v: string) => {
+    setWho(v);
+    try {
+      localStorage.setItem('han.corpus.who', v);
+    } catch {
+      // Nothing to do: the value still works for this page load.
+    }
+  }, []);
+
+  const named = who.trim().length > 0;
+
   const review = useCallback(
     async (id: string, accept: boolean) => {
       setReviewing(id);
@@ -104,14 +127,14 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
         await fetch(`${API}/api/corpus/pending/${id}/review`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ accept }),
+          body: JSON.stringify({ accept, reviewedBy: who.trim() }),
         });
         await loadPending();
       } finally {
         setReviewing(null);
       }
     },
-    [loadPending],
+    [loadPending, who],
   );
 
   const submit = useCallback(async () => {
@@ -125,7 +148,7 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
       const res = await fetch(`${API}/api/corpus/additions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ poems: payload }),
+        body: JSON.stringify({ poems: payload, submittedBy: who.trim() }),
       });
       const body = (await res.json()) as { error?: string; tally?: Record<string, number>; results?: AddResult[] };
       if (!res.ok) {
@@ -138,10 +161,23 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
     } finally {
       setSending(false);
     }
-  }, [rows, checks, lang]);
+  }, [rows, checks, lang, who]);
 
   return (
     <div className="panel">
+
+      <section className="group">
+        <h3>{t(lang, 'corpus.whoTitle')}</h3>
+        <p className="note">{t(lang, 'corpus.whoWhy')}</p>
+        <input
+          className="who"
+          type="text"
+          maxLength={200}
+          value={who}
+          placeholder={t(lang, 'corpus.whoPlaceholder')}
+          onChange={(e) => rememberWho(e.target.value)}
+        />
+      </section>
 
       {pending.length > 0 && (
         <section className="group">
@@ -179,7 +215,7 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
                 <button
                   type="button"
                   className="primary"
-                  disabled={reviewing === p.id}
+                  disabled={reviewing === p.id || !named}
                   onClick={() => void review(p.id, true)}
                 >
                   {t(lang, 'corpus.accept')}
@@ -187,7 +223,7 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
                 <button
                   type="button"
                   className="ghost"
-                  disabled={reviewing === p.id}
+                  disabled={reviewing === p.id || !named}
                   onClick={() => void review(p.id, false)}
                 >
                   {t(lang, 'corpus.reject')}
@@ -305,13 +341,15 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
         <button
           type="button"
           className="primary"
-          disabled={accepted === 0 || sending}
+          disabled={accepted === 0 || sending || !named}
           onClick={() => void submit()}
         >
           {sending
             ? t(lang, 'corpus.adding')
             : t(lang, 'corpus.add').replace('{n}', String(accepted))}
         </button>
+        {/* Named, so a disabled button is never a mystery. */}
+        {!named && <p className="note">{t(lang, 'corpus.whoRequired')}</p>}
         <p className="note">{t(lang, 'corpus.addNote')}</p>
 
         {outcome && (

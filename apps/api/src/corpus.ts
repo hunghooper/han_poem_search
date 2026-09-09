@@ -27,8 +27,13 @@ const MAX_PER_REQUEST = 200;
 
 const SubmitSchema = z.object({
   poems: z.array(z.unknown()).min(1).max(MAX_PER_REQUEST),
-  /** Recorded, not verified — there is no auth beyond a stub user (§17). */
-  submittedBy: z.string().max(200).optional(),
+  /**
+   * Required, and still not verified — there is no auth beyond a stub user (§17), so this is a
+   * claim rather than a control. It is required anyway: an added poem sits in the same index as
+   * 78,455 that carry a dataset, a file and a commit, and the least it can carry is the name of
+   * whoever put it there. A blank field would leave no one to ask.
+   */
+  submittedBy: z.string().trim().min(1).max(200),
 });
 
 export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
@@ -45,7 +50,7 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
       return reply.code(400).send({ error: 'invalid request', issues: parsed.error.issues });
     }
 
-    const submittedBy = parsed.data.submittedBy ?? null;
+    const { submittedBy } = parsed.data;
     const results = [];
 
     for (const [i, raw] of parsed.data.poems.entries()) {
@@ -115,7 +120,9 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
     const body = z
       .object({
         accept: z.boolean(),
-        reviewedBy: z.string().max(200).optional(),
+        // Same reasoning as submittedBy: accepting a proposal is the moment it becomes a poem
+        // every later search can return, and that decision should have a name on it.
+        reviewedBy: z.string().trim().min(1).max(200),
         note: z.string().max(2000).optional(),
       })
       .safeParse(request.body);
@@ -136,7 +143,7 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
         .set({
           status: AdditionStatus.REJECTED,
           reviewedAt: new Date(),
-          reviewedBy: body.data.reviewedBy ?? null,
+          reviewedBy: body.data.reviewedBy,
           reviewNote: body.data.note ?? null,
         })
         .where(eq(corpusAddition.id, id));
@@ -170,7 +177,7 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
         status: AdditionStatus.ACCEPTED,
         poemId: outcome.poemId ?? null,
         reviewedAt: new Date(),
-        reviewedBy: body.data.reviewedBy ?? null,
+        reviewedBy: body.data.reviewedBy,
         reviewNote: body.data.note ?? null,
       })
       .where(eq(corpusAddition.id, id));

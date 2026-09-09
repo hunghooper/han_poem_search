@@ -390,3 +390,19 @@ button.primary:disabled { opacity: .5; cursor: not-allowed; }
   margin-bottom: .55rem;
 }
 .proposal-actions { display: flex; gap: .5rem; }
+
+/* The name on an addition. Wide enough for an email, which is what most people will type. */
+.who {
+  width: 100%;
+  max-width: 26rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+}
+.who:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
