@@ -45,7 +45,7 @@ models:
     cachedInputPerMTok: 4.00
 
 # Every other model on the gateway is UNPRICED and reports costUsd: null. That is the honest
-# state, not an oversight — see docs/TODO.md.
+# state, not an oversight.
 #
 # Still unpriced and in use: qwen-3.8-max, the reasoning model that drives the agent loop.
 # Until it is priced, any run that invokes the agent has costUnknown set and §12's ceiling

@@ -264,7 +264,7 @@ for (const [model, results] of Object.entries(all)) {
 }
 
 writeFileSync(
-  'docs/smoke-latest.json',
+  'local/reports/smoke-latest.json',
   JSON.stringify({ ranAt: new Date().toISOString(), baseURL, results: all }, null, 2),
 );
-console.log('\nwrote docs/smoke-latest.json');
+console.log('\nwrote local/reports/smoke-latest.json');

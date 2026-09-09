@@ -173,7 +173,7 @@ async function main(): Promise<void> {
 
     const payload = {
       $comment:
-        'DERIVED FROM THE CORPUS, not from an authoritative 平水韻 table — see ADR 007. tone[ch] counts how often strains/ marked that character 平 vs 仄; a character with both is genuinely 多音. rhyme[ch] is an empirical 韻部 class id from the transitive closure of even-line finals in regulated verse.',
+        'DERIVED FROM THE CORPUS, not from an authoritative 平水韻 table. tone[ch] counts how often strains/ marked that character 平 vs 仄; a character with both is genuinely 多音. rhyme[ch] is an empirical 韻部 class id from the transitive closure of even-line finals in regulated verse.',
       $corpusCommit: process.env.CORPUS_COMMIT_SHA ?? '',
       $builtAt: new Date().toISOString(),
       tone,

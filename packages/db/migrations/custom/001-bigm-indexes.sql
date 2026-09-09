@@ -1,4 +1,4 @@
--- pg_bigm n-gram indexes — ADR 001.
+-- pg_bigm n-gram indexes.
 --
 -- Drizzle cannot express a gin_bigm_ops operator class, so this lives in raw SQL. The brief
 -- anticipates exactly this (§2, ORM row: "Raw SQL escape hatch needed for pg_bigm").

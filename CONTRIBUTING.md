@@ -5,8 +5,8 @@ and the three extension points you are most likely to touch: adding a tool, addi
 and adding a retrieval source.
 
 Read [`README.md`](./README.md) first for what the system does and how to read its output,
-and [`docs/adr/`](./docs/adr/) for the decisions that would be expensive to reverse. This
-document is about _how to work in the repo_.
+first for what the system does and how to read its output. This document is about _how to
+work in the repo_.
 
 ---
 
@@ -73,8 +73,7 @@ pnpm flags:docs         # regenerate docs/flags.md from the flag registry
 
 ## Branches and commits
 
-Branch names: `feat/agent-budget-limits`, `fix/rrf-tie-breaking`, `docs/adr-reranker`,
-`chore/bump-temporal`.
+Branch names: `feat/agent-budget-limits`, `fix/rrf-tie-breaking`, `chore/bump-temporal`.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 
@@ -221,8 +220,8 @@ To add or fix an adapter:
    enabled, "which model answered this" is otherwise unanswerable.
 
 Before pointing the agent at a new model, run the smoke test in
-`openai-compatible.smoke.test.ts` against it and record the result in
-`docs/adr/002-llm-gateway.md`. OpenAI compatibility is a claim, not a guarantee — gateways
+`openai-compatible.smoke.test.ts` against it and record the result. OpenAI compatibility is a
+claim, not a guarantee — gateways
 routinely proxy plain completions correctly while mishandling the tool-result round-trip for
 some models. A model that fails that step can still do rewriting and answer generation, but
 must never be set as `LLM_MODEL_REASONING`.
@@ -268,13 +267,12 @@ almost always one of the four rules above.
 
 ## Architecture decisions
 
-Anything that would be expensive to reverse gets an ADR in `docs/adr/`, numbered and dated:
-choice of embedding model, BM25 backend, reranker, threshold calibration, transport, schema
-changes to the event contract.
+Anything that would be expensive to reverse gets a short record: context, decision,
+consequences, and what would make us revisit. Choice of embedding model, BM25 backend,
+reranker, threshold calibration, transport, schema changes to the event contract.
 
-Use the template in `docs/adr/000-template.md`. Keep them short — context, decision,
-consequences, and what would make us revisit. An ADR that nobody reads because it is six pages
-long has failed at its job.
+Keep them short. A decision record that nobody reads because it is six pages long has failed
+at its job.
 
 Retrieval thresholds specifically must not be changed without a calibration run recorded in an
 ADR. "It felt better on a few queries" is not a calibration run.

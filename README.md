@@ -12,8 +12,7 @@ available: you get a confident-looking title with no way to tell whether it is r
 the closest thing in the index.
 
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)** — how to work in the repo.
-- **[docs/adr/](./docs/adr/)** — decisions that would be expensive to reverse.
-- **[docs/TODO.md](./docs/TODO.md)** — what is not built, and why.
+- **[docs/flags.md](./docs/flags.md)** — the full tag reference, generated from the registry.
 
 ## Running it
 
@@ -161,5 +160,6 @@ synthetic query set with MRR 0.987; the thresholds and prosody tables are calibr
 measured data, not chosen by feel.
 
 It is not deployed. There is no Dockerfile for the app itself, no CI, and no auth — the name on
-a corpus addition is a record, not a control. `docs/TODO.md` lists 17 open items with the
-reasoning for each.
+a corpus addition is a record, not a control. The exact-match gate calls a five-character run
+a full match; the tail below 40% overlap is still treated as confident; and quotation — a poem
+quoting an earlier one — is not modelled, so it can resolve to the wrong work.

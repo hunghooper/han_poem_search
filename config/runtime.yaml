@@ -25,7 +25,7 @@ confidence:
   verifyFloor: 0.60
   noiseFloor: 0.35
   minAgreeingWindows: 2
-  minLexicalOverlap: 0.15 # ADR 008 — the floor that stops a confident 0.99 on nonsense
+  minLexicalOverlap: 0.15 # the floor that stops a confident 0.99 on nonsense
 
 agent:
   enabled: true
@@ -36,7 +36,7 @@ agent:
   skipWhenNoOverlap: true
 
 # null means "take it from the environment" (LLM_MODEL_*). Only ever set REASONING to a model
-# that passed §4.5 checks 2-4 — see docs/adr/002-llm-gateway.md.
+# that passed the tool-calling smoke test.
 models:
   reasoning: null
   answer: null

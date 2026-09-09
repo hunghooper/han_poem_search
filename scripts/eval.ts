@@ -223,7 +223,7 @@ async function main(): Promise<void> {
     );
 
     await writeFile(
-      'docs/eval-latest.json',
+      'local/reports/eval-latest.json',
       JSON.stringify(
         {
           ranAt: new Date().toISOString(),
@@ -238,7 +238,7 @@ async function main(): Promise<void> {
       ),
       'utf8',
     );
-    console.log('\nwrote docs/eval-latest.json');
+    console.log('\nwrote local/reports/eval-latest.json');
   } finally {
     await pool.end();
   }
