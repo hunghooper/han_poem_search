@@ -20,7 +20,17 @@ import { CorpusPanel } from '@/components/corpus';
 import { Tabs, type TabId } from '@/components/tabs';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-const WS = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:3001';
+
+/**
+ * The socket lives on the same server as the API, so it is DERIVED from the API base rather
+ * than configured beside it. Two settings for one host drift, and this one drifted the worst
+ * way available: a hardcoded `ws://localhost:3001` left the search POST working over HTTPS
+ * while the live trace silently never connected — the page looked like it had done nothing.
+ *
+ * `NEXT_PUBLIC_WS_URL` still wins when it is set, for a deployment that really does split them.
+ */
+const WS =
+  process.env.NEXT_PUBLIC_WS_URL ?? API.replace(/^http/, 'ws');
 
 interface Ev {
   seq: number;
