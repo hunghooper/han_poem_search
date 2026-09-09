@@ -35,7 +35,7 @@ import { decode } from '@han/shared/serde';
  * property of the SQL representation, so it is reconciled here, where SQL lives: a NULL in a
  * column backing an optional field means the key was never set.
  */
-const OPTIONAL_COLUMNS = ['status', 'agentIteration', 'message'] as const;
+const OPTIONAL_COLUMNS = ['status', 'agentIteration', 'message', 'messageTrace'] as const;
 
 export function rowToEvent(row: Record<string, unknown>): SearchEvent {
   const decoded = decode<Record<string, unknown>>(row);
@@ -132,11 +132,13 @@ export class PostgresEventSink implements EventSink {
       // duplicate (run_id, seq) means a bug upstream that an upsert would hide.
       await this.db.execute(sql`
         INSERT INTO search_event
-          (event_id, run_id, seq, ts, step, source, phase, status, flags, agent_iteration, message, metadata)
+          (event_id, run_id, seq, ts, step, source, phase, status, flags, agent_iteration, message, message_trace, metadata)
         VALUES (
           ${e.eventId}, ${e.runId}, ${e.seq}, ${e.ts}, ${e.step}, ${e.source}, ${e.phase},
           ${e.status ?? null}, ${JSON.stringify(e.flags)}::jsonb, ${e.agentIteration ?? null},
-          ${e.message ?? null}, ${JSON.stringify(e.metadata)}::jsonb
+          ${e.message ?? null},
+          ${e.messageTrace ? JSON.stringify(e.messageTrace) : null}::jsonb,
+          ${JSON.stringify(e.metadata)}::jsonb
         )
         ON CONFLICT (run_id, seq) DO NOTHING
       `);
@@ -196,7 +198,7 @@ export async function loadRun(
   const evRes = await db.execute<Record<string, unknown>>(sql`
     SELECT event_id, run_id, seq,
            to_char(ts AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS ts,
-           step, source, phase, status, flags, agent_iteration, message, metadata
+           step, source, phase, status, flags, agent_iteration, message, message_trace, metadata
     FROM search_event WHERE run_id = ${runId} ORDER BY seq
   `);
   const rows = Array.isArray(evRes) ? evRes : evRes.rows;

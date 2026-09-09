@@ -101,6 +101,32 @@ describe('trace labels', () => {
     expect(tTrace('vi', msg('trace.notAThing'), 'Reading your query')).toBe('Reading your query');
   });
 
+  /**
+   * Params cross the wire inside the event, and the wire codec (@han/shared/serde) rewrites
+   * EVERY key it walks: snake_case going out, camelCase coming back. A param named
+   * `source_url` would therefore arrive as `sourceUrl`, never match its own placeholder, and
+   * render as the literal text "{source_url}" — with no error anywhere.
+   *
+   * One lowercase word per param keeps the codec a no-op. This test is the only thing that
+   * says so.
+   */
+  it('uses only param names the wire codec leaves alone', () => {
+    const safe = /^[a-z][a-z0-9]*$/;
+    let checked = 0;
+    for (const lang of UI_LANGUAGES) {
+      for (const [code, template] of Object.entries(TRACE_LABELS[lang])) {
+        for (const m of template.matchAll(/\{(\w+)\}/gu)) {
+          const name = m[1] ?? '';
+          checked += 1;
+          expect(safe.test(name), `${lang} ${code} has param {${name}}`).toBe(true);
+        }
+      }
+    }
+    // A test that walks nothing passes for the wrong reason. This one nearly did: an earlier
+    // version of the pattern lost its escapes, matched no placeholders at all, and went green.
+    expect(checked).toBeGreaterThan(100);
+  });
+
   /** A raw key on screen teaches a reader nothing; with no fallback, say nothing. */
   it('returns null rather than a raw code when there is no fallback either', () => {
     expect(tTrace('vi', msg('trace.notAThing'))).toBeNull();

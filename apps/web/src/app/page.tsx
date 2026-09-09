@@ -87,6 +87,7 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [server, setServer] = useState<ServerConfig | null>(null);
+  const [corpusSize, setCorpusSize] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tab, setTab] = useState<TabId>('search');
   // Deliberately NOT part of `settings`: that blob is persisted and is the thing a user
@@ -104,6 +105,15 @@ export default function Home() {
       .then((r) => r.json())
       .then((j) => setServer(decode<ServerConfig>(j)))
       .catch(() => setServer(null));
+  }, []);
+
+  // The corpus size, counted. Silent on failure: the headline simply does not appear, which is
+  // better than a number nobody checked.
+  useEffect(() => {
+    void fetch(`${API}/api/corpus/stats`)
+      .then((r) => r.json())
+      .then((j) => setCorpusSize(decode<{ total: number | null }>(j).total))
+      .catch(() => setCorpusSize(null));
   }, []);
 
   const updateSettings = useCallback((next: Settings) => {
@@ -183,7 +193,12 @@ export default function Home() {
           {t(lang, 'settings.title')}
         </button>
       </div>
-      <p className="sub">{t(lang, 'app.tagline', { n: '78,455' })}</p>
+      {/* Counted, not hardcoded — the corpus grows now, and a headline that cannot move is a
+          claim rather than a count. Nothing is shown until the count arrives: a placeholder
+          number would be a guess, and this line's whole job is to be exact. */}
+      {corpusSize !== null && (
+        <p className="sub">{t(lang, 'app.tagline', { n: corpusSize.toLocaleString('en-US') })}</p>
+      )}
 
       <Tabs lang={lang} active={tab} onChange={setTab} />
 

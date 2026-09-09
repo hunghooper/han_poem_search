@@ -6,6 +6,7 @@
  * constraint visible rather than something each new field has to remember.
  */
 
+import type { TraceMsg } from '@han/shared/trace';
 import type { Evidence } from '@han/shared/evidence';
 import type { StepStatus } from '@han/shared/status';
 import type { RuntimeConfig } from '@han/shared/runtime-config';
@@ -81,5 +82,7 @@ export interface WorkflowEvent {
   flags?: string[];
   agentIteration?: number;
   message: string;
+  /** The same message as a code the reader's language can render (@han/shared/trace). */
+  messageTrace?: TraceMsg;
   metadata?: Record<string, unknown>;
 }

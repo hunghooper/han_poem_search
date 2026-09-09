@@ -163,6 +163,17 @@ export const TRACE_CODES = [
   'trace.agent.failed',
   'trace.agent.found',
   'trace.agent.stopped',
+  'trace.agent.chose',
+  'trace.agent.finishing',
+
+  // one tool reporting back, from inside the durable workflow
+  'trace.tool.count',
+  'trace.tool.none',
+  'trace.tool.lowConfidence',
+  'trace.tool.timeout',
+  'trace.tool.unavailable',
+  'trace.tool.failed',
+  'trace.tool.other',
 
   // the verifier, and what it proposed
   'trace.judge.checking',

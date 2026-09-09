@@ -12,6 +12,7 @@
  * appearing to stall.
  */
 
+import type { TraceMsg } from '@han/shared/trace';
 import { Redis } from 'ioredis';
 import type { SearchStep } from '@han/shared/events';
 import type { StepStatus } from '@han/shared/status';
@@ -26,6 +27,7 @@ interface WorkflowEvent {
   flags?: string[];
   agentIteration?: number;
   message: string;
+  messageTrace?: TraceMsg;
   metadata?: Record<string, unknown>;
 }
 
@@ -68,6 +70,7 @@ export class AgentEventBridge {
           flags: e.flags ?? [],
           ...(e.agentIteration !== undefined ? { agentIteration: e.agentIteration } : {}),
           message: e.message,
+          ...(e.messageTrace ? { messageTrace: e.messageTrace } : {}),
           metadata: (e.metadata ?? {}) as never,
         });
       } catch (err) {

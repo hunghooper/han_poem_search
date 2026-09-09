@@ -193,6 +193,13 @@ export const searchEvent = pgTable(
     flags: jsonb('flags').$type<string[]>().notNull().default([]),
     agentIteration: integer('agent_iteration'),
     message: text('message'),
+    /**
+     * What the message MEANT, so a run reopened later reads in the reader's language rather
+     * than the English it was written in. See packages/shared/src/trace.ts — the whole reason
+     * the code travels beside the string is that this log is replayed, and a log that stores
+     * only the rendered English defeats it.
+     */
+    messageTrace: jsonb('message_trace'),
     metadata: jsonb('metadata').notNull().default({}),
   },
   (t) => ({

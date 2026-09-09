@@ -23,6 +23,7 @@
  * satisfaction check and the state compaction are pure, and imported unchanged.
  */
 
+import { msg, type TraceMsg } from '@han/shared/trace';
 import * as workflow from '@temporalio/workflow';
 import type { Evidence } from '@han/shared/evidence';
 import { StepStatus } from '@han/shared/status';
@@ -171,6 +172,10 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
       agentIteration: state.iteration,
       flags: decision.flags,
       message: decision.toolCalls.length > 0 ? `Chose ${decision.toolCalls[0]!.name}` : 'Decided to finish',
+      messageTrace:
+        decision.toolCalls.length > 0
+          ? msg('trace.agent.chose', { tool: decision.toolCalls[0]!.name })
+          : msg('trace.agent.finishing'),
       metadata: {
         provider: decision.provider,
         model: decision.model,
@@ -221,6 +226,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
       status: result.status,
       agentIteration: state.iteration,
       message: describeToolResult(call.name, result),
+      messageTrace: toolResultTrace(call.name, result),
       metadata: {
         latencyMs: result.latencyMs,
         resultCount: result.resultCount,
@@ -243,6 +249,28 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunOutput> {
     });
 
     if (satisfied(state)) return stop(state, flags, 'satisfied', false);
+  }
+}
+
+/** `describeToolResult`'s twin — same branches, same order. */
+function toolResultTrace(name: string, r: ToolCallResult): TraceMsg {
+  switch (r.status) {
+    case StepStatus.HAS_RESULT:
+      return msg('trace.tool.count', { tool: name, n: r.resultCount });
+    case StepStatus.NO_RESULT:
+      return msg('trace.tool.none', { tool: name });
+    case StepStatus.LOW_CONFIDENCE:
+      return msg('trace.tool.lowConfidence', { tool: name });
+    case StepStatus.TIMEOUT:
+      return msg('trace.tool.timeout', { tool: name });
+    case StepStatus.UNAVAILABLE:
+      return msg('trace.tool.unavailable', { tool: name });
+    case StepStatus.ERROR:
+      // The error text is the tool's own; it passes through as a value so the frame is still
+      // the reader's language.
+      return msg('trace.tool.failed', { tool: name, error: r.error?.message ?? '' });
+    default:
+      return msg('trace.tool.other', { tool: name, status: String(r.status) });
   }
 }
 

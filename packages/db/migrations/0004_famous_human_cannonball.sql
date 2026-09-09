@@ -1,0 +1,1 @@
+ALTER TABLE "search_event" ADD COLUMN "message_trace" jsonb;

@@ -7,7 +7,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { corpusAddition, poem } from '@han/db/schema';
 import {
@@ -185,7 +185,13 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
     return { reviewed: 'accepted', ...outcome };
   });
 
-  /** How many poems in the corpus arrived by addition, for the panel to show honestly. */
+  /**
+   * How big the corpus is, and how much of it arrived by addition.
+   *
+   * The total is COUNTED, not configured. The headline used to carry a hardcoded 78,455 — true
+   * on the day it was typed, and wrong the moment somebody added a poem, which is now a thing
+   * the interface invites them to do. A number that cannot move is a claim, not a count.
+   */
   app.get('/api/corpus/stats', async () => {
     const rows = await db
       .select({ dataset: poem.dataset })
@@ -195,6 +201,7 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
       .select({ dataset: poem.dataset })
       .from(poem)
       .where(eq(poem.dataset, 'agent-proposed'));
-    return { userAdded: rows.length, agentAdded: agent.length };
+    const [totalRow] = await db.select({ n: sql<number>`count(*)::int` }).from(poem);
+    return { total: totalRow?.n ?? null, userAdded: rows.length, agentAdded: agent.length };
   });
 }
