@@ -363,3 +363,30 @@ button.primary:disabled { opacity: .5; cursor: not-allowed; }
 .rows td.num, .rows th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .scroller { overflow-x: auto; }
+
+/* A proposal is shown as a thing to read, not a row to tick: the text is the
+   evidence and a reviewer needs it in front of them before deciding. */
+.proposal {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  padding: .7rem .9rem;
+  margin: .7rem 0;
+  background: var(--bg);
+}
+.proposal-head { font-size: .92rem; margin-bottom: .4rem; }
+.proposal-text {
+  font-family: var(--serif-cjk);
+  font-size: 15px;
+  line-height: 1.85;
+  margin: 0 0 .5rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.proposal-meta {
+  display: flex;
+  gap: .8rem;
+  align-items: center;
+  font-size: .76rem;
+  margin-bottom: .55rem;
+}
+.proposal-actions { display: flex; gap: .5rem; }

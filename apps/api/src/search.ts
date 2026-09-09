@@ -20,6 +20,7 @@ import type { Evidence } from '@han/shared/evidence';
 import { StepStatus } from '@han/shared/status';
 import { AggregateFlag, flag } from '@han/shared/flags';
 import { verifyWithLlm, type Verdict } from '@han/agent/verify-llm';
+import { proposeAddition } from './corpus-add.js';
 import { runAgentWorkflow } from '@han/worker/client';
 import type { AgentRunOutput } from '@han/worker/shared';
 import type { AgentEventBridge } from './agent-bridge.js';
@@ -430,6 +431,27 @@ export async function runSearch(
       });
     } else {
       llmVerdict = judged.verdict;
+
+      // The judge may name a poem worth keeping. It lands as a PENDING proposal — no poem
+      // row, no index entry, invisible to every search until a person accepts it. The four
+      // conditions are re-checked in `proposeAddition` rather than trusted from the model.
+      if (judged.verdict.propose) {
+        const outcome = await proposeAddition(deps.db, judged.verdict.propose, {
+          runId,
+          verdict: judged.verdict.verdict,
+          localFoundNothing: !found,
+          evidence: result.evidence.map((e) => ({ source: e.source, url: e.url })),
+        });
+        store.emit(runId, {
+          step: 'llm_verification',
+          source: 'llm_verify',
+          phase: 'completed',
+          status: outcome.proposed ? StepStatus.HAS_RESULT : StepStatus.SKIPPED,
+          message: outcome.proposed
+            ? `Proposed "${judged.verdict.propose.title}" for the corpus — awaiting review`
+            : `Proposal declined — ${outcome.reason ?? 'no reason given'}`,
+        });
+      }
       store.emit(runId, {
         step: 'llm_verification',
         source: 'llm_verify',

@@ -38,3 +38,31 @@ describe('parseVerdict', () => {
     expect(v?.notes).toBe('');
   });
 });
+
+/**
+ * The judge may name a poem worth keeping. It may not write one in — the caller checks the
+ * conditions and a person accepts the proposal, because a model that once counted its own
+ * refusal as a finding does not get write access to what every later search reads.
+ */
+describe('the optional proposal', () => {
+  it('is read when present and well formed', () => {
+    const v = parseVerdict(
+      '{"verdict":"sufficient","confidence":0.9,"propose":{"title":"東坡引","author":"彭孫貽","text":"綺窗紅日皦","source_url":"https://sou-yun.cn/x"}}',
+    );
+    expect(v?.propose?.title).toBe('東坡引');
+    expect(v?.propose?.author).toBe('彭孫貽');
+  });
+
+  // Null is the normal answer and the safe one.
+  it('is absent on an ordinary verdict', () => {
+    expect(parseVerdict('{"verdict":"insufficient","confidence":0.2}')?.propose).toBeUndefined();
+  });
+
+  // A malformed proposal must not take the verdict down with it, nor slip through half-filled:
+  // the schema refuses the whole object, and the caller sees no verdict rather than a bad one.
+  it('refuses a proposal missing an author', () => {
+    expect(
+      parseVerdict('{"verdict":"sufficient","confidence":1,"propose":{"title":"x","text":"y"}}'),
+    ).toBeNull();
+  });
+});

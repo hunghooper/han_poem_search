@@ -22,7 +22,7 @@
  * a row the screen accepts and the server refuses.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UiLanguage } from '@han/shared/runtime-config';
 import { t } from './i18n';
 
@@ -36,11 +36,24 @@ interface AddResult {
   message?: string;
 }
 
+/** A proposal the verifier made. Not in the corpus: no poem row, no index entry. */
+interface Pending {
+  id: string;
+  origin: string;
+  runId: string | null;
+  sourceUrl: string | null;
+  note: string | null;
+  createdAt: string;
+  payload: { title?: string; author?: string; text?: string; dynasty?: string };
+}
+
 export function CorpusPanel({ lang }: { lang: UiLanguage }) {
   const [rows, setRows] = useState<Array<Record<string, unknown>> | null>(null);
   const [filename, setFilename] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [reviewing, setReviewing] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{ tally: Record<string, number>; results: AddResult[] } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -71,6 +84,36 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
     }
   }, [lang]);
 
+  const loadPending = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/corpus/pending`);
+      if (res.ok) setPending(((await res.json()) as { pending: Pending[] }).pending);
+    } catch {
+      // A review list that will not load is not a reason to break the rest of the panel.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPending();
+  }, [loadPending]);
+
+  const review = useCallback(
+    async (id: string, accept: boolean) => {
+      setReviewing(id);
+      try {
+        await fetch(`${API}/api/corpus/pending/${id}/review`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ accept }),
+        });
+        await loadPending();
+      } finally {
+        setReviewing(null);
+      }
+    },
+    [loadPending],
+  );
+
   const submit = useCallback(async () => {
     if (!rows) return;
     setSending(true);
@@ -99,6 +142,61 @@ export function CorpusPanel({ lang }: { lang: UiLanguage }) {
 
   return (
     <div className="panel">
+
+      {pending.length > 0 && (
+        <section className="group">
+          <h3>{t(lang, 'corpus.pendingTitle').replace('{n}', String(pending.length))}</h3>
+          {/* Proposals, not entries. Nothing here is in the corpus: no poem row, no index
+              entry, invisible to every search until somebody here says yes. The verifier can
+              see when a run found a poem the corpus lacks and is well placed to suggest it —
+              but a model that once counted its own refusal as a finding does not get to write
+              into what every later search reads. */}
+          <p className="note">{t(lang, 'corpus.pendingWhy')}</p>
+
+          {pending.map((p) => (
+            <div className="proposal" key={p.id}>
+              <div className="proposal-head">
+                <strong>{p.payload.title || t(lang, 'corpus.noTitle')}</strong>
+                <span className="muted">
+                  {' '}
+                  {p.payload.author || t(lang, 'corpus.noAuthor')}
+                  {p.payload.dynasty ? ` · ${p.payload.dynasty}` : ''}
+                </span>
+              </div>
+              <pre className="proposal-text">{p.payload.text}</pre>
+              <div className="proposal-meta">
+                {p.sourceUrl && (
+                  <a href={p.sourceUrl} target="_blank" rel="noreferrer">
+                    {t(lang, 'corpus.source')}
+                  </a>
+                )}
+                {/* The run that produced it, so a reviewer can read the evidence rather than
+                    the conclusion. */}
+                {p.runId && <code>{p.runId.slice(0, 8)}</code>}
+                <span className="muted">{new Date(p.createdAt).toLocaleString()}</span>
+              </div>
+              <div className="proposal-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={reviewing === p.id}
+                  onClick={() => void review(p.id, true)}
+                >
+                  {t(lang, 'corpus.accept')}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={reviewing === p.id}
+                  onClick={() => void review(p.id, false)}
+                >
+                  {t(lang, 'corpus.reject')}
+                </button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="group">
         <h3>{t(lang, 'corpus.rulesTitle')}</h3>

@@ -21,7 +21,24 @@ import { z } from 'zod';
 import type { LlmProvider } from '@han/llm/provider';
 import type { Evidence } from '@han/shared/evidence';
 
-/** §10.2's shape, unchanged. */
+/**
+ * A poem the judge thinks the corpus should keep.
+ *
+ * Named by the model; written by nobody. The caller decides whether this becomes a pending
+ * proposal, and a person decides whether the proposal becomes a poem — see
+ * docs/plans/corpus-enrichment.md for why the judge may propose and may not write.
+ */
+export const ProposalSchema = z.object({
+  title: z.string().min(1).max(200),
+  author: z.string().min(1).max(200),
+  text: z.string().min(1).max(8000),
+  dynasty: z.string().max(100).nullish(),
+  source_url: z.string().max(500).nullish(),
+});
+
+export type Proposal = z.infer<typeof ProposalSchema>;
+
+/** §10.2's shape, plus the optional proposal. */
 export const VerdictSchema = z.object({
   verdict: z.enum(['sufficient', 'insufficient', 'conflicting']),
   confidence: z.number().min(0).max(1),
@@ -29,6 +46,11 @@ export const VerdictSchema = z.object({
   gaps: z.array(z.string()).max(6).default([]),
   /** One or two sentences for a human, in the trace and in the export. */
   notes: z.string().max(600).default(''),
+  /**
+   * Set only when the evidence identified a poem that came from OUTSIDE the corpus and is
+   * worth keeping. Null is the normal answer and the safe one.
+   */
+  propose: ProposalSchema.nullish(),
 });
 
 export type Verdict = z.infer<typeof VerdictSchema>;
@@ -54,6 +76,17 @@ Answer with JSON only, no prose around it:
 Judge the EVIDENCE, not the plausibility of the query. A confident-sounding sentence with no
 work named is insufficient. A candidate that shares few characters with the query is
 insufficient however fluent the prose around it.
+
+OPTIONALLY, add "propose": {"title","author","text","dynasty","source_url"} — but ONLY when
+ALL of these hold:
+
+  - your verdict is "sufficient"
+  - the identified poem came from an OUTSIDE source in the evidence, not from the local corpus
+  - that outside source gave a real URL
+  - you can copy the poem's text, title and author from the evidence rather than recalling them
+
+If you are working from memory rather than from a source in the evidence, do not propose. Omit
+the field or set it to null; null is the normal answer.
 
 `;
 

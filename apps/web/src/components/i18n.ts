@@ -170,6 +170,13 @@ const vi: Dict = {
   'corpus.out.refused': '{n} bài bị từ chối',
   'corpus.out.error': '{n} bài lỗi',
   'corpus.errNetwork': 'Không gọi được máy chủ.',
+  'corpus.pendingTitle': '{n} đề xuất chờ duyệt',
+  'corpus.pendingWhy': 'Đây là ĐỀ XUẤT, chưa phải bài trong kho: chưa có bản ghi, chưa vào chỉ mục, không lượt tra nào thấy được cho tới khi có người bấm nhận. Con thẩm định nhìn ra được lúc một lượt chạy tìm thấy bài kho chưa có, nhưng một mô hình từng tính lời từ chối của chính nó thành phát hiện thì không được quyền ghi thẳng vào thứ mọi lượt tra sau này đều đọc.',
+  'corpus.accept': 'Nhận vào kho',
+  'corpus.reject': 'Từ chối',
+  'corpus.source': 'nguồn',
+  'corpus.noTitle': '(không tên)',
+  'corpus.noAuthor': '(không rõ tác giả)',
 };
 
 const en: Dict = {
@@ -325,6 +332,13 @@ const en: Dict = {
   'corpus.out.refused': '{n} refused',
   'corpus.out.error': '{n} failed',
   'corpus.errNetwork': 'Could not reach the server.',
+  'corpus.pendingTitle': '{n} proposals awaiting review',
+  'corpus.pendingWhy': 'These are PROPOSALS, not corpus entries: no poem row, no index entry, invisible to every search until somebody accepts. The verifier can see when a run found a poem the corpus lacks — but a model that once counted its own refusal as a finding does not get to write into what every later search reads.',
+  'corpus.accept': 'Accept',
+  'corpus.reject': 'Reject',
+  'corpus.source': 'source',
+  'corpus.noTitle': '(untitled)',
+  'corpus.noAuthor': '(author unknown)',
 };
 
 const zh: Dict = {
@@ -480,6 +494,13 @@ const zh: Dict = {
   'corpus.out.refused': '{n} 首遭拒',
   'corpus.out.error': '{n} 首失敗',
   'corpus.errNetwork': '無法連線至伺服器。',
+  'corpus.pendingTitle': '{n} 項待審提議',
+  'corpus.pendingWhy': '此為提議，尚非語料條目：無詩作記錄、未入索引，在有人接受之前任何檢索都看不見。校驗模型能察覺某次執行找到了語料所無之詩——但一個曾把自身拒答計為發現的模型，不得直接寫入其後每次檢索所讀之物。',
+  'corpus.accept': '接受',
+  'corpus.reject': '拒絕',
+  'corpus.source': '來源',
+  'corpus.noTitle': '（無題）',
+  'corpus.noAuthor': '（作者不詳）',
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };

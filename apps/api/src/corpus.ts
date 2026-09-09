@@ -106,7 +106,12 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
   });
 
   app.post('/api/corpus/pending/:id/review', async (request, reply) => {
-    const { id } = request.params as { id: string };
+    // Checked here rather than left to the database. The id column is a uuid, so a malformed
+    // one surfaces as a driver error and a 500 — which tells a caller the server broke when in
+    // fact they asked for something that cannot exist.
+    const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'id must be a uuid' });
+    const { id } = params.data;
     const body = z
       .object({
         accept: z.boolean(),
@@ -150,6 +155,9 @@ export function registerCorpusRoutes(app: FastifyInstance, db: Db): void {
       origin: AdditionOrigin.AGENT,
       submittedBy: row.submittedBy,
       runId: row.runId,
+      // This proposal's own row becomes the accepted record, just below. A second row would
+      // say the poem arrived twice.
+      recordAddition: false,
     });
 
     if (outcome.result === 'error') {
