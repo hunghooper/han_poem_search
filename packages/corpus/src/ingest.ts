@@ -210,7 +210,7 @@ const limit = Number.isFinite(explicitLimit)
     : null;
 
 run({
-  root: process.env.CORPUS_DATA_DIR ?? './data/chinese-poetry',
+  root: process.env.CORPUS_DATA_DIR ?? './local/chinese-poetry',
   commitSha: process.env.CORPUS_COMMIT_SHA ?? '',
   databaseUrl: process.env.DATABASE_URL ?? '',
   limit,

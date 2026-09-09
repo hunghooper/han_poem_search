@@ -30,7 +30,7 @@ cp .env.example .env          # RAMCLOUDS_API_KEY, ANTHROPIC_API_KEY (fallback),
 docker compose up -d          # postgres (with pg_bigm), qdrant, temporal, redis
 pnpm db:migrate
 
-pnpm corpus:fetch             # clones chinese-poetry at a pinned commit into data/
+pnpm corpus:ingest            # after cloning chinese-poetry into local/chinese-poetry
 pnpm corpus:ingest -- --sample  # ~2k poems, enough for development
 # pnpm corpus:ingest           # the full ~350k corpus, takes a while
 

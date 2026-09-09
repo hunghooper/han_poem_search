@@ -371,7 +371,7 @@ app.get('/api/runs/:runId/stream', { websocket: true }, (socket, req) => {
 });
 
 const BATCH_DIR =
-  process.env.BATCH_DIR ?? fileURLToPath(new URL('../../../.data/batch', import.meta.url));
+  process.env.BATCH_DIR ?? fileURLToPath(new URL('../../../local/batch', import.meta.url));
 registerBatchRoutes(
   app,
   { ...deps, store, config: baseConfig, makeToolsWith, keyStore },

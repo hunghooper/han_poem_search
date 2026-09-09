@@ -136,7 +136,7 @@ function buildRhymeGroups(poems: Array<{ finals: string[] }>): Record<string, nu
 
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
-  const root = process.env.CORPUS_DATA_DIR ?? './data/chinese-poetry';
+  const root = process.env.CORPUS_DATA_DIR ?? './local/chinese-poetry';
   const outDir = fileURLToPath(new URL('../../retrieval/src/data/', import.meta.url));
   if (!databaseUrl) throw new Error('DATABASE_URL is not set');
 

@@ -22,7 +22,7 @@ the closest thing in the index.
 corepack enable && pnpm install
 docker compose up -d          # postgres (pg_bigm), qdrant, redis, temporal
 pnpm db:migrate
-git clone --depth 1 https://github.com/chinese-poetry/chinese-poetry data/chinese-poetry
+git clone --depth 1 https://github.com/chinese-poetry/chinese-poetry local/chinese-poetry
 pnpm --filter @han/corpus exec tsx src/ingest.ts
 pnpm dev
 ```
@@ -31,6 +31,9 @@ The corpus is roughly 78,000 poems and 800,000 lines. Semantic search and re-ran
 `apps/model-service` on a CUDA box; everything else runs without a GPU. The agent needs an
 OpenAI-compatible gateway in `.env` — without one it reports `unavailable` and the rest still
 works.
+
+Everything on disk that is not source — the cloned corpus, uploaded files, exports — lives
+under `local/`, which is git-ignored. Nothing in there belongs in a commit.
 
 `scripts/accept.ts` runs the acceptance criteria against the real index.
 
