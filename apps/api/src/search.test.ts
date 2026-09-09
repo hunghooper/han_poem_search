@@ -131,6 +131,61 @@ describe('agent evidence reaches the run status', () => {
 });
 
 /**
+ * FOUND IN AN EXPORT. Rows flagged `model_has_result` carried a title and an author but an
+ * empty `han_form` and `han_form_label`.
+ *
+ * The cause was ordering, not the columns. Rule verification ran on the LOCAL candidate, before
+ * the agent had its turn — so when the corpus found nothing and the agent supplied the answer
+ * there was no verification at all, and the form columns went out blank on exactly the rows a
+ * reader most wants them. Worse, when the corpus DID produce a candidate that the confidence
+ * policy then rejected, the agent's answer was prepended in front of it while the form still
+ * described the rejected poem: a form belonging to one poem beside the title of another.
+ *
+ * These test the two ends the fix has to hold together — that a form derived from an outside
+ * poem still reaches the row, and that the columns stay gated on the row having an answer.
+ */
+describe('form columns on a model-sourced answer', () => {
+  const verification = {
+    outcome: 'pass',
+    checks: [],
+    candidateForm: { form: 'qijue' },
+  } as never;
+
+  it('carries the form of the poem that is actually being returned', () => {
+    const row = buildRow(
+      {
+        status: StepStatus.LOW_CONFIDENCE,
+        outcome: { verification } as never,
+        top: { title: 'T', author: 'A' } as never,
+      },
+      ['title', 'form', 'form_label'],
+    );
+    expect(row.title).toBe('T');
+    expect(row.form).toBe('qijue');
+    expect(row.form_label).toBe('thất ngôn tứ tuyệt');
+  });
+
+  /**
+   * A form with no poem beside it is a fact about nothing. Note the verification is PRESENT
+   * here: a candidate the confidence policy rejected still has a real form analysis attached,
+   * and the row must stay blank on the strength of its status alone.
+   */
+  it('stays blank when the run found nothing to describe', () => {
+    const row = buildRow(
+      {
+        status: StepStatus.NO_RESULT,
+        outcome: { verification } as never,
+        top: { title: 'T' } as never,
+      },
+      ['title', 'form', 'form_label'],
+    );
+    expect(row.title).toBeNull();
+    expect(row.form).toBeNull();
+    expect(row.form_label).toBeNull();
+  });
+});
+
+/**
  * The Vietnamese form names live in packages/batch, which cannot import the verifier that
  * produces the codes — so nothing but this test stops the two drifting. apps/api is the one
  * package that sees both.

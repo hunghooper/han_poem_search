@@ -2,7 +2,11 @@
  * The search pipeline — the spec §7, §8, §10.
  *
  *   colophon split -> exact -> (short circuit?) -> bm25 + vector -> RRF -> rerank
- *                  -> confidence policy -> rule verification -> answer
+ *                  -> confidence policy -> agent (if unresolved) -> rule verification
+ *                  -> LLM verification -> answer
+ *
+ * Rule verification sits AFTER the agent because it verifies the ANSWER, and until the agent
+ * has finished nobody knows which candidate that is.
  *
  * Every stage emits started/completed events. A stage that does not emit is a stage the user
  * cannot see, including when it fails — which is §1's second unacceptable failure mode.
@@ -213,52 +217,12 @@ export async function runSearch(
     },
   });
 
-  // ---- rule verification (§10.1) ------------------------------------------
-  // Rules first, deterministic and free. The LLM verifier (§10.2) arrives in Phase 4 and only
-  // sees what the rules could not decide.
+  // The prosody check used to run HERE, on the local candidate, before the agent had its
+  // turn. It now runs after — see below. Declared here because the flag set is assembled
+  // before the agent and filled in afterwards.
   let verification: ReturnType<typeof verifyCandidate> | null = null;
-  const top = result.evidence[0];
-  const allFlagsSoFar = [...result.exact.flags, ...verdict.flags];
 
-  if (top) {
-    // prosodyLines, not visualLines: a spreadsheet cell holds a whole couplet on one line
-    // separated by 、，。 and the form check would otherwise compare ten characters against a
-    // 五言 poem's five and fail a poem it matched exactly. See normalize.ts.
-    const inputLines = prosodyLines(searchText)
-      .map((l) => toMatchForm(l))
-      .filter((l) => l.length > 0);
-    verification = verifyCandidate(
-      inputLines,
-      poemLines(top.content),
-      allFlagsSoFar.includes(AggregateFlag.INPUT_REORDERED),
-    );
-    store.emit(runId, {
-      step: 'rule_verification',
-      source: 'rule_verify',
-      phase: 'completed',
-      status:
-        verification.outcome === 'pass'
-          ? StepStatus.HAS_RESULT
-          : verification.outcome === 'fail'
-            ? StepStatus.LOW_CONFIDENCE
-            : StepStatus.SKIPPED,
-      flags: verification.flags,
-      message: verification.summary,
-      messageTrace: verification.summaryTrace,
-      metadata: { resultCount: verification.checks.length },
-    });
-  } else {
-    store.emit(runId, {
-      step: 'rule_verification',
-      source: 'rule_verify',
-      phase: 'completed',
-      status: StepStatus.NOT_EXECUTED,
-      message: 'Nothing to verify — no candidate',
-      messageTrace: msg('trace.nothingToVerify'),
-    });
-  }
-
-  const allFlags = [...new Set([...result.exact.flags, ...verdict.flags, ...(verification?.flags ?? [])])];
+  const allFlags = [...new Set([...result.exact.flags, ...verdict.flags])];
   const found = allFlags.includes(AggregateFlag.LOCAL_RESULT_FOUND);
 
   // §9: the agent fires only when local retrieval could not confidently answer. Given the
@@ -421,6 +385,66 @@ export async function runSearch(
         });
       }
     }
+  }
+
+  // ---- rule verification (§10.1) ------------------------------------------
+  //
+  // AFTER the agent, on purpose, because it verifies THE ANSWER — and until the agent has
+  // finished, nobody knows what the answer is.
+  //
+  // It used to run before, on the local candidate. Two ways that was wrong, and both showed up
+  // in an export. When the corpus found nothing and the agent supplied the answer, there was no
+  // local candidate, so `han_form` and `han_form_label` went out EMPTY on exactly the rows a
+  // reader most wants them — the ones flagged `model_has_result`, where the model rather than
+  // the corpus produced the answer. And when the corpus produced a candidate the confidence
+  // policy then rejected, the agent's answer was prepended in front of it while the form columns
+  // still described the rejected one: a form belonging to a different poem than the title and
+  // author beside it, which is worse than a blank.
+  //
+  // The shape of a poem is a fact about that poem's own lines. It does not become unknowable
+  // because the poem arrived from outside the corpus.
+  const top = result.evidence[0];
+
+  if (top) {
+    // prosodyLines, not visualLines: a spreadsheet cell holds a whole couplet on one line
+    // separated by 、，。 and the form check would otherwise compare ten characters against a
+    // 五言 poem's five and fail a poem it matched exactly. See normalize.ts.
+    const inputLines = prosodyLines(searchText)
+      .map((l) => toMatchForm(l))
+      .filter((l) => l.length > 0);
+    verification = verifyCandidate(
+      inputLines,
+      poemLines(top.content),
+      allFlags.includes(AggregateFlag.INPUT_REORDERED),
+    );
+    store.emit(runId, {
+      step: 'rule_verification',
+      source: 'rule_verify',
+      phase: 'completed',
+      status:
+        verification.outcome === 'pass'
+          ? StepStatus.HAS_RESULT
+          : verification.outcome === 'fail'
+            ? StepStatus.LOW_CONFIDENCE
+            : StepStatus.SKIPPED,
+      flags: verification.flags,
+      message: verification.summary,
+      messageTrace: verification.summaryTrace,
+      metadata: { resultCount: verification.checks.length },
+    });
+  } else {
+    store.emit(runId, {
+      step: 'rule_verification',
+      source: 'rule_verify',
+      phase: 'completed',
+      status: StepStatus.NOT_EXECUTED,
+      message: 'Nothing to verify — no candidate',
+      messageTrace: msg('trace.nothingToVerify'),
+    });
+  }
+
+  for (const f of verification?.flags ?? []) {
+    if (!allFlags.includes(f)) allFlags.push(f);
   }
 
   /**
