@@ -4,8 +4,9 @@ Thanks for working on this project. This guide covers local setup, the developme
 and the three extension points you are most likely to touch: adding a tool, adding a flag,
 and adding a retrieval source.
 
-Read [`the spec`](./the spec) first — it is the architectural source of truth.
-This document is about _how to work in the repo_, not _what to build_.
+Read [`README.md`](./README.md) first for what the system does and how to read its output,
+and [`docs/adr/`](./docs/adr/) for the decisions that would be expensive to reverse. This
+document is about _how to work in the repo_.
 
 ---
 

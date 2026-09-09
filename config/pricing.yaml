@@ -1,4 +1,4 @@
-# Model pricing, USD per million tokens — the spec §4.3, §18 Q2.
+# Model pricing, USD per million tokens.
 #
 # Cost is NOT in the OpenAI response; it is computed from this table. A model absent here
 # yields costUsd: null, never a guess — §12's budget then degrades to a token cap, which the

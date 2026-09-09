@@ -12,11 +12,15 @@ coverage/
 
 # Everything on disk that is not source: the cloned corpus, uploaded batch files, exports.
 # One folder, so there is one thing to ignore and one thing to check before publishing.
-local/
+#
+# Anchored with a leading slash. Unanchored, `data/` matches a directory named `data` at ANY
+# depth — which silently excluded packages/retrieval/src/data/, the variant folding table and
+# the derived prosody tables, from the repository entirely.
+/local/
 
 # Kept from when these were two separate folders, so an old checkout cannot resurrect them.
-data/
-.data/
+/data/
+/.data/
 
 __pycache__/
 *.py[cod]

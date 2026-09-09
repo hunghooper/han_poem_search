@@ -11,7 +11,6 @@ Most search returns its best match no matter what, which for calligraphy is the 
 available: you get a confident-looking title with no way to tell whether it is right or merely
 the closest thing in the index.
 
-- **[the spec](./the spec)** — the architectural source of truth.
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)** — how to work in the repo.
 - **[docs/adr/](./docs/adr/)** — decisions that would be expensive to reverse.
 - **[docs/TODO.md](./docs/TODO.md)** — what is not built, and why.

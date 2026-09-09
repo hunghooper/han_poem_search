@@ -1,0 +1,33 @@
+{
+  "$comment": "異體字 folding table — data, not code. Applied to textMatch only, after OpenCC conversion to Traditional. Folding is one-directional: variant -> canonical.",
+  "$provenance": "Seed set drawn from well-attested Unihan kZVariant / kSemanticVariant relations and 教育部《異體字字典》. These are the forms that actually differ between chinese-poetry collections. NOT independently verified character-by-character — treat as provisional and audit before Phase 5 calibration.",
+  "$rule": "Adding an entry requires a citation for the equivalence in the PR description (CONTRIBUTING.md). Two characters looking similar is not evidence. A wrong entry silently merges two distinct poems, and nothing in the pipeline will report it.",
+  "$excluded": "Simplified<->Traditional pairs are NOT listed here. OpenCC handles those, and duplicating the mapping in two places is how the two paths drift apart.",
+  "fold": {
+    "羣": "群",
+    "峯": "峰",
+    "牀": "床",
+    "眞": "真",
+    "靑": "青",
+    "淸": "清",
+    "敎": "教",
+    "竝": "並",
+    "溫": "温",
+    "爲": "為",
+    "遙": "遥",
+    "臥": "卧",
+    "却": "卻",
+    "祕": "秘",
+    "疎": "疏",
+    "菸": "煙",
+    "菴": "庵",
+    "牕": "窗",
+    "囘": "回",
+    "廼": "乃",
+    "冩": "寫",
+    "揷": "插",
+    "硏": "研",
+    "覩": "睹",
+    "喫": "吃"
+  }
+}
