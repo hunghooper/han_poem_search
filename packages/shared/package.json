@@ -13,7 +13,8 @@
     "./tool-result": "./src/tool-result.ts",
     "./state": "./src/state.ts",
     "./serde": "./src/serde.ts",
-    "./runtime-config": "./src/runtime-config.ts"
+    "./runtime-config": "./src/runtime-config.ts",
+    "./trace": "./src/trace.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

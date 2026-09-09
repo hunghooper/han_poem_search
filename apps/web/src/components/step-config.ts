@@ -8,23 +8,9 @@
  * a coloured dot.
  */
 
-export const STEP_LABEL: Record<string, string> = {
-  query_understanding: 'Read your query',
-  normalization: 'Normalised the text',
-  local_search: 'Searched the corpus',
-  exact: 'Exact match',
-  bm25: 'Keyword search',
-  vector: 'Semantic search',
-  hybrid: 'Combined results',
-  reranker: 'Re-ranked candidates',
-  local_evaluation: 'Judged the results',
-  agent: 'Agent',
-  tool_call: 'External source',
-  aggregation: 'Merged evidence',
-  rule_verification: 'Checked form and rhyme',
-  llm_verification: 'Verified with a model',
-  final_answer: 'Answer',
-};
+// Step NAMES live in the label tables (`step.<name>` in i18n.ts), not here — a name shown
+// to a reader has to be in their language, and a second copy in this file would be the drift
+// this file's own header warns about.
 
 export interface StatusStyle {
   icon: string;

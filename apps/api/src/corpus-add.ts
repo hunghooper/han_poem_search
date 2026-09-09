@@ -17,6 +17,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { author, corpusAddition, poem, poemLine, work } from '@han/db/schema';
 import { normalize, toMatchForm, visualLines } from '@han/retrieval/normalize';
+import { msg, type TraceMsg } from '@han/shared/trace';
 import {
   AdditionOrigin,
   AdditionStatus,
@@ -246,12 +247,20 @@ export async function proposeAddition(
   db: Db,
   proposal: { title: string; author: string; text: string; dynasty?: string | null; source_url?: string | null },
   ctx: { runId: string; verdict: string; localFoundNothing: boolean; evidence: readonly { source: string; url: string | null }[] },
-): Promise<{ proposed: boolean; reason?: string }> {
+): Promise<{ proposed: boolean; reason?: string; reasonTrace?: TraceMsg }> {
   if (ctx.verdict !== 'sufficient') {
-    return { proposed: false, reason: 'the verifier did not call the evidence sufficient' };
+    return {
+      proposed: false,
+      reason: 'the verifier did not call the evidence sufficient',
+      reasonTrace: msg('trace.propose.notSufficient'),
+    };
   }
   if (!ctx.localFoundNothing) {
-    return { proposed: false, reason: 'the local corpus already answered' };
+    return {
+      proposed: false,
+      reason: 'the local corpus already answered',
+      reasonTrace: msg('trace.propose.localAnswered'),
+    };
   }
 
   // The URL must be one the run actually saw. A model can write a plausible URL from memory,
@@ -260,19 +269,29 @@ export async function proposeAddition(
   const outsideUrls = ctx.evidence.filter((e) => e.url).map((e) => e.url);
   const url = proposal.source_url ?? null;
   if (!url || !outsideUrls.includes(url)) {
-    return { proposed: false, reason: 'the proposed source is not a URL this run retrieved' };
+    return {
+      proposed: false,
+      reason: 'the proposed source is not a URL this run retrieved',
+      reasonTrace: msg('trace.propose.urlNotRetrieved'),
+    };
   }
 
   const check = checkRow(proposal as unknown as Record<string, unknown>, 0);
   if (!check.ok) {
-    return { proposed: false, reason: `the proposal fails the same rules a person must pass: ${check.missing.join(', ')}` };
+    return {
+      proposed: false,
+      reason: `the proposal fails the same rules a person must pass: ${check.missing.join(', ')}`,
+      reasonTrace: msg('trace.propose.failsRules', { fields: check.missing.join(', ') }),
+    };
   }
 
   // Already proposed for this run, or already in the corpus? Neither is an error worth
   // surfacing to the searcher; both mean there is nothing new to add.
   const hash = additionHash(proposal as CorpusAddition, normalize(proposal.text).textMatch);
   const [existing] = await db.select({ id: poem.id }).from(poem).where(eq(poem.contentHash, hash)).limit(1);
-  if (existing) return { proposed: false, reason: 'already in the corpus' };
+  if (existing) {
+    return { proposed: false, reason: 'already in the corpus', reasonTrace: msg('trace.propose.duplicate') };
+  }
 
   await db.insert(corpusAddition).values({
     origin: AdditionOrigin.AGENT,

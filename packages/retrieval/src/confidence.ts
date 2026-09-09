@@ -13,6 +13,7 @@
  * is a test asserting that, and CONTRIBUTING.md forbids weakening it.
  */
 
+import { msg, type TraceMsg } from '@han/shared/trace';
 import { StepStatus } from '@han/shared/status';
 import { AggregateFlag } from '@han/shared/flags';
 import type { ExactMatchKind } from './sources/exact-ngram.js';
@@ -70,6 +71,8 @@ export interface EvaluateOutput {
   flags: string[];
   confidence: number;
   reason: string;
+  /** The same reason, renderable in the reader's language. */
+  trace: TraceMsg;
 }
 
 export function evaluateLocal(
@@ -104,6 +107,10 @@ export function evaluateLocal(
       flags: [AggregateFlag.NO_LOCAL_RESULT],
       confidence: 0,
       reason: `an exact run matched, but the work it resolves to shares only ${(overlapNow * 100).toFixed(0)}% of the query's characters — below the ${(thresholds.minLexicalOverlap * 100).toFixed(0)}% floor, so the run is a coincidence rather than the poem`,
+      trace: msg('trace.conf.exactBelowFloor', {
+        pct: (overlapNow * 100).toFixed(0),
+        floor: (thresholds.minLexicalOverlap * 100).toFixed(0),
+      }),
     };
   }
 
@@ -113,6 +120,7 @@ export function evaluateLocal(
       flags: [AggregateFlag.LOCAL_RESULT_FOUND, AggregateFlag.EXACT_FULL_MATCH],
       confidence: 1,
       reason: 'exact contiguous match resolving to a single work',
+      trace: msg('trace.conf.exactSingle'),
     };
   }
 
@@ -122,6 +130,7 @@ export function evaluateLocal(
       flags: [AggregateFlag.LOCAL_RESULT_FOUND, AggregateFlag.EXACT_AMBIGUOUS],
       confidence: 0.9,
       reason: `exact match resolving to ${em.workIds.length} works — candidates passed forward, not guessed between`,
+      trace: msg('trace.conf.exactAmbiguous', { n: em.workIds.length }),
     };
   }
 
@@ -131,6 +140,7 @@ export function evaluateLocal(
       flags: [AggregateFlag.LOCAL_RESULT_FOUND, AggregateFlag.EXACT_PARTIAL_MATCH],
       confidence: 0.85,
       reason: `${em.windowsMatched} windows agree on the same work`,
+      trace: msg('trace.conf.windowsAgree', { n: em.windowsMatched }),
     };
   }
 
@@ -142,6 +152,7 @@ export function evaluateLocal(
       flags: [AggregateFlag.NO_LOCAL_RESULT],
       confidence: 0,
       reason: 'no candidates returned by any local retriever',
+      trace: msg('trace.conf.noCandidates'),
     };
   }
 
@@ -151,6 +162,7 @@ export function evaluateLocal(
       flags: [AggregateFlag.LOCAL_LOW_CONFIDENCE, AggregateFlag.LOCAL_INCOMPLETE],
       confidence: 0.3,
       reason: `${input.candidateCount} candidates exist but none has been scored — reranker not available`,
+      trace: msg('trace.conf.unscored', { n: input.candidateCount }),
     };
   }
 
@@ -163,6 +175,11 @@ export function evaluateLocal(
       flags: [AggregateFlag.NO_LOCAL_RESULT],
       confidence: 0,
       reason: `candidates exist but the best shares only ${(overlap * 100).toFixed(0)}% of the query's characters — below the ${(thresholds.minLexicalOverlap * 100).toFixed(0)}% floor, so the rerank score of ${top1.toFixed(2)} is not believed`,
+      trace: msg('trace.conf.overlapBelowFloor', {
+        pct: (overlap * 100).toFixed(0),
+        floor: (thresholds.minLexicalOverlap * 100).toFixed(0),
+        score: top1.toFixed(2),
+      }),
     };
   }
 
@@ -172,6 +189,10 @@ export function evaluateLocal(
       flags: [AggregateFlag.NO_LOCAL_RESULT],
       confidence: 0,
       reason: `top rerank score ${top1.toFixed(2)} is below the noise floor ${thresholds.noiseFloor}`,
+      trace: msg('trace.conf.belowNoiseFloor', {
+        score: top1.toFixed(2),
+        floor: thresholds.noiseFloor,
+      }),
     };
   }
 
@@ -183,5 +204,9 @@ export function evaluateLocal(
       top1 >= thresholds.verifyFloor
         ? `top rerank score ${top1.toFixed(2)} clears the verify floor but no exact match — requires verification`
         : `top rerank score ${top1.toFixed(2)} sits between the noise and verify floors`,
+    trace: msg(
+      top1 >= thresholds.verifyFloor ? 'trace.conf.scoredClears' : 'trace.conf.scoredBetween',
+      { score: top1.toFixed(2) },
+    ),
   };
 }

@@ -8,6 +8,8 @@
  */
 
 import type { UiLanguage } from '@han/shared/runtime-config';
+import { renderTrace, type TraceMsg } from '@han/shared/trace';
+import { TRACE_LABELS } from './i18n-trace';
 
 export const LANGUAGE_NAMES: Record<UiLanguage, string> = {
   vi: 'Tiếng Việt',
@@ -18,6 +20,25 @@ export const LANGUAGE_NAMES: Record<UiLanguage, string> = {
 type Dict = Record<string, string>;
 
 const vi: Dict = {
+  'answer.source': 'Nguồn:',
+  'answer.colophon': 'Phần lạc khoản đã tách ra trước khi tra: {lines}',
+  'answer.colophonDate': ' — niên hiệu 干支 {date}',
+  'step.query_understanding': 'Đọc câu bạn nhập',
+  'step.normalization': 'Chuẩn hoá văn bản',
+  'step.local_search': 'Tra trong kho',
+  'step.exact': 'Khớp chính xác',
+  'step.bm25': 'Tra theo từ khoá',
+  'step.vector': 'Tra theo ngữ nghĩa',
+  'step.hybrid': 'Gộp kết quả',
+  'step.reranker': 'Xếp hạng lại ứng viên',
+  'step.local_evaluation': 'Đánh giá kết quả',
+  'step.agent': 'Agent',
+  'step.tool_call': 'Nguồn bên ngoài',
+  'step.aggregation': 'Gộp chứng cứ',
+  'step.rule_verification': 'Kiểm thể thức và vần',
+  'step.llm_verification': 'Thẩm định bằng mô hình',
+  'step.final_answer': 'Kết quả',
+
   'app.tagline': '{n} bài · 全唐詩 + 宋詞',
   'search.placeholder': 'Dán một đoạn thơ — sai thứ tự, thiếu chữ, hay chép từ thư pháp',
   'search.button': 'Tìm',
@@ -184,6 +205,25 @@ const vi: Dict = {
 };
 
 const en: Dict = {
+  'answer.source': 'Source:',
+  'answer.colophon': 'Inscription set aside before searching: {lines}',
+  'answer.colophonDate': ' — 干支 date {date}',
+  'step.query_understanding': 'Read your query',
+  'step.normalization': 'Normalised the text',
+  'step.local_search': 'Searched the corpus',
+  'step.exact': 'Exact match',
+  'step.bm25': 'Keyword search',
+  'step.vector': 'Semantic search',
+  'step.hybrid': 'Combined results',
+  'step.reranker': 'Re-ranked candidates',
+  'step.local_evaluation': 'Judged the results',
+  'step.agent': 'Agent',
+  'step.tool_call': 'External source',
+  'step.aggregation': 'Merged evidence',
+  'step.rule_verification': 'Checked form and rhyme',
+  'step.llm_verification': 'Verified with a model',
+  'step.final_answer': 'Answer',
+
   'app.tagline': '{n} poems · 全唐詩 + 宋詞',
   'search.placeholder': 'Paste a fragment — reordered, damaged, or copied from calligraphy',
   'search.button': 'Search',
@@ -350,6 +390,25 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  'answer.source': '來源：',
+  'answer.colophon': '檢索前已析出的落款：{lines}',
+  'answer.colophonDate': '——干支紀年 {date}',
+  'step.query_understanding': '讀取輸入',
+  'step.normalization': '正規化文本',
+  'step.local_search': '檢索詩庫',
+  'step.exact': '精確匹配',
+  'step.bm25': '關鍵詞檢索',
+  'step.vector': '語義檢索',
+  'step.hybrid': '合併結果',
+  'step.reranker': '重新排序候選',
+  'step.local_evaluation': '評斷結果',
+  'step.agent': 'Agent',
+  'step.tool_call': '外部來源',
+  'step.aggregation': '彙整證據',
+  'step.rule_verification': '核驗格律與用韻',
+  'step.llm_verification': '以模型核驗',
+  'step.final_answer': '結果',
+
   'app.tagline': '{n} 首 · 全唐詩 + 宋詞',
   'search.placeholder': '貼上詩句片段 — 次序錯亂、缺字，或自書法轉錄皆可',
   'search.button': '檢索',
@@ -516,6 +575,23 @@ const zh: Dict = {
 };
 
 const DICTS: Record<UiLanguage, Dict> = { vi, en, zh };
+
+/**
+ * Render a trace message in the reader's language.
+ *
+ * `fallback` is the English string the server sent beside the code. It is used when the code
+ * has no label — an event recorded before a code existed, or a code somebody added on the
+ * server without adding labels. English is the honest degradation there; a raw `trace.x.y` on
+ * screen teaches the reader nothing.
+ */
+export function tTrace(
+  lang: UiLanguage,
+  trace: TraceMsg | null | undefined,
+  fallback: string | null = null,
+): string | null {
+  const table = TRACE_LABELS[lang] ?? TRACE_LABELS.en;
+  return renderTrace(trace, (code) => table[code] ?? TRACE_LABELS.en[code] ?? null, fallback);
+}
 
 /** A missing key falls back to English, then to the key itself — a visible gap beats a blank. */
 export function t(lang: UiLanguage, key: string, vars: Record<string, string | number> = {}): string {

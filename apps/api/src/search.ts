@@ -8,6 +8,7 @@
  * cannot see, including when it fails — which is §1's second unacceptable failure mode.
  */
 
+import { msg, TRACE_CODES, type TraceMsg } from '@han/shared/trace';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { normalize, prosodyLines, toMatchForm } from '@han/retrieval/normalize';
 import { splitColophon } from '@han/retrieval/colophon';
@@ -106,6 +107,7 @@ export async function runSearch(
     source: 'query',
     phase: 'started',
     message: 'Reading your query',
+    messageTrace: msg('trace.readingQuery'),
     metadata: { query: rawQuery },
   });
 
@@ -122,6 +124,13 @@ export async function runSearch(
       phase: 'completed',
       status: StepStatus.HAS_RESULT,
       message: `Set aside an inscription: ${colophon.colophonLines.join(' · ')}${colophon.cyclicalDate ? ` (${colophon.cyclicalDate})` : ''}`,
+      messageTrace: msg(
+        colophon.cyclicalDate ? 'trace.colophonDated' : 'trace.colophon',
+        {
+          lines: colophon.colophonLines.join(' · '),
+          ...(colophon.cyclicalDate ? { date: colophon.cyclicalDate } : {}),
+        },
+      ),
       metadata: { query: rawQuery, normalizedQuery: toMatchForm(searchText) },
     });
   }
@@ -133,6 +142,7 @@ export async function runSearch(
     phase: 'completed',
     status: StepStatus.HAS_RESULT,
     message: `Normalised to ${norm.textMatch.length} characters`,
+    messageTrace: msg('trace.normalised', { n: norm.textMatch.length }),
     metadata: { query: rawQuery, normalizedQuery: norm.textMatch },
   });
 
@@ -142,6 +152,7 @@ export async function runSearch(
     source: 'local',
     phase: 'started',
     message: 'Searching the corpus',
+    messageTrace: msg('trace.searching'),
   });
 
   const result = await hybridSearch(searchText, {
@@ -165,6 +176,7 @@ export async function runSearch(
       status: report.status,
       flags: source === 'exact' ? result.exact.flags : [],
       message: describeSource(source, report.status, report.count, result.shortCircuited),
+      messageTrace: describeSourceTrace(source, report.status, report.count, result.shortCircuited),
       metadata: {
         latencyMs: report.latencyMs,
         resultCount: report.count,
@@ -193,6 +205,7 @@ export async function runSearch(
     status: verdict.status,
     flags: verdict.flags,
     message: verdict.reason,
+    messageTrace: verdict.trace,
     metadata: {
       confidence: verdict.confidence,
       resultCount: result.evidence.length,
@@ -231,6 +244,7 @@ export async function runSearch(
             : StepStatus.SKIPPED,
       flags: verification.flags,
       message: verification.summary,
+      messageTrace: verification.summaryTrace,
       metadata: { resultCount: verification.checks.length },
     });
   } else {
@@ -240,6 +254,7 @@ export async function runSearch(
       phase: 'completed',
       status: StepStatus.NOT_EXECUTED,
       message: 'Nothing to verify — no candidate',
+      messageTrace: msg('trace.nothingToVerify'),
     });
   }
 
@@ -275,6 +290,7 @@ export async function runSearch(
       status: StepStatus.SKIPPED,
       message:
         'Agent skipped — the query shares no characters with anything in the corpus, so there is nothing here to reason about',
+      messageTrace: msg('trace.agent.skippedNoOverlap'),
     });
   } else if (!found) {
     if (!deps.config.agent.enabled) {
@@ -291,6 +307,7 @@ export async function runSearch(
         status: StepStatus.SKIPPED,
         flags: [flag('model', StepStatus.SKIPPED)],
         message: 'Agent is switched off in settings',
+        messageTrace: msg('trace.agent.off'),
       });
     } else if (!deps.provider || !deps.reasoningModel) {
       // The one that matters most: the user ASKED for the agent and did not get it. Switched
@@ -303,10 +320,17 @@ export async function runSearch(
         status: StepStatus.UNAVAILABLE,
         flags: [flag('model', StepStatus.UNAVAILABLE)],
         message: 'No LLM gateway is configured — the agent could not run',
+        messageTrace: msg('trace.agent.noGateway'),
         metadata: { errorCode: 'TOOL_UNAVAILABLE' },
       });
     } else {
-      store.emit(runId, { step: 'agent', source: 'model', phase: 'started', message: 'Agent took over' });
+      store.emit(runId, {
+        step: 'agent',
+        source: 'model',
+        phase: 'started',
+        message: 'Agent took over',
+        messageTrace: msg('trace.agent.tookOver'),
+      });
 
       try {
         // The loop now lives in Temporal (§9.1). Killing the worker mid-run loses nothing:
@@ -320,6 +344,7 @@ export async function runSearch(
             source: 'model',
             phase: 'started',
             message: 'Agent running — live trace unavailable (no Redis), the answer will still arrive',
+            messageTrace: msg('trace.agent.noRelay'),
           });
         }
 
@@ -368,6 +393,14 @@ export async function runSearch(
             ? `Agent found ${agentOut.evidence.length} result${agentOut.evidence.length === 1 ? '' : 's'}`
             : (agentOut.stopDetail ??
               `Agent stopped — ${agentOut.stoppedBecause.replace(/_/gu, ' ')}`),
+        // `stopDetail` is prose the workflow wrote and cannot be translated here; it is passed
+        // through as a value so the frame around it is still the reader's language.
+        messageTrace:
+          agentOut.evidence.length > 0
+            ? msg('trace.agent.found', { n: agentOut.evidence.length })
+            : msg('trace.agent.stopped', {
+                reason: agentOut.stopDetail ?? agentOut.stoppedBecause.replace(/_/gu, ' '),
+              }),
         metadata: { resultCount: agentOut.evidence.length },
       });
       } catch (e) {
@@ -383,6 +416,7 @@ export async function runSearch(
           phase: 'failed',
           status: StepStatus.ERROR,
           message: 'The agent failed — answering from the evidence collected so far',
+        messageTrace: msg('trace.agent.failed'),
           metadata: { errorCode: 'INTERNAL', errorMessage: message },
         });
       }
@@ -409,6 +443,7 @@ export async function runSearch(
       source: 'llm_verify',
       phase: 'started',
       message: 'Checking whether the evidence actually settles it',
+      messageTrace: msg('trace.judge.checking'),
     });
 
     const judged = await verifyWithLlm(
@@ -428,6 +463,7 @@ export async function runSearch(
         phase: 'completed',
         status: StepStatus.UNAVAILABLE,
         message: 'The verifier could not be reached — the evidence is unchecked',
+        messageTrace: msg('trace.judge.unreachable'),
       });
     } else {
       llmVerdict = judged.verdict;
@@ -450,6 +486,11 @@ export async function runSearch(
           message: outcome.proposed
             ? `Proposed "${judged.verdict.propose.title}" for the corpus — awaiting review`
             : `Proposal declined — ${outcome.reason ?? 'no reason given'}`,
+          messageTrace: outcome.proposed
+            ? msg('trace.judge.proposed', { title: judged.verdict.propose.title })
+            // The refusal composes in as a part, so the whole line is the reader's language
+            // rather than a translated frame around an English clause.
+            : msg('trace.judge.declined', {}, outcome.reasonTrace ? [outcome.reasonTrace] : []),
         });
       }
       store.emit(runId, {
@@ -461,6 +502,9 @@ export async function runSearch(
             ? StepStatus.HAS_RESULT
             : StepStatus.LOW_CONFIDENCE,
         message: `${llmVerdict.verdict} — ${llmVerdict.notes || 'no note'}`,
+        messageTrace: msg(`trace.judge.${llmVerdict.verdict}`, {
+          notes: llmVerdict.notes || '',
+        }),
         metadata: {
           confidence: llmVerdict.confidence,
           model: judged.model,
@@ -544,6 +588,7 @@ export async function runSearch(
     status: finalStatus,
     flags: allFlags,
     message: answerMessage(result.evidence[0], allFlags, agentPartial),
+    messageTrace: answerTrace(result.evidence[0], allFlags, agentPartial),
     metadata: { confidence: verdict.confidence, resultCount: result.evidence.length },
   });
 
@@ -568,6 +613,52 @@ function answerMessage(
   }
   // Reached only via the agent: label the source, since it is not the local corpus.
   return `${top.title ?? top.content.slice(0, 30)} — via ${top.source}${suffix}`;
+}
+
+/** `answerMessage`'s twin. Same branches, same order — see the comments there. */
+function answerTrace(top: Evidence | undefined, flags: string[], partial: boolean): TraceMsg {
+  const suffix = partial ? [msg('trace.answer.partialSuffix')] : undefined;
+  if (flags.includes(AggregateFlag.NO_LOCAL_RESULT)) {
+    return msg('trace.answer.nothingMatches', {}, suffix);
+  }
+  if (!top) return msg('trace.answer.none', {}, suffix);
+  if (flags.includes(AggregateFlag.LOCAL_RESULT_FOUND)) {
+    return msg(
+      'trace.answer.local',
+      { title: top.title ?? '(untitled)', author: top.author ?? '(unknown)' },
+      suffix,
+    );
+  }
+  return msg(
+    'trace.answer.outside',
+    { title: top.title ?? top.content.slice(0, 30), source: top.source },
+    suffix,
+  );
+}
+
+/** `describeSource`'s twin. */
+function describeSourceTrace(
+  source: string,
+  status: StepStatus,
+  count: number,
+  shortCircuited: boolean,
+): TraceMsg {
+  if (status === StepStatus.SKIPPED) {
+    return msg(shortCircuited ? 'trace.src.skippedShort' : 'trace.src.skipped');
+  }
+  if (status === StepStatus.UNAVAILABLE) return msg('trace.src.unavailable');
+  if (status === StepStatus.TIMEOUT) return msg('trace.src.timeout');
+  if (status === StepStatus.ERROR) return msg('trace.src.failed');
+  // The source NAME composes in as a PART, so the label table holds one sentence per outcome
+  // rather than one per outcome-and-source. A source with no label of its own falls back to
+  // carrying its raw name — an untranslated word beats a sentence with the name missing.
+  const code = `trace.srcName.${source}`;
+  const known = (TRACE_CODES as readonly string[]).includes(code);
+  const parts = known ? [msg(code)] : undefined;
+  const raw: Record<string, string | number> = known ? {} : { source };
+  return count === 0
+    ? msg(known ? 'trace.src.none' : 'trace.src.noneRaw', raw, parts)
+    : msg(known ? 'trace.src.count' : 'trace.src.countRaw', { ...raw, n: count }, parts);
 }
 
 function describeSource(

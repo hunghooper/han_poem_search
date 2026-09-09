@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { decode } from '@han/shared/serde';
-import { NOTABLE_FLAGS, STEP_LABEL, styleFor } from '@/components/step-config';
+import { NOTABLE_FLAGS, styleFor } from '@/components/step-config';
 import {
   DEFAULT_SETTINGS,
   authHeaders,
@@ -14,7 +14,8 @@ import {
   type ServerConfig,
   type Settings,
 } from '@/components/settings';
-import { t } from '@/components/i18n';
+import type { TraceMsg } from '@han/shared/trace';
+import { t, tTrace } from '@/components/i18n';
 import { BatchPanel } from '@/components/batch';
 import { CorpusPanel } from '@/components/corpus';
 import { Tabs, type TabId } from '@/components/tabs';
@@ -38,6 +39,8 @@ interface Ev {
   source: string;
   phase: string;
   status?: string;
+  /** What the message meant, so it renders in the reader's language. Absent on older runs. */
+  messageTrace?: TraceMsg;
   flags: string[];
   message?: string;
   metadata: { latencyMs?: number; resultCount?: number; confidence?: number; provider?: string; model?: string };
@@ -59,12 +62,19 @@ interface Check {
   name: string;
   outcome: 'pass' | 'fail' | 'abstain';
   detail: string;
+  /** The same detail, renderable in the reader's language. */
+  trace?: TraceMsg;
 }
 
 interface Outcome {
   results: Result[];
   colophon: { lines: string[]; cyclicalDate: string | null } | null;
-  verification: { outcome: string; summary: string; checks: Check[] } | null;
+  verification: {
+    outcome: string;
+    summary: string;
+    summaryTrace?: TraceMsg;
+    checks: Check[];
+  } | null;
 }
 
 const SAMPLE = '自下寒煙 卧松高 白鶴眠 語来江色暮 獨 尋古道 倚石聽流泉 花暖青牛 羣峭碧摩天 逍遥不記年 撥雲';
@@ -218,8 +228,15 @@ export default function Home() {
               <div className="step" key={ev.seq}>
                 <span className={`icon ${s.className}`}>{s.icon}</span>
                 <span>
-                  {STEP_LABEL[ev.step] ?? ev.step}
-                  {ev.message ? <span style={{ color: 'var(--muted)' }}> — {ev.message}</span> : null}
+                  {t(lang, `step.${ev.step}`)}
+                  {/* The sentence the server MEANT, rendered here in the reader's language.
+                      `ev.message` is the English it sent beside the code, and is used only
+                      when the code has no label — an event from before the code existed, say.
+                      See packages/shared/src/trace.ts. */}
+                  {(() => {
+                    const line = tTrace(lang, ev.messageTrace, ev.message ?? null);
+                    return line ? <span style={{ color: 'var(--muted)' }}> — {line}</span> : null;
+                  })()}
                 </span>
                 <span className="lat">
                   {ev.metadata.latencyMs != null ? `${ev.metadata.latencyMs}ms` : ''}
@@ -287,14 +304,17 @@ export default function Home() {
 
           {outcome?.verification && outcome.verification.outcome !== 'abstain' && (
             <div className={`verify v-${outcome.verification.outcome}`}>
-              <strong>{outcome.verification.outcome === 'pass' ? '✓' : '⚠'} {outcome.verification.summary}</strong>
+              <strong>
+                {outcome.verification.outcome === 'pass' ? '✓' : '⚠'}{' '}
+                {tTrace(lang, outcome.verification.summaryTrace, outcome.verification.summary)}
+              </strong>
               <ul>
                 {outcome.verification.checks.map((c) => (
                   <li key={c.name}>
                     <span className={`vmark v-${c.outcome}`}>
                       {c.outcome === 'pass' ? '✓' : c.outcome === 'fail' ? '✗' : '○'}
                     </span>{' '}
-                    {c.detail}
+                    {tTrace(lang, c.trace, c.detail)}
                   </li>
                 ))}
               </ul>
@@ -303,15 +323,17 @@ export default function Home() {
 
           {outcome?.colophon && (
             <p className="colophon">
-              Inscription set aside before searching: {outcome.colophon.lines.join(' · ')}
-              {outcome.colophon.cyclicalDate ? ` — 干支 date ${outcome.colophon.cyclicalDate}` : ''}
+              {t(lang, 'answer.colophon', { lines: outcome.colophon.lines.join(' · ') })}
+              {outcome.colophon.cyclicalDate
+                ? t(lang, 'answer.colophonDate', { date: outcome.colophon.cyclicalDate })
+                : ''}
             </p>
           )}
 
           {results[0].provenance && (
             <p className="prov">
-              What this dataset says — not an authoritative edition. Source:{' '}
-              <code>{results[0].provenance.file}</code> at{' '}
+              {t(lang, 'answer.notAuthoritative')} {t(lang, 'answer.source')}{' '}
+              <code>{results[0].provenance.file}</code> @{' '}
               <code>{results[0].provenance.commitSha.slice(0, 8)}</code>
             </p>
           )}
@@ -321,7 +343,7 @@ export default function Home() {
       {terminal && !found && (
         <div className="empty">
           <strong>{t(lang, 'empty.title')}</strong>
-          {terminal.message}
+          {tTrace(lang, terminal.messageTrace, terminal.message ?? null)}
           <br />
           {/* Read off THIS run's own steps, not asserted. The sentence here used to say that
               semantic search and the agent "are not built yet" — true when it was written,

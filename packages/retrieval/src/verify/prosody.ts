@@ -11,6 +11,7 @@
  * for characters the tables never saw, and the confidence policy would quietly downgrade them.
  */
 
+import { msg, type TraceMsg } from '@han/shared/trace';
 import prosody from '../data/prosody.json' with { type: 'json' };
 
 export type Tone = 'ping' | 'ze' | 'either' | 'unknown';
@@ -43,6 +44,8 @@ export interface RhymeCheck {
   rhymeChars: string[];
   groups: Array<number | null>;
   reason: string;
+  /** The same reason, renderable in the reader's language. */
+  trace: TraceMsg;
 }
 
 /**
@@ -64,6 +67,7 @@ export function checkRhyme(lines: readonly string[]): RhymeCheck {
       rhymeChars,
       groups: [],
       reason: 'fewer than two rhyme positions — nothing to compare',
+      trace: msg('trace.rhyme.tooFew'),
     };
   }
 
@@ -76,6 +80,7 @@ export function checkRhyme(lines: readonly string[]): RhymeCheck {
       rhymeChars,
       groups,
       reason: 'rhyme characters are not in the derived table — cannot judge',
+      trace: msg('trace.rhyme.notInTable'),
     };
   }
 
@@ -88,6 +93,9 @@ export function checkRhyme(lines: readonly string[]): RhymeCheck {
     reason: consistent
       ? `rhyme characters ${rhymeChars.join('、')} share a derived 韻部`
       : `rhyme characters ${rhymeChars.join('、')} fall in different derived 韻部`,
+    trace: msg(consistent ? 'trace.rhyme.share' : 'trace.rhyme.differ', {
+      chars: rhymeChars.join('、'),
+    }),
   };
 }
 
@@ -97,6 +105,8 @@ export interface ToneCheck {
   violations: Array<[number, number]>;
   coverage: number;
   reason: string;
+  /** The same reason, renderable in the reader's language. */
+  trace: TraceMsg;
 }
 
 /**
@@ -138,6 +148,7 @@ export function checkTone(lines: readonly string[]): ToneCheck {
       violations,
       coverage,
       reason: 'too few characters found in the derived tone table to judge',
+      trace: msg('trace.tone.tooFew'),
     };
   }
 
@@ -150,6 +161,10 @@ export function checkTone(lines: readonly string[]): ToneCheck {
     reason: consistent
       ? `平仄 alternation holds at 二四六 (${violations.length} exception, ${(coverage * 100).toFixed(0)}% coverage)`
       : `平仄 alternation broken at ${violations.length} positions (${(coverage * 100).toFixed(0)}% coverage)`,
+    trace: msg(consistent ? 'trace.tone.clean' : 'trace.tone.broken', {
+      n: violations.length,
+      coverage: (coverage * 100).toFixed(0),
+    }),
   };
 }
 

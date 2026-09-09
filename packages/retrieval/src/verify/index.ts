@@ -13,6 +13,7 @@
  * it into `pass` would claim verification that never happened. It is its own outcome.
  */
 
+import { msg, type TraceMsg } from '@han/shared/trace';
 import { AggregateFlag } from '@han/shared/flags';
 import { analyseForm, formCompatible, isRegulated, type FormAnalysis, FORM_LABEL } from './form.js';
 import { checkRhyme, checkTone } from './prosody.js';
@@ -23,6 +24,8 @@ export interface Check {
   name: 'form' | 'rhyme' | 'tone';
   outcome: CheckOutcome;
   detail: string;
+  /** The same detail, renderable in the reader's language. */
+  trace: TraceMsg;
 }
 
 export interface Verification {
@@ -33,6 +36,8 @@ export interface Verification {
   flags: string[];
   /** One sentence, written for the trace UI (§14.2). */
   summary: string;
+  /** The same sentence, composed from the checks so it renders in any language. */
+  summaryTrace: TraceMsg;
 }
 
 const outcomeOf = (b: boolean | null): CheckOutcome => (b === null ? 'abstain' : b ? 'pass' : 'fail');
@@ -74,6 +79,18 @@ export function verifyCandidate(
       : formOk
       ? `${FORM_LABEL[candidateForm.form]} — ${candidateForm.lineLength ?? '?'} characters per line, matching the input`
       : `${FORM_LABEL[candidateForm.form]} has ${candidateForm.lineLength} characters per line but the input has ${inputForm.lineLength}`,
+    trace: inputReordered
+      ? msg('trace.verify.formReordered', { form: FORM_LABEL[candidateForm.form] })
+      : formOk
+        ? msg('trace.verify.formMatches', {
+            form: FORM_LABEL[candidateForm.form],
+            n: candidateForm.lineLength ?? '?',
+          })
+        : msg('trace.verify.formDiffers', {
+            form: FORM_LABEL[candidateForm.form],
+            n: candidateForm.lineLength ?? '?',
+            input: inputForm.lineLength ?? '?',
+          }),
   });
 
   // Tone and rhyme rules only bind regulated verse. Applying them to 古詩 or 詞 would produce
@@ -92,6 +109,9 @@ export function verifyCandidate(
       detail: shapeGuess
         ? `${rhyme.reason} — but a poem of this shape may be 古詩 rather than ${FORM_LABEL[candidateForm.form]}, so this decides nothing`
         : rhyme.reason,
+      trace: shapeGuess
+        ? msg('trace.verify.shapeGuess', { form: FORM_LABEL[candidateForm.form] }, [rhyme.trace])
+        : rhyme.trace,
     });
 
     // TONE NEVER REJECTS, and this is the important line in the file.
@@ -116,12 +136,15 @@ export function verifyCandidate(
         tone.consistent === false
           ? `${tone.reason} — which makes this 古體, not a different poem`
           : tone.reason,
+      trace:
+        tone.consistent === false ? msg('trace.verify.toneBroken', {}, [tone.trace]) : tone.trace,
     });
   } else {
     checks.push({
       name: 'rhyme',
       outcome: 'abstain',
       detail: `${FORM_LABEL[candidateForm.form]} is not regulated verse — rhyme and tone rules do not apply`,
+      trace: msg('trace.verify.notRegulated', { form: FORM_LABEL[candidateForm.form] }),
     });
   }
 
@@ -144,6 +167,14 @@ export function verifyCandidate(
         : outcome === 'pass'
           ? `Form checks out — ${passed.map((c) => c.detail).join('; ')}`
           : 'Not enough structure to verify — the candidate was neither confirmed nor rejected',
+    // Composed from the checks rather than from their rendered English, so the whole sentence
+    // arrives in the reader's language instead of a translated frame around English innards.
+    summaryTrace:
+      outcome === 'fail'
+        ? msg('trace.verify.failed', {}, failed.map((c) => c.trace))
+        : outcome === 'pass'
+          ? msg('trace.verify.passed', {}, passed.map((c) => c.trace))
+          : msg('trace.verify.abstained'),
   };
 }
 

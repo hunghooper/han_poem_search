@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { TraceMsgSchema } from './trace.js';
 import { StepStatus } from './status.js';
 
 export const SearchStep = z.enum([
@@ -62,7 +63,13 @@ export const SearchEventSchema = z.object({
   status: z.nativeEnum(StepStatus).optional(),
   flags: z.array(z.string()).default([]),
   agentIteration: z.number().int().nonnegative().optional(),
-  message: z.string().optional(), // human-readable, shown in the simple UI
+  message: z.string().optional(), // English, and the fallback when a code has no label
+  /**
+   * What the message MEANT, so a reader can have it in their own language. The server does not
+   * know who will read the run — see packages/shared/src/trace.ts. Optional because events
+   * recorded before this existed replay without it, and must still read.
+   */
+  messageTrace: TraceMsgSchema.optional(),
   metadata: EventMetadataSchema,
 });
 

@@ -11,6 +11,7 @@
  */
 
 import type { SearchEvent, SearchStep } from './events.js';
+import type { TraceMsg } from './trace.js';
 import { StepStatus } from './status.js';
 import { isFailure } from './status.js';
 
@@ -27,6 +28,8 @@ export interface StepState {
   errorCode: string | null;
   errorMessage: string | null;
   message: string | null;
+  /** The same message, still renderable in the reader's language. */
+  messageTrace: TraceMsg | null;
   agentIteration: number | null;
 }
 
@@ -94,6 +97,7 @@ export function reduce(state: SearchRunState, event: SearchEvent): SearchRunStat
     errorCode: md.errorCode ?? prev?.errorCode ?? null,
     errorMessage: md.errorMessage ?? prev?.errorMessage ?? null,
     message: event.message ?? prev?.message ?? null,
+    messageTrace: event.messageTrace ?? prev?.messageTrace ?? null,
     agentIteration: event.agentIteration ?? prev?.agentIteration ?? null,
   };
 

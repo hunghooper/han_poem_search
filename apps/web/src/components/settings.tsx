@@ -289,7 +289,7 @@ export function SettingsPanel({
                   } as never)
                 }
               />
-              <span>{k}</span>
+              <span>{t(lang, `step.${k}`)}</span>
             </label>
           ))}
         </div>

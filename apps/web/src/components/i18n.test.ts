@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { t, LANGUAGE_NAMES } from './i18n';
+import { t, tTrace, LANGUAGE_NAMES } from './i18n';
 import { UI_LANGUAGES } from '@han/shared/runtime-config';
+import { msg, TRACE_CODES } from '@han/shared/trace';
+import { TRACE_LABELS } from './i18n-trace';
 
 /**
  * Every key the settings panel derives must exist in every language. A missing one renders the
@@ -44,5 +46,63 @@ describe('i18n', () => {
 
   it('falls back to the key itself so a gap is visible rather than blank', () => {
     expect(t('vi', 'nope.not.here')).toBe('nope.not.here');
+  });
+});
+
+/**
+ * The trace is the part a reader most needs in their own language: it is the system explaining
+ * why it decided what it decided. A code emitted on the server with no label beside it renders
+ * as English inside a Vietnamese page — which reads as a translation bug rather than the
+ * omission it is, and nothing but this test would catch it.
+ */
+describe('trace labels', () => {
+  it('has every code the server can emit, in every language', () => {
+    for (const lang of UI_LANGUAGES) {
+      for (const code of TRACE_CODES) {
+        expect(TRACE_LABELS[lang][code], `${lang} is missing ${code}`).toBeTruthy();
+      }
+    }
+  });
+
+  it('has no label for a code no producer emits', () => {
+    const known = new Set<string>(TRACE_CODES);
+    for (const lang of UI_LANGUAGES) {
+      for (const code of Object.keys(TRACE_LABELS[lang])) {
+        expect(known.has(code), `${lang} has ${code}, which no producer emits`).toBe(true);
+      }
+    }
+  });
+
+  it('renders values into the sentence', () => {
+    expect(tTrace('vi', msg('trace.normalised', { n: 10 }))).toContain('10');
+    expect(tTrace('en', msg('trace.normalised', { n: 10 }))).toBe('Normalised to 10 characters');
+  });
+
+  /** The prosody summary is built from its checks; the whole sentence must be one language. */
+  it('renders composed messages, not a translated frame around English', () => {
+    const composed = msg('trace.verify.passed', {}, [
+      msg('trace.rhyme.share', { chars: '霜、鄉' }),
+      msg('trace.tone.clean', { n: 0, coverage: '100' }),
+    ]);
+    const vi = tTrace('vi', composed) ?? '';
+    expect(vi).toContain('Thể thức khớp');
+    expect(vi).toContain('các chữ vần 霜、鄉');
+    expect(vi).toContain('luật 平仄');
+    expect(vi).not.toContain('rhyme characters');
+    expect(vi).not.toContain('alternation');
+  });
+
+  /**
+   * The case that decides whether this design was worth building: a run recorded before the
+   * codes existed replays with no trace at all, and must still read as the English it was.
+   */
+  it('falls back to the English the server sent when a code has no label', () => {
+    expect(tTrace('vi', null, 'Reading your query')).toBe('Reading your query');
+    expect(tTrace('vi', msg('trace.notAThing'), 'Reading your query')).toBe('Reading your query');
+  });
+
+  /** A raw key on screen teaches a reader nothing; with no fallback, say nothing. */
+  it('returns null rather than a raw code when there is no fallback either', () => {
+    expect(tTrace('vi', msg('trace.notAThing'))).toBeNull();
   });
 });

@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { SearchEvent, SearchStep } from '@han/shared/events';
 import type { StepStatus } from '@han/shared/status';
+import type { TraceMsg } from '@han/shared/trace';
 import { nullSink, type EventSink, type RunRecord } from './event-sink.js';
 
 export interface EmitInput {
@@ -20,6 +21,8 @@ export interface EmitInput {
   /** Which agent iteration produced this, for the trace (§5.2). */
   agentIteration?: number;
   message?: string;
+  /** The same message as a code the reader's language can render — see @han/shared/trace. */
+  messageTrace?: TraceMsg;
   metadata?: SearchEvent['metadata'];
 }
 
@@ -62,6 +65,7 @@ export class RunStore {
       flags: input.flags ?? [],
       ...(input.agentIteration !== undefined ? { agentIteration: input.agentIteration } : {}),
       ...(input.message ? { message: input.message } : {}),
+      ...(input.messageTrace ? { messageTrace: input.messageTrace } : {}),
       metadata: input.metadata ?? {},
     };
     list.push(event);
